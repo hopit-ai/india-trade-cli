@@ -148,10 +148,18 @@ class AnthropicProvider(LLMProvider):
         super().__init__(model, registry, system_prompt)
         try:
             import anthropic as _sdk
-            self._sdk    = _sdk
-            self._client = _sdk.Anthropic(
-                api_key=get_credential("ANTHROPIC_API_KEY", "Anthropic API Key", secret=True)
+            self._sdk = _sdk
+            # Use required=False so we never prompt interactively inside a command
+            api_key = get_credential(
+                "ANTHROPIC_API_KEY", "Anthropic API Key", secret=True, required=False
             )
+            if not api_key:
+                raise RuntimeError(
+                    "Anthropic API key not set.\n"
+                    "Run [bold]credentials setup[/bold] → AI Provider → choose your option\n"
+                    "  or set AI_PROVIDER=claude_subscription to use your Claude subscription."
+                )
+            self._client = _sdk.Anthropic(api_key=api_key)
         except ImportError:
             raise RuntimeError("anthropic not installed. Run: pip install anthropic")
 
@@ -949,20 +957,9 @@ def get_provider(
 
     Provider resolution order:
       1. Explicit `provider` argument
-      2. AI_PROVIDER env var
+      2. AI_PROVIDER env var / keychain
       3. Auto-detect from which keys/tokens are present in env
-      4. Default: anthropic
-
-    Model resolution order:
-      1. Explicit `model` argument
-      2. AI_MODEL env var
-      3. Provider-specific default
-
-    Supported AI_PROVIDER values:
-      anthropic           — Claude API key (or Max with API access)
-      openai              — OpenAI API key
-      claude_subscription — `claude` CLI (Pro/Max browser subscription)
-      openai_subscription — ChatGPT session token (unofficial, Plus/Team)
+      4. If nothing found: interactive first-time setup menu
     """
     reg = registry or build_registry()
 
@@ -972,6 +969,11 @@ def get_provider(
         or _auto_detect_provider()
     )
 
+    # If auto-detect fell back to anthropic but no key is available,
+    # run the first-time setup instead of prompting for a key mid-command.
+    if chosen == PROVIDER_ANTHROPIC and not _has_anthropic_key():
+        chosen = _first_time_provider_setup()
+
     chosen_model = (
         model
         or os.environ.get("AI_MODEL", "")
@@ -979,6 +981,12 @@ def get_provider(
     )
 
     system = build_system_prompt()
+
+    if chosen == "none":
+        raise RuntimeError(
+            "No AI provider configured.\n"
+            "Run [bold]credentials setup[/bold] → AI Provider to set one up."
+        )
 
     dispatch = {
         PROVIDER_ANTHROPIC:  AnthropicProvider,
@@ -991,6 +999,140 @@ def get_provider(
 
     cls = dispatch.get(chosen, AnthropicProvider)
     return cls(chosen_model, reg, system)
+
+
+def _has_anthropic_key() -> bool:
+    """Check whether an Anthropic API key is available without prompting."""
+    from config.credentials import _kr_get
+    return bool(os.environ.get("ANTHROPIC_API_KEY") or _kr_get("ANTHROPIC_API_KEY"))
+
+
+def _first_time_provider_setup() -> str:
+    """
+    First-time AI provider setup — shown when no provider is configured.
+
+    Saves the choice to the OS keychain so it's never asked again.
+    Returns the chosen provider name string.
+    """
+    import shutil
+    from rich.console import Console
+    from rich.panel   import Panel
+    from rich.prompt  import Prompt
+    from config.credentials import _kr_set, _kr_get
+
+    _c = Console()
+
+    # Check what's available to inform the menu
+    has_claude_cli = bool(shutil.which("claude") or shutil.which("claude-code"))
+
+    subscription_hint = (
+        "[bold green]✓ claude CLI detected[/bold green]"
+        if has_claude_cli else
+        "[dim](install: npm i -g @anthropic-ai/claude-code)[/dim]"
+    )
+
+    _c.print()
+    _c.print(Panel(
+        "\n"
+        "  No AI provider configured yet. Pick one to continue:\n\n"
+        f"  [cyan][1][/cyan] [bold]Claude subscription[/bold]  {subscription_hint}\n"
+        "       Use your Claude Pro or Max plan — no API costs.\n\n"
+        "  [cyan][2][/cyan] [bold]Claude API key[/bold]  [dim](console.anthropic.com)[/dim]\n"
+        "       Pay-per-use. Claude Haiku is very cheap for trading analysis.\n\n"
+        "  [cyan][3][/cyan] [bold]Gemini (Google)[/bold]  [dim][green]Free tier available — aistudio.google.com[/green][/dim]\n"
+        "       Gemini 2.5 Pro is free with generous rate limits.\n\n"
+        "  [cyan][4][/cyan] [bold]OpenAI (GPT-4o)[/bold]  [dim](platform.openai.com)[/dim]\n"
+        "       Pay-per-use API key.\n\n"
+        "  [cyan][5][/cyan] ChatGPT Plus subscription  "
+        "[dim](session token, unofficial)[/dim]\n\n"
+        "  [cyan][6][/cyan] Skip AI for now\n",
+        title="[bold yellow]🤖  AI Provider Setup[/bold yellow]",
+        border_style="yellow",
+        padding=(0, 2),
+    ))
+
+    choice = Prompt.ask(
+        "  [bold]Choose[/bold]",
+        choices=["1", "2", "3", "4", "5", "6"],
+        default="1" if has_claude_cli else "3",
+    )
+
+    def _save(key: str, value: str) -> None:
+        _kr_set(key, value)
+        os.environ[key] = value
+
+    if choice == "1":
+        if not has_claude_cli:
+            _c.print(
+                "\n  [yellow]claude CLI not found.[/yellow]  Install it first:\n"
+                "    npm install -g @anthropic-ai/claude-code\n"
+                "    claude login\n\n"
+                "  Falling back to Gemini free tier for now.\n"
+            )
+            _save("AI_PROVIDER", PROVIDER_GEMINI)
+            return PROVIDER_GEMINI
+        _save("AI_PROVIDER", PROVIDER_CLAUDE_CLI)
+        _c.print("  [green]✓ Using Claude subscription (claude CLI)[/green]\n")
+        return PROVIDER_CLAUDE_CLI
+
+    elif choice == "2":
+        from config.credentials import get_credential
+        api_key = get_credential("ANTHROPIC_API_KEY", "Anthropic API Key", secret=True, required=False)
+        if api_key:
+            _save("AI_PROVIDER", PROVIDER_ANTHROPIC)
+            _c.print("  [green]✓ Using Anthropic API[/green]\n")
+            return PROVIDER_ANTHROPIC
+        _c.print("  [yellow]No key entered — skipping AI.[/yellow]\n")
+        _save("AI_PROVIDER", "none")
+        return "none"
+
+    elif choice == "3":
+        from config.credentials import get_credential
+        api_key = get_credential(
+            "GEMINI_API_KEY", "Google Gemini API Key", secret=True, required=False
+        )
+        if api_key:
+            _save("AI_PROVIDER", PROVIDER_GEMINI)
+            _c.print(
+                "  [green]✓ Using Gemini.[/green]  "
+                "[dim]Get a free key at aistudio.google.com[/dim]\n"
+            )
+            return PROVIDER_GEMINI
+        _c.print("  [yellow]No key entered — skipping AI.[/yellow]\n")
+        _save("AI_PROVIDER", "none")
+        return "none"
+
+    elif choice == "4":
+        from config.credentials import get_credential
+        api_key = get_credential("OPENAI_API_KEY", "OpenAI API Key", secret=True, required=False)
+        if api_key:
+            _save("AI_PROVIDER", PROVIDER_OPENAI)
+            _c.print("  [green]✓ Using OpenAI GPT-4o[/green]\n")
+            return PROVIDER_OPENAI
+        _c.print("  [yellow]No key entered — skipping AI.[/yellow]\n")
+        _save("AI_PROVIDER", "none")
+        return "none"
+
+    elif choice == "5":
+        _c.print(
+            "\n  [dim]Get token: chatgpt.com → F12 DevTools → Application → Cookies[/dim]\n"
+            "  [dim]→ __Secure-next-auth.session-token[/dim]\n"
+        )
+        from config.credentials import get_credential
+        token = get_credential(
+            "OPENAI_SESSION_TOKEN", "ChatGPT Session Token", secret=True, required=False
+        )
+        if token:
+            _save("AI_PROVIDER", PROVIDER_OPENAI_SUB)
+            _c.print("  [green]✓ Using ChatGPT Plus subscription[/green]\n")
+            return PROVIDER_OPENAI_SUB
+        _c.print("  [yellow]No token entered — skipping AI.[/yellow]\n")
+        _save("AI_PROVIDER", "none")
+        return "none"
+
+    else:  # skip
+        _c.print("  [dim]AI skipped for this session.[/dim]\n")
+        return "none"
 
 
 def _auto_detect_provider() -> str:
@@ -1144,8 +1286,9 @@ class TradingAgent:
             active = "✓" if name == _infer_current_name(self._provider) else " "
             console.print(f"  [{active}] [cyan]{name:<22}[/cyan]  {cred:<28}  [dim]{note}[/dim]")
         console.print(
-            "\n  Set [bold]AI_PROVIDER[/bold] and [bold]AI_MODEL[/bold] in .env, "
-            "or pass to TradingAgent(provider=..., model=...).\n"
+            "\n  Switch with: [bold]provider <name>[/bold]  "
+            "e.g. [cyan]provider claude_subscription[/cyan]\n"
+            "  Or run [bold]credentials setup[/bold] → AI Provider to configure persistently.\n"
         )
 
     @property
