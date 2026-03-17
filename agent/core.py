@@ -471,22 +471,34 @@ class ClaudeCLIProvider(LLMProvider):
         # permission to run Python), we scan the prompt text for tool
         # names that exist in our registry.  This is instant and reliable.
         tool_plan = self._match_tools_in_text(last_user_msg)
+        console.print(f"[dim]  DEBUG: matched {len(tool_plan)} tools: "
+                       f"{[t[0] for t in tool_plan]}[/dim]")
 
         # ── Phase 2: execute matched tools locally (fast) ─────────
+        # Suppress interactive credential prompts during batch tool execution.
+        # Without this, tools like get_stock_news pause for a NewsAPI key input,
+        # blocking the entire flow.
+        os.environ["_CLI_BATCH_MODE"] = "1"
         collected: list[str] = []
         for name, args in tool_plan:
             _print_tool_call(name, args)
-            result = self.registry.execute(name, args)
-            collected.append(
-                f'<tool_result name="{name}">\n'
-                f"{json.dumps(result, indent=2)}\n"
-                f"</tool_result>"
-            )
+            try:
+                result = self.registry.execute(name, args)
+                collected.append(
+                    f'<tool_result name="{name}">\n'
+                    f"{json.dumps(result, indent=2)}\n"
+                    f"</tool_result>"
+                )
+                console.print(f"[dim]  DEBUG: {name} → OK "
+                               f"({len(json.dumps(result))} chars)[/dim]")
+            except Exception as exc:
+                console.print(f"[dim]  ⚠ {name} skipped: {exc}[/dim]")
+        os.environ.pop("_CLI_BATCH_MODE", None)
+
+        console.print(f"[dim]  DEBUG: {len(collected)} tool results collected, "
+                       f"total {sum(len(c) for c in collected)} chars[/dim]")
 
         # ── Phase 3: synthesis — ONE CLI call to write the response ─
-        # We append a text-only instruction to the trading system prompt so
-        # Claude won't try to use code to "help."  And we pass
-        # --allowedTools "" to disable Claude Code's tools entirely.
         _synthesis_system = (
             self.system_prompt
             + "\n\n"
@@ -508,6 +520,10 @@ class ClaudeCLIProvider(LLMProvider):
         else:
             synthesis_prompt = last_user_msg
 
+        # Log the CLI command and prompt size
+        console.print(f"[dim]  DEBUG: synthesis prompt = {len(synthesis_prompt)} chars[/dim]")
+        console.print(f"[dim]  DEBUG: system prompt = {len(_synthesis_system)} chars[/dim]")
+
         console.print("[dim]  Generating response…[/dim]")
         response = self._call_cli(
             synthesis_prompt,
@@ -515,6 +531,8 @@ class ClaudeCLIProvider(LLMProvider):
             timeout=300,
             label="Generating response",
         )
+        # Log first 200 chars of the response to see what came back
+        console.print(f"[dim]  DEBUG: response preview = {response[:200]!r}[/dim]")
         console.print(response, highlight=False)
         return response
 
@@ -565,7 +583,12 @@ class ClaudeCLIProvider(LLMProvider):
             "--disallowedTools", _BLOCKED,
         ]
         if system:
-            cmd += ["--system", system]
+            cmd += ["--append-system-prompt", system]
+
+        # Log the full command (minus system prompt for brevity)
+        cmd_preview = [c if len(c) < 80 else c[:77] + "..." for c in cmd]
+        console.print(f"[dim]  DEBUG _call_cli: cmd = {cmd_preview}[/dim]")
+        console.print(f"[dim]  DEBUG _call_cli: prompt size = {len(prompt)} chars[/dim]")
 
         try:
             proc = subprocess.Popen(
@@ -613,8 +636,13 @@ class ClaudeCLIProvider(LLMProvider):
             t_out.join(timeout=5)
             t_err.join(timeout=5)
 
+            console.print(f"[dim]  DEBUG _call_cli: returncode = {proc.returncode}[/dim]")
+            stderr_text = "".join(err_buf).strip()
+            if stderr_text:
+                console.print(f"[dim]  DEBUG _call_cli: stderr = {stderr_text[:300]!r}[/dim]")
+
             if proc.returncode != 0:
-                err = "".join(err_buf).strip() or "".join(out_buf).strip() or "non-zero exit"
+                err = stderr_text or "".join(out_buf).strip() or "non-zero exit"
                 return f"[Claude CLI error: {err}]"
 
             return "".join(out_buf).strip()

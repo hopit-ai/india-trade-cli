@@ -158,7 +158,12 @@ def get_credential(
     if value:
         return value
 
-    # 3. Interactive prompt
+    # 3. Interactive prompt (skip in batch mode — e.g. CLI provider tool loop)
+    if os.environ.get("_CLI_BATCH_MODE"):
+        if required:
+            raise RuntimeError(f"Credential '{key}' not configured (skipped in batch mode)")
+        return ""
+
     console.print(f"\n[yellow]⚠  Missing credential:[/yellow] [bold]{display}[/bold]")
 
     if secret:
