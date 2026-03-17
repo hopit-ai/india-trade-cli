@@ -499,9 +499,8 @@ class ClaudeCLIProvider(LLMProvider):
                        f"total {sum(len(c) for c in collected)} chars[/dim]")
 
         # ── Phase 3: synthesis — ONE CLI call to write the response ─
-        # Embed the system prompt directly in the stdin text rather than
-        # passing via --append-system-prompt, which fails on long prompts
-        # with special characters (causes API 400 errors).
+        # Build the full prompt with: system context + conversation history
+        # + tool results + latest user message.
         _context = (
             self.system_prompt
             + "\n\n"
@@ -509,20 +508,39 @@ class ClaudeCLIProvider(LLMProvider):
             "Do NOT attempt to fetch more data or run any code."
         )
 
+        # Include conversation history so follow-up messages have context
+        # (e.g. user says "1 year" after asking about RELIANCE vs SHAKTI)
+        history_parts: list[str] = []
+        for msg in messages[:-1]:  # all messages except the last (already in last_user_msg)
+            role = msg["role"].upper()
+            content = msg["content"] if isinstance(msg["content"], str) else json.dumps(msg["content"])
+            # Truncate very long assistant messages to keep prompt manageable
+            if role == "ASSISTANT" and len(content) > 1500:
+                content = content[:1500] + "\n[...truncated...]"
+            history_parts.append(f"{role}: {content}")
+
+        parts = [_context]
+
+        if history_parts:
+            parts.append("\n--- CONVERSATION HISTORY ---\n" + "\n\n".join(history_parts))
+
         if collected:
-            synthesis_prompt = (
-                _context + "\n\n"
-                "The following live market data has already been collected for you.\n"
-                "Use it to answer the user's request.\n\n"
+            parts.append(
+                "\n--- DATA COLLECTED FROM MARKET TOOLS ---\n"
                 + "\n\n".join(collected)
-                + "\n\n--- USER REQUEST ---\n"
-                + last_user_msg
-                + "\n\n"
-                "Write a concise, well-formatted response for a terminal. "
+            )
+
+        parts.append(
+            "\n--- CURRENT USER MESSAGE ---\n" + last_user_msg
+        )
+
+        if collected:
+            parts.append(
+                "\nWrite a concise, well-formatted response for a terminal. "
                 "Use bullet points, cite the actual numbers from the data above."
             )
-        else:
-            synthesis_prompt = _context + "\n\n" + last_user_msg
+
+        synthesis_prompt = "\n".join(parts)
 
         console.print(f"[dim]  DEBUG: synthesis prompt = {len(synthesis_prompt)} chars[/dim]")
 
