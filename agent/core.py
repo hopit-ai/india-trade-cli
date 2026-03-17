@@ -432,130 +432,247 @@ class ClaudeCLIProvider(LLMProvider):
 
     def chat(self, messages: list[dict], stream: bool = True) -> str:
         """
-        Tool-calling loop implemented via repeated CLI calls.
-        Tools are described in the prompt; results injected as user messages.
+        Two-phase approach to avoid multiple slow subprocess calls.
+
+        Problem: each `claude -p` subprocess takes 30–90 s to start + respond.
+        The old approach made one call per tool round (5–6 for morning-brief)
+        → 3–9 minutes total, always timing out.
+
+        New approach (2 CLI calls total, regardless of tool count):
+
+          Phase 1 — Planner call
+            Send a tiny prompt (user question + bare tool names, no descriptions,
+            no system prompt). Claude returns a JSON array of tool calls to make.
+            Fast: small context, no tool descriptions to read.
+
+          Phase 2 — Execute tools locally (Python, instant)
+            Run every requested tool via the ToolRegistry in this process.
+            No subprocess overhead at all.
+
+          Phase 3 — Synthesis call
+            Send ONE CLI call with: system prompt + user question + all tool
+            results. Claude writes the final narrative.
+
+        If the planner fails to return valid JSON (network error, unexpected
+        output, etc.) we fall back to a direct synthesis call without tool data.
         """
-        tool_descriptions = self._build_tool_descriptions()
-        history           = list(messages)
+        last_user_msg = ""
+        for m in reversed(messages):
+            if m["role"] == "user":
+                last_user_msg = (
+                    m["content"] if isinstance(m["content"], str)
+                    else json.dumps(m["content"])
+                )
+                break
 
-        for _ in range(MAX_TOOL_ROUNDS):
-            full_prompt = self._render_prompt(history, tool_descriptions)
-            raw_output  = self._call_cli(full_prompt)
+        # ── Phase 1: in-process tool matching (no subprocess) ─────
+        # Instead of asking the Claude CLI which tools to call (which
+        # triggers Claude Code's coding-agent behaviour and asks for
+        # permission to run Python), we scan the prompt text for tool
+        # names that exist in our registry.  This is instant and reliable.
+        tool_plan = self._match_tools_in_text(last_user_msg)
 
-            # Try to parse tool calls from model output
-            tool_calls = self._parse_tool_calls(raw_output)
+        # ── Phase 2: execute matched tools locally (fast) ─────────
+        collected: list[str] = []
+        for name, args in tool_plan:
+            _print_tool_call(name, args)
+            result = self.registry.execute(name, args)
+            collected.append(
+                f'<tool_result name="{name}">\n'
+                f"{json.dumps(result, indent=2)}\n"
+                f"</tool_result>"
+            )
 
-            if tool_calls:
-                # Strip the tool_call JSON from the output text
-                display_text = self._strip_tool_calls(raw_output)
-                if display_text.strip():
-                    console.print(display_text, highlight=False)
+        # ── Phase 3: synthesis — ONE CLI call to write the response ─
+        # We append a text-only instruction to the trading system prompt so
+        # Claude won't try to use code to "help."  And we pass
+        # --allowedTools "" to disable Claude Code's tools entirely.
+        _synthesis_system = (
+            self.system_prompt
+            + "\n\n"
+            "IMPORTANT: Respond using ONLY the data provided. "
+            "Do NOT attempt to fetch more data or run any code."
+        )
 
-                # Build assistant turn
-                history.append(_assistant_msg(raw_output))
+        if collected:
+            synthesis_prompt = (
+                "The following live market data has already been collected for you.\n"
+                "Use it to answer the user's request.\n\n"
+                + "\n\n".join(collected)
+                + "\n\n--- USER REQUEST ---\n"
+                + last_user_msg
+                + "\n\n"
+                "Write a concise, well-formatted response for a terminal. "
+                "Use bullet points, cite the actual numbers from the data above."
+            )
+        else:
+            synthesis_prompt = last_user_msg
 
-                # Execute and inject results
-                results_text = ""
-                for tc in tool_calls:
-                    _print_tool_call(tc["name"], tc["input"])
-                    result = self.registry.execute(tc["name"], tc["input"])
-                    results_text += (
-                        f"\n<tool_result name=\"{tc['name']}\">\n"
-                        f"{json.dumps(result, indent=2)}\n"
-                        f"</tool_result>\n"
-                    )
-                history.append(_user_msg(results_text))
-
-            else:
-                # No tool calls → this is the final answer
-                console.print(raw_output, highlight=False)
-                return raw_output
-
-        return "[Agent hit tool-round limit]"
+        console.print("[dim]  Generating response…[/dim]")
+        response = self._call_cli(
+            synthesis_prompt,
+            system=_synthesis_system,
+            timeout=300,
+            label="Generating response",
+        )
+        console.print(response, highlight=False)
+        return response
 
     # ── Private ───────────────────────────────────────────────
 
-    def _call_cli(self, prompt: str) -> str:
+    def _call_cli(
+        self,
+        prompt:  str,
+        system:  str  = "",
+        timeout: int  = 300,
+        label:   str  = "Claude is thinking",
+    ) -> str:
         """
         Invoke `claude -p` non-interactively, sending the prompt via **stdin**.
 
-        Shows a live spinner so the user knows work is in progress — the CLI
-        can take 30–120 s for a complex prompt like morning-brief, and a blank
-        terminal makes it look frozen.
+        Args:
+            prompt:  Full prompt text (sent via stdin to avoid OS arg-length limits).
+            system:  Optional system prompt passed via --system.  This OVERRIDES
+                     Claude Code's built-in coding-agent system prompt, giving us a
+                     clean text-only LLM without tool-use behaviour.
+            timeout: Seconds to wait before giving up (default 5 min).
+            label:   Spinner label shown while waiting.
 
-        Passing the prompt via stdin (not as a CLI argument) avoids OS
-        argument-length limits on large contexts.
+        Why --system matters:
+            `claude -p` runs Claude Code — an agentic coding assistant.  Its
+            default system prompt tells it to use tools (bash, Python, etc.).
+            If we don't override it, Claude will try to "help" by running shell
+            commands instead of just responding with text.  Passing --system with
+            our own instructions suppresses that behaviour entirely.
+
+        Uses subprocess.Popen + a reader thread so we can show a live spinner
+        while the process runs, and still collect stdout/stderr when it exits.
         """
+        import threading
         from rich.live    import Live
         from rich.spinner import Spinner
+
+        # --allowedTools "" disables ALL of Claude Code's built-in tools
+        # (Bash, Edit, Read, Write, etc.) so it can only respond with text.
+        # --system overrides the coding-agent system prompt with ours.
+        cmd = [self._cli, "-p", "--output-format", "text", "--allowedTools", ""]
+        if system:
+            cmd += ["--system", system]
+
         try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin  = subprocess.PIPE,
+                stdout = subprocess.PIPE,
+                stderr = subprocess.PIPE,
+                text   = True,
+            )
+            # Write prompt via stdin then close so the CLI knows input is done
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+
+            out_buf: list[str] = []
+            err_buf: list[str] = []
+
+            def _read_out() -> None:
+                for line in proc.stdout:
+                    out_buf.append(line)
+
+            def _read_err() -> None:
+                for line in proc.stderr:
+                    err_buf.append(line)
+
+            t_out = threading.Thread(target=_read_out, daemon=True)
+            t_err = threading.Thread(target=_read_err, daemon=True)
+            t_out.start()
+            t_err.start()
+
             with Live(
-                Spinner("dots", text=" Claude is thinking… (may take 1-2 min)"),
+                Spinner("dots", text=f" {label}… (may take 1–2 min)"),
                 console=console,
-                transient=True,       # spinner disappears once the response arrives
+                transient=True,
                 refresh_per_second=8,
             ):
-                result = subprocess.run(
-                    [self._cli, "-p", "--output-format", "text"],
-                    input=prompt,          # ← prompt via stdin, NOT as a CLI argument
-                    capture_output=True,
-                    text=True,
-                    timeout=180,           # 3 min — morning-brief can be slow
-                )
-            if result.returncode != 0:
-                # Prefer stderr; fall back to stdout (some CLI versions write
-                # error text there) so the user always sees a useful message.
-                err = result.stderr.strip() or result.stdout.strip() or "non-zero exit"
+                try:
+                    proc.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    t_out.join(timeout=2)
+                    t_err.join(timeout=2)
+                    mins = timeout // 60
+                    return f"[Claude CLI timed out after {mins} min — try a simpler request]"
+
+            t_out.join(timeout=5)
+            t_err.join(timeout=5)
+
+            if proc.returncode != 0:
+                err = "".join(err_buf).strip() or "".join(out_buf).strip() or "non-zero exit"
                 return f"[Claude CLI error: {err}]"
-            return result.stdout.strip()
-        except subprocess.TimeoutExpired:
-            return "[Claude CLI timed out after 3 minutes]"
+
+            return "".join(out_buf).strip()
+
         except FileNotFoundError:
-            return "[Claude CLI not found — install with: npm i -g @anthropic-ai/claude-code]"
+            return (
+                "[Claude CLI not found — install with:\n"
+                "  npm install -g @anthropic-ai/claude-code\n"
+                "then run: claude login]"
+            )
 
-    def _build_tool_descriptions(self) -> str:
-        """Describe available tools to the model in the system prompt."""
-        lines = ["You have access to the following tools. Call them by outputting JSON like:"]
-        lines.append('{"tool_call": {"name": "tool_name", "arguments": {...}}}')
-        lines.append("")
-        for t in self.registry.anthropic_schema():
-            lines.append(f"• {t['name']}: {t['description']}")
-        return "\n".join(lines)
+    def _match_tools_in_text(self, text: str) -> list[tuple[str, dict]]:
+        """
+        Scan prompt text for registered tool names and return matches.
 
-    def _render_prompt(self, history: list[dict], tool_descriptions: str) -> str:
-        """Render conversation history into a single prompt string."""
-        parts = [
-            "SYSTEM:\n" + self.system_prompt,
-            "\nAVAILABLE TOOLS:\n" + tool_descriptions,
-            "\n--- CONVERSATION ---",
-        ]
-        for msg in history:
-            role    = msg["role"].upper()
-            content = msg["content"] if isinstance(msg["content"], str) else json.dumps(msg["content"])
-            parts.append(f"\n{role}:\n{content}")
-        parts.append("\nASSISTANT:")
-        return "\n".join(parts)
+        This replaces the old "planner CLI call" approach: instead of asking
+        the Claude CLI which tools to call (which triggers Claude Code's
+        coding-agent behaviour), we match tool names directly in the user's
+        prompt.  The structured command prompts (MORNING_BRIEF_PROMPT,
+        ANALYZE_STOCK_PROMPT, etc.) already list tool names explicitly, so
+        simple string matching is reliable and instant.
 
-    @staticmethod
-    def _parse_tool_calls(text: str) -> list[dict]:
-        """Extract tool_call JSON blocks from model output."""
+        For tools that need arguments (e.g. get_quote needs symbols), we
+        try to infer them from the prompt text.  If we can't, the tool is
+        called with {} and its implementation uses sensible defaults.
+
+        Returns list of (tool_name, arguments_dict) tuples.
+        """
         import re
-        pattern = r'\{["\']tool_call["\']\s*:\s*\{.*?\}\s*\}'
-        calls   = []
-        for m in re.finditer(pattern, text, re.DOTALL):
-            try:
-                obj = json.loads(m.group())
-                tc  = obj.get("tool_call", {})
-                calls.append({"name": tc.get("name", ""), "input": tc.get("arguments", {})})
-            except json.JSONDecodeError:
-                pass
-        return calls
+        known = {t["name"] for t in self.registry.anthropic_schema()}
+        matched: list[tuple[str, dict]] = []
+        seen: set[str] = set()
 
-    @staticmethod
-    def _strip_tool_calls(text: str) -> str:
-        """Remove tool_call JSON from display text."""
-        import re
-        return re.sub(r'\{["\']tool_call["\']\s*:\s*\{.*?\}\s*\}', "", text, flags=re.DOTALL).strip()
+        # Try to extract a stock symbol from the prompt, for tools that need one.
+        # Matches patterns like: "NSE:RELIANCE", '"RELIANCE"', 'of RELIANCE', etc.
+        sym_match = re.search(
+            r'(?:NSE:|BSE:)?([A-Z][A-Z0-9]{1,19})'
+            r'(?=[\s"\'.,;:\]\)—]|$)',
+            text,
+        )
+        symbol = sym_match.group(1) if sym_match else ""
+        # Filter out noise words that look like symbols
+        _noise = {
+            "NIFTY", "BANKNIFTY", "VIX", "SYSTEM", "USER", "ASSISTANT",
+            "JSON", "NSE", "BSE", "IST", "AM", "PM", "RSI", "MACD", "PE",
+            "CE", "PUT", "CALL", "BUY", "SELL", "STT", "GST", "RBI",
+            "FII", "DII", "NOT", "USE", "THE", "FOR", "AND",
+        }
+        if symbol in _noise:
+            symbol = ""
+
+        for name in known:
+            if name in text and name not in seen:
+                seen.add(name)
+                # Infer arguments for common tool parameter patterns
+                args: dict = {}
+                schema = self.registry._tools[name].get("parameters", {})
+                props  = schema.get("properties", {})
+                if symbol:
+                    if "symbol" in props:
+                        args["symbol"] = symbol
+                    elif "symbols" in props:
+                        args["symbols"] = [f"NSE:{symbol}"]
+                matched.append((name, args))
+
+        return matched
 
 
 # ── OpenAI subscription provider (session token) ───────────────
