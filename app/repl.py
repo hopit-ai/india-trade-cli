@@ -59,7 +59,7 @@ COMMANDS = [
     "holdings", "positions", "orders",
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
-    "ai", "provider", "tui", "web",
+    "ai", "clear", "provider", "tui", "web",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -424,6 +424,7 @@ def cmd_help() -> None:
 
   [bold]AI[/bold]
     ai <message>     Chat directly with the AI agent
+    clear            Clear AI conversation history (start fresh)
     provider         Show / switch AI provider (anthropic / openai / gemini / …)
 
   [bold]Interface[/bold]
@@ -544,6 +545,10 @@ def run_repl(broker: BrokerAPI) -> None:
                 else:
                     agent = get_agent()
                     agent.run_command("analyze", symbol=symbol)
+
+            elif command == "clear":
+                agent = get_agent()
+                agent.clear_history()
 
             elif command == "ai":
                 message = " ".join(args).strip()
