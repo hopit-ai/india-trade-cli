@@ -476,16 +476,25 @@ class ClaudeCLIProvider(LLMProvider):
     # ── Private ───────────────────────────────────────────────
 
     def _call_cli(self, prompt: str) -> str:
-        """Invoke `claude -p <prompt>` and return output."""
+        """
+        Invoke `claude -p` non-interactively, sending the prompt via **stdin**.
+
+        Passing the prompt as a CLI argument (`claude -p "…"`) hits OS argument-
+        length limits when the full context (system prompt + tool descriptions +
+        conversation history) is large.  Using stdin avoids that limit entirely.
+        """
         try:
             result = subprocess.run(
-                [self._cli, "-p", prompt, "--output-format", "text"],
+                [self._cli, "-p", "--output-format", "text"],
+                input=prompt,          # ← prompt via stdin, NOT as a CLI argument
                 capture_output=True,
                 text=True,
                 timeout=120,
             )
             if result.returncode != 0:
-                err = result.stderr.strip()
+                # Prefer stderr; fall back to stdout (some CLI versions write
+                # error text there) so the user always sees a useful message.
+                err = result.stderr.strip() or result.stdout.strip() or "non-zero exit"
                 return f"[Claude CLI error: {err}]"
             return result.stdout.strip()
         except subprocess.TimeoutExpired:
