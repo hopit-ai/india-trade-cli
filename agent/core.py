@@ -501,12 +501,19 @@ class ClaudeCLIProvider(LLMProvider):
         # ── Phase 3: synthesis — ONE CLI call to write the response ─
         # Build the full prompt with: system context + conversation history
         # + tool results + latest user message.
-        _context = (
-            self.system_prompt
-            + "\n\n"
-            "IMPORTANT: Respond using ONLY the data provided below. "
-            "Do NOT attempt to fetch more data or run any code."
-        )
+        if collected:
+            _extra = (
+                "\n\nIMPORTANT: Market data has already been collected for you below. "
+                "Use it to answer — do NOT run any code."
+            )
+        else:
+            _extra = (
+                "\n\nYou have access to WebSearch and WebFetch tools. "
+                "USE THEM to look up live market data, current prices, news, "
+                "option chains, and fundamentals before answering. "
+                "Always fetch real data — never guess prices. Do NOT run any code."
+            )
+        _context = self.system_prompt + _extra
 
         # Include conversation history so follow-up messages have context
         # (e.g. user says "1 year" after asking about RELIANCE vs SHAKTI)
