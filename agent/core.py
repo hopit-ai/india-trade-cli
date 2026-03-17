@@ -960,8 +960,16 @@ def get_provider(
       2. AI_PROVIDER env var / keychain
       3. Auto-detect from which keys/tokens are present in env
       4. If nothing found: interactive first-time setup menu
+
+    If a saved provider fails (e.g. package not installed), the bad value is
+    cleared from the keychain and the setup wizard runs automatically so the
+    user can pick a working provider without ever seeing a raw traceback.
     """
     reg = registry or build_registry()
+
+    # Remember whether the caller explicitly specified a provider so we know
+    # whether to propagate construction failures or silently recover.
+    explicit_provider = bool(provider)
 
     chosen = (
         provider
@@ -998,13 +1006,57 @@ def get_provider(
     }
 
     cls = dispatch.get(chosen, AnthropicProvider)
-    return cls(chosen_model, reg, system)
+
+    try:
+        return cls(chosen_model, reg, system)
+    except RuntimeError as exc:
+        # If the caller explicitly named a provider, propagate the error —
+        # they asked for something specific and should see why it failed.
+        if explicit_provider:
+            raise
+
+        # The provider came from a saved keychain value or auto-detect.
+        # It's broken (missing package, missing key, etc.).  Clear it so we
+        # don't hit the same error next time, then offer re-configuration.
+        first_line = str(exc).splitlines()[0]
+        console.print(
+            f"\n[yellow]⚠  Saved AI provider [bold]{chosen!r}[/bold] is unavailable:[/yellow]"
+            f" {first_line}\n"
+            "[dim]Clearing saved provider and running one-time setup...[/dim]\n"
+        )
+        _clear_saved_provider()
+
+        chosen = _first_time_provider_setup()
+        if chosen == "none":
+            raise RuntimeError(
+                "No AI provider configured.\n"
+                "Run [bold]credentials setup[/bold] → AI Provider to set one up."
+            ) from exc
+
+        cls2 = dispatch.get(chosen, AnthropicProvider)
+        return cls2(_default_model(chosen), reg, system)
 
 
 def _has_anthropic_key() -> bool:
     """Check whether an Anthropic API key is available without prompting."""
     from config.credentials import _kr_get
     return bool(os.environ.get("ANTHROPIC_API_KEY") or _kr_get("ANTHROPIC_API_KEY"))
+
+
+def _clear_saved_provider() -> None:
+    """
+    Remove AI_PROVIDER from the OS keychain and the current process environment.
+
+    Called when a saved provider fails to construct (e.g. required package not
+    installed) so the next call to get_provider() doesn't keep hitting the same
+    broken value.
+    """
+    try:
+        from config.credentials import _kr_set
+        _kr_set("AI_PROVIDER", "")   # blank it — falsy, so load_all() won't set os.environ
+    except Exception:
+        pass
+    os.environ.pop("AI_PROVIDER", None)
 
 
 def _first_time_provider_setup() -> str:
