@@ -552,10 +552,18 @@ class ClaudeCLIProvider(LLMProvider):
         from rich.live    import Live
         from rich.spinner import Spinner
 
-        # --allowedTools "" disables ALL of Claude Code's built-in tools
-        # (Bash, Edit, Read, Write, etc.) so it can only respond with text.
-        # --system overrides the coding-agent system prompt with ours.
-        cmd = [self._cli, "-p", "--output-format", "text", "--allowedTools", ""]
+        # Block every Claude Code tool so it can ONLY respond with text.
+        # --allowedTools "" is interpreted as "no filter" (all allowed), so
+        # we use --disallowedTools to explicitly block every known tool.
+        _BLOCKED = (
+            "Bash Read Write Edit Glob Grep "
+            "WebFetch WebSearch Agent NotebookEdit TodoWrite"
+        )
+        cmd = [
+            self._cli, "-p",
+            "--output-format", "text",
+            "--disallowedTools", _BLOCKED,
+        ]
         if system:
             cmd += ["--system", system]
 
