@@ -40,19 +40,33 @@ SERVICE = "india-trade-cli"
 #   is_secret=False → plain input, still stored in keychain
 
 KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
-    # ── Broker ───────────────────────────────────────────────
-    ("KITE_API_KEY",        "Zerodha API Key",         False),
-    ("KITE_API_SECRET",     "Zerodha API Secret",      True),
-    ("GROWW_CLIENT_ID",     "Groww Client ID",         False),
-    ("GROWW_CLIENT_SECRET", "Groww Client Secret",     True),
-    # ── AI Providers ─────────────────────────────────────────
-    ("ANTHROPIC_API_KEY",   "Anthropic API Key",       True),
-    ("OPENAI_API_KEY",      "OpenAI API Key",          True),
-    ("GEMINI_API_KEY",      "Google Gemini API Key",   True),
-    ("OPENAI_SESSION_TOKEN","OpenAI Session Token",    True),
-    ("GOOGLE_CLOUD_PROJECT","Google Cloud Project ID", False),
+    # ── Zerodha ──────────────────────────────────────────────
+    ("KITE_API_KEY",        "Zerodha API Key",                     False),
+    ("KITE_API_SECRET",     "Zerodha API Secret",                  True),
+    # ── Groww ────────────────────────────────────────────────
+    ("GROWW_CLIENT_ID",     "Groww Client ID",                     False),
+    ("GROWW_CLIENT_SECRET", "Groww Client Secret",                 True),
+    # ── Angel One ────────────────────────────────────────────
+    ("ANGEL_API_KEY",       "Angel One API Key",                   False),
+    ("ANGEL_CLIENT_CODE",   "Angel One Client Code (Login ID)",    False),
+    ("ANGEL_PASSWORD",      "Angel One Trading Password",          True),
+    ("ANGEL_TOTP_SECRET",   "Angel One TOTP Secret",               True),
+    # ── Upstox ───────────────────────────────────────────────
+    ("UPSTOX_API_KEY",      "Upstox API Key",                      False),
+    ("UPSTOX_API_SECRET",   "Upstox API Secret",                   True),
+    # ── Fyers ────────────────────────────────────────────────
+    ("FYERS_APP_ID",        "Fyers App ID",                        False),
+    ("FYERS_SECRET_KEY",    "Fyers Secret Key",                    True),
+    # ── AI Provider selection ─────────────────────────────────
+    ("AI_PROVIDER",         "AI Provider (anthropic / claude_subscription / openai / gemini / …)", False),
+    # ── AI API Keys ──────────────────────────────────────────
+    ("ANTHROPIC_API_KEY",   "Anthropic API Key",                   True),
+    ("OPENAI_API_KEY",      "OpenAI API Key",                      True),
+    ("GEMINI_API_KEY",      "Google Gemini API Key",               True),
+    ("OPENAI_SESSION_TOKEN","OpenAI Session Token (ChatGPT Plus)", True),
+    ("GOOGLE_CLOUD_PROJECT","Google Cloud Project ID",             False),
     # ── Data / News ───────────────────────────────────────────
-    ("NEWSAPI_KEY",         "NewsAPI.org Key",         True),
+    ("NEWSAPI_KEY",         "NewsAPI.org Key",                     True),
 ]
 
 _KNOWN_KEYS = {k for k, _, _ in KNOWN_CREDENTIALS}
@@ -246,18 +260,35 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
     )
 
     # Group by section
-    sections = {
-        "Broker (Zerodha / Groww)": [
-            (k, l, s) for k, l, s in targets
-            if k in ("KITE_API_KEY", "KITE_API_SECRET", "GROWW_CLIENT_ID", "GROWW_CLIENT_SECRET")
+    _ZERODHA_KEYS   = {"KITE_API_KEY", "KITE_API_SECRET"}
+    _GROWW_KEYS     = {"GROWW_CLIENT_ID", "GROWW_CLIENT_SECRET"}
+    _ANGEL_KEYS     = {"ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PASSWORD", "ANGEL_TOTP_SECRET"}
+    _UPSTOX_KEYS    = {"UPSTOX_API_KEY", "UPSTOX_API_SECRET"}
+    _FYERS_KEYS     = {"FYERS_APP_ID", "FYERS_SECRET_KEY"}
+    _AI_KEYS        = {"AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY",
+                       "OPENAI_SESSION_TOKEN", "GOOGLE_CLOUD_PROJECT"}
+
+    sections: dict[str, list] = {
+        "Zerodha (Kite Connect)": [
+            (k, l, s) for k, l, s in targets if k in _ZERODHA_KEYS
         ],
-        "AI Providers": [
-            (k, l, s) for k, l, s in targets
-            if "ANTHROPIC" in k or "OPENAI" in k or "GEMINI" in k or "GOOGLE" in k
+        "Groww": [
+            (k, l, s) for k, l, s in targets if k in _GROWW_KEYS
+        ],
+        "Angel One (SmartAPI — free)": [
+            (k, l, s) for k, l, s in targets if k in _ANGEL_KEYS
+        ],
+        "Upstox": [
+            (k, l, s) for k, l, s in targets if k in _UPSTOX_KEYS
+        ],
+        "Fyers": [
+            (k, l, s) for k, l, s in targets if k in _FYERS_KEYS
+        ],
+        "AI Provider": [
+            (k, l, s) for k, l, s in targets if k in _AI_KEYS
         ],
         "Market Data": [
-            (k, l, s) for k, l, s in targets
-            if "NEWSAPI" in k
+            (k, l, s) for k, l, s in targets if "NEWSAPI" in k
         ],
     }
 
@@ -265,7 +296,16 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
     for section, items in sections.items():
         if not items:
             continue
+
         console.print(f"[bold]{section}[/bold]")
+
+        # Special interactive flow for the AI Provider section
+        if section == "AI Provider" and any(k == "AI_PROVIDER" for k, _, _ in items):
+            _wizard_ai_provider(items)
+            saved += sum(1 for k, _, _ in items if _kr_get(k))
+            console.print()
+            continue
+
         for key, label, is_secret in items:
             current = _kr_get(key) or os.environ.get(key, "")
             hint    = " [dim](already set — press Enter to keep)[/dim]" if current else ""
@@ -292,6 +332,86 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
         f"[bold green]✓  Setup complete.[/bold green]  "
         f"{saved} credential(s) saved to keychain.\n"
     )
+
+
+def _wizard_ai_provider(items: list[tuple[str, str, bool]]) -> None:
+    """
+    Interactive AI provider wizard with subscription vs API-key choice.
+    Called from run_setup_wizard for the AI Provider section.
+    """
+    console.print(
+        "\n  How do you want to use AI?\n\n"
+        "  [cyan][1][/cyan] [bold]Claude (Anthropic)[/bold] — API key  [dim](pay per token)[/dim]\n"
+        "  [cyan][2][/cyan] [bold]Claude Pro / Max subscription[/bold]  [dim](use `claude` CLI, no key needed)[/dim]\n"
+        "  [cyan][3][/cyan] [bold]OpenAI (GPT-4o)[/bold]  — API key  [dim](pay per token)[/dim]\n"
+        "  [cyan][4][/cyan] [bold]ChatGPT Plus / Team subscription[/bold]  [dim](session token, unofficial)[/dim]\n"
+        "  [cyan][5][/cyan] [bold]Google Gemini[/bold] — API key  [dim](free tier at aistudio.google.com)[/dim]\n"
+        "  [cyan][6][/cyan] [bold]Gemini Advanced subscription[/bold]  [dim](Vertex AI via gcloud, GCP project needed)[/dim]\n"
+        "  [cyan][7][/cyan] Skip / keep existing\n"
+    )
+    choice = Prompt.ask("  Choice", choices=["1", "2", "3", "4", "5", "6", "7"], default="7")
+
+    if choice == "1":
+        _save_cred("AI_PROVIDER", "anthropic")
+        _prompt_and_save("ANTHROPIC_API_KEY", "Anthropic API Key", secret=True)
+
+    elif choice == "2":
+        _save_cred("AI_PROVIDER", "claude_subscription")
+        console.print(
+            "\n  [green]✓ Set to Claude subscription mode.[/green]\n"
+            "  Make sure you have the [bold]claude[/bold] CLI installed and logged in:\n"
+            "    [dim]npm install -g @anthropic-ai/claude-code[/dim]\n"
+            "    [dim]claude login[/dim]\n"
+        )
+
+    elif choice == "3":
+        _save_cred("AI_PROVIDER", "openai")
+        _prompt_and_save("OPENAI_API_KEY", "OpenAI API Key", secret=True)
+
+    elif choice == "4":
+        _save_cred("AI_PROVIDER", "openai_subscription")
+        console.print(
+            "\n  [yellow]ChatGPT session token (unofficial — may break on updates).[/yellow]\n"
+            "  Get it: chatgpt.com → F12 DevTools → Application → Cookies\n"
+            "          → [bold]__Secure-next-auth.session-token[/bold]\n"
+        )
+        _prompt_and_save("OPENAI_SESSION_TOKEN", "ChatGPT Session Token", secret=True)
+
+    elif choice == "5":
+        _save_cred("AI_PROVIDER", "gemini")
+        console.print("  [dim]Get a free key at: aistudio.google.com[/dim]")
+        _prompt_and_save("GEMINI_API_KEY", "Google Gemini API Key", secret=True)
+
+    elif choice == "6":
+        _save_cred("AI_PROVIDER", "gemini_subscription")
+        console.print(
+            "\n  [green]Gemini Advanced via Vertex AI (gcloud ADC).[/green]\n"
+            "  Make sure you have run: [dim]gcloud auth application-default login[/dim]\n"
+        )
+        _prompt_and_save("GOOGLE_CLOUD_PROJECT", "Google Cloud Project ID", secret=False)
+
+
+def _save_cred(key: str, value: str) -> None:
+    """Save a credential to keychain + os.environ silently."""
+    if _kr_set(key, value):
+        os.environ[key] = value
+        console.print(f"  [green]✓ AI_PROVIDER → {value}[/green]")
+
+
+def _prompt_and_save(key: str, label: str, *, secret: bool) -> None:
+    """Prompt for a single credential and save it."""
+    current = _kr_get(key) or os.environ.get(key, "")
+    hint    = " [dim](already set — press Enter to keep)[/dim]" if current else ""
+    console.print(f"  {label}{hint}")
+    if secret:
+        value = Prompt.ask("  Value", password=True, default="")
+    else:
+        value = Prompt.ask("  Value", default=current or "")
+    value = value.strip()
+    if value:
+        if _kr_set(key, value):
+            os.environ[key] = value
+            console.print("  [green]✓ Saved[/green]")
 
 
 def cmd_credentials(args: list[str]) -> None:

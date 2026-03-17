@@ -59,7 +59,7 @@ COMMANDS = [
     "holdings", "positions", "orders",
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
-    "ai", "provider", "tui",
+    "ai", "provider", "tui", "web",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -356,6 +356,48 @@ def _cmd_toggle_paper() -> None:
         )
 
 
+def _cmd_web(port: int = 8765) -> None:
+    """
+    Start the FastAPI web server (broker login + portfolio API) and open the browser.
+
+    Usage:
+        web           — start on default port 8765
+        web 9000      — start on custom port
+    """
+    import threading
+    import webbrowser
+
+    try:
+        import uvicorn
+    except ImportError:
+        console.print(
+            "[red]uvicorn not installed.[/red]  Run: [bold]pip install uvicorn[standard][/bold]"
+        )
+        return
+
+    url = f"http://localhost:{port}"
+    console.print(f"\n[bold cyan]🌐 Starting web server on {url}[/bold cyan]")
+    console.print("[dim]  Zerodha, Groww, Angel One, Upstox and Fyers login available.[/dim]")
+    console.print("[dim]  Press Ctrl+C in this terminal to stop the server.[/dim]\n")
+
+    # Open browser slightly after server starts
+    def _open():
+        import time as _time
+        _time.sleep(1.2)
+        webbrowser.open(url)
+
+    threading.Thread(target=_open, daemon=True).start()
+
+    # Run uvicorn (blocks until Ctrl+C)
+    uvicorn.run(
+        "web.api:app",
+        host       = "0.0.0.0",
+        port       = port,
+        log_level  = "warning",   # quiet — the REPL already has UI
+    )
+    console.print("[dim]\nWeb server stopped. Back in REPL.[/dim]\n")
+
+
 def cmd_help() -> None:
     console.print("""
 [bold cyan]Available commands:[/bold cyan]
@@ -386,6 +428,7 @@ def cmd_help() -> None:
 
   [bold]Interface[/bold]
     tui              Launch split-panel Textual TUI
+    web [PORT]       Start web UI server (browser-based broker login, default port 8765)
     paper            Show paper-trading mode status
 
   [bold]Setup[/bold]
@@ -543,6 +586,10 @@ def run_repl(broker: BrokerAPI) -> None:
                 from ui.app import run_tui
                 run_tui()
                 console.print("[dim]Back in REPL mode.[/dim]")
+
+            elif command == "web":
+                port = int(args[0]) if args and args[0].isdigit() else 8765
+                _cmd_web(port)
 
             elif command == "credentials":
                 from config.credentials import cmd_credentials

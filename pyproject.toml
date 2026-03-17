@@ -10,22 +10,38 @@ requires-python = ">=3.11"
 readme = "README.md"
 
 dependencies = [
-    "kiteconnect>=4.2.0",
-    "httpx>=0.27.0",
+    # ── Brokers ──────────────────────────────────────────────────────
+    "kiteconnect>=4.2.0",           # Zerodha Kite Connect
+    "httpx>=0.27.0",                # Groww, Upstox, Fyers (REST client)
+    # ── AI ───────────────────────────────────────────────────────────
     "anthropic>=0.40.0",
+    # ── Terminal UI ───────────────────────────────────────────────────
     "rich>=13.7.0",
     "textual>=0.80.0",
     "prompt_toolkit>=3.0.0",
+    # ── Data & Analysis ───────────────────────────────────────────────
     "pandas>=2.2.0",
     "numpy>=1.26.0",
     "py_vollib>=1.0.1",
     "feedparser>=6.0.11",
     "newsapi-python>=0.2.7",
+    # ── Auth & Security ───────────────────────────────────────────────
     "python-dotenv>=1.0.0",
     "keyring>=25.2.0",
+    "pyotp>=2.9.0",                 # Angel One TOTP auto-login
+    # ── Date / Time ───────────────────────────────────────────────────
     "python-dateutil>=2.9.0",
     "pytz>=2024.1",
+    # ── Web UI (FastAPI server for browser-based login) ───────────────
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.24.0",
 ]
+
+# ── Optional broker SDKs (install separately if needed) ─────────────
+# Angel One SmartAPI:  pip install smartapi-python logzero
+# Note: smartapi-python is not on PyPI's standard index; install with:
+#   pip install smartapi-python
+# The brokers/angelone.py gracefully imports it at call-time.
 
 [project.scripts]
 trade = "app.main:main"

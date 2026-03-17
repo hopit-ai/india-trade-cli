@@ -40,10 +40,13 @@ from rich.prompt  import Prompt
 from rich.table   import Table
 from rich.text    import Text
 
-from .base    import BrokerAPI
-from .zerodha import ZerodhaAPI
-from .groww   import GrowwAPI
-from .mock    import MockBrokerAPI
+from .base     import BrokerAPI
+from .zerodha  import ZerodhaAPI
+from .groww    import GrowwAPI
+from .mock     import MockBrokerAPI
+from .angelone import AngelOneAPI
+from .upstox   import UpstoxAPI
+from .fyers    import FyersAPI
 
 from config.credentials import get_credential
 
@@ -58,16 +61,35 @@ _primary_key: str = ""
 
 # Human-readable names for display
 _BROKER_NAMES = {
-    "0": "mock", "demo": "mock", "mock": "mock",
-    "1": "zerodha", "zerodha": "zerodha",
-    "2": "groww",   "groww":   "groww",
+    "0": "mock",     "demo": "mock",         "mock": "mock",
+    "1": "zerodha",  "zerodha": "zerodha",
+    "2": "groww",    "groww":   "groww",
+    "3": "angelone", "angelone": "angelone", "angel": "angelone",
+    "4": "upstox",   "upstox":  "upstox",
+    "5": "fyers",    "fyers":   "fyers",
 }
 
 _BROKER_LABELS = {
-    "mock":    "[dim]Mock / Demo[/dim]",
-    "zerodha": "[cyan]Zerodha (Kite)[/cyan]",
-    "groww":   "[green]Groww[/green]",
+    "mock":     "[dim]Mock / Demo[/dim]",
+    "zerodha":  "[cyan]Zerodha (Kite)[/cyan]",
+    "groww":    "[green]Groww[/green]",
+    "angelone": "[bold yellow]Angel One (SmartAPI)[/bold yellow]",
+    "upstox":   "[magenta]Upstox[/magenta]",
+    "fyers":    "[blue]Fyers[/blue]",
 }
+
+# Brokers that use TOTP auto-login (no browser redirect)
+_TOTP_BROKERS = {"angelone"}
+
+# Broker menu display items (number, label, description)
+_BROKER_MENU = [
+    ("0", "Demo",      "mock data, no credentials needed"),
+    ("1", "Zerodha",   "Kite Connect — redirect login"),
+    ("2", "Groww",     "OAuth2 — redirect login"),
+    ("3", "Angel One", "SmartAPI — free, TOTP auto-login"),
+    ("4", "Upstox",    "API v3 — redirect login"),
+    ("5", "Fyers",     "API v3 — redirect login"),
+]
 
 
 # ── Public accessors ──────────────────────────────────────────
@@ -146,9 +168,9 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         api_secret = get_credential("KITE_API_SECRET", "Zerodha API Secret", secret=True)
         return key, ZerodhaAPI(api_key=api_key, api_secret=api_secret)
 
-    else:  # groww
-        client_id     = get_credential("GROWW_CLIENT_ID",     "Groww Client ID",     secret=False)
-        client_secret = get_credential("GROWW_CLIENT_SECRET",  "Groww Client Secret", secret=True)
+    elif key == "groww":
+        client_id     = get_credential("GROWW_CLIENT_ID",     "Groww Client ID",    secret=False)
+        client_secret = get_credential("GROWW_CLIENT_SECRET", "Groww Client Secret", secret=True)
         redirect_uri  = os.environ.get(
             "GROWW_REDIRECT_URL", "http://localhost:8765/groww/callback"
         )
@@ -158,9 +180,53 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
             redirect_uri  = redirect_uri,
         )
 
+    elif key == "angelone":
+        api_key     = get_credential("ANGEL_API_KEY",      "Angel One API Key",              secret=False)
+        client_code = get_credential("ANGEL_CLIENT_CODE",  "Angel One Client Code (Login ID)", secret=False)
+        password    = get_credential("ANGEL_PASSWORD",     "Angel One Trading Password",      secret=True)
+        totp_secret = get_credential("ANGEL_TOTP_SECRET",  "Angel One TOTP Secret",           secret=True, required=False)
+        return key, AngelOneAPI(
+            api_key     = api_key,
+            client_code = client_code,
+            password    = password,
+            totp_secret = totp_secret,
+        )
+
+    elif key == "upstox":
+        api_key    = get_credential("UPSTOX_API_KEY",    "Upstox API Key",    secret=False)
+        api_secret = get_credential("UPSTOX_API_SECRET", "Upstox API Secret", secret=True)
+        redirect_uri = os.environ.get(
+            "UPSTOX_REDIRECT_URL", "http://localhost:8765/upstox/callback"
+        )
+        return key, UpstoxAPI(
+            api_key      = api_key,
+            api_secret   = api_secret,
+            redirect_uri = redirect_uri,
+        )
+
+    else:  # fyers
+        app_id     = get_credential("FYERS_APP_ID",    "Fyers App ID",     secret=False)
+        secret_key = get_credential("FYERS_SECRET_KEY", "Fyers Secret Key", secret=True)
+        redirect_uri = os.environ.get(
+            "FYERS_REDIRECT_URL", "http://localhost:8765/fyers/callback"
+        )
+        return key, FyersAPI(
+            app_id       = app_id,
+            secret_key   = secret_key,
+            redirect_uri = redirect_uri,
+        )
+
 
 def _do_auth(key: str, broker: BrokerAPI) -> None:
-    """Run the browser-based auth flow for a broker that needs fresh login."""
+    """Run the auth flow for a broker. TOTP brokers auto-login; others use browser redirect."""
+
+    # Angel One: fully automated TOTP login — no browser redirect needed
+    if key in _TOTP_BROKERS:
+        console.print(f"\n[bold cyan]🔐 Logging in to {key.title()} via TOTP…[/bold cyan]")
+        broker.complete_login()
+        return
+
+    # All others: open browser, paste token/code back
     login_url = broker.get_login_url()
     console.print(f"\n[bold cyan]🌐 Opening login page for {key.title()}…[/bold cyan]")
     console.print(f"   URL: [link={login_url}]{login_url}[/link]\n")
@@ -174,10 +240,26 @@ def _do_auth(key: str, broker: BrokerAPI) -> None:
         token = Prompt.ask("[bold]Paste the [cyan]request_token[/cyan] here[/bold]")
         broker.complete_login(request_token=token)
 
-    else:  # groww
+    elif key == "groww":
         console.print(
             "[dim]After login, the browser will redirect to a URL like:[/dim]\n"
             "[dim]  http://localhost:8765/groww/callback?[bold]code=XXXXXX[/bold][/dim]\n"
+        )
+        code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
+        broker.complete_login(auth_code=code)
+
+    elif key == "upstox":
+        console.print(
+            "[dim]After login, the browser will redirect to a URL like:[/dim]\n"
+            "[dim]  http://localhost:8765/upstox/callback?[bold]code=XXXXXX[/bold][/dim]\n"
+        )
+        code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
+        broker.complete_login(auth_code=code)
+
+    elif key == "fyers":
+        console.print(
+            "[dim]After login, the browser will redirect to a URL like:[/dim]\n"
+            "[dim]  http://localhost:8765/fyers/callback?[bold]auth_code=XXXXXX[/bold][/dim]\n"
         )
         code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
         broker.complete_login(auth_code=code)
@@ -219,8 +301,8 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
     key it will be replaced.
 
     Args:
-        choice: "0"/"demo", "1"/"zerodha", "2"/"groww".
-                If None, the user is prompted to choose.
+        choice: "0"/"demo", "1"/"zerodha", "2"/"groww", "3"/"angelone",
+                "4"/"upstox", "5"/"fyers". If None, the user is prompted.
 
     Returns:
         Authenticated BrokerAPI instance.
@@ -229,10 +311,12 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
 
     if choice is None:
         console.print("\n[bold]Choose your primary broker:[/bold]")
-        console.print("  [cyan][0][/cyan] Demo     (mock data, no credentials needed)")
-        console.print("  [cyan][1][/cyan] Zerodha  (Kite Connect)")
-        console.print("  [cyan][2][/cyan] Groww")
-        choice = Prompt.ask("\n[bold]>[/bold]", choices=["0", "1", "2"])
+        for num, name, desc in _BROKER_MENU:
+            console.print(f"  [cyan][{num}][/cyan] {name:12s}  [dim]{desc}[/dim]")
+        choice = Prompt.ask(
+            "\n[bold]>[/bold]",
+            choices=[num for num, _, _ in _BROKER_MENU],
+        )
 
     key, broker = _make_broker(choice)
 
@@ -281,11 +365,14 @@ def connect_broker(choice: Optional[str] = None) -> BrokerAPI:
 
     if choice is None:
         console.print("\n[bold]Connect an additional broker:[/bold]")
-        for opt, label in [("0", "Demo (mock)"), ("1", "Zerodha"), ("2", "Groww")]:
-            key = _BROKER_NAMES[opt]
+        for num, name, desc in _BROKER_MENU:
+            key    = _BROKER_NAMES[num]
             already = " [dim](already connected)[/dim]" if key in _brokers else ""
-            console.print(f"  [cyan][{opt}][/cyan] {label}{already}")
-        choice = Prompt.ask("\n[bold]>[/bold]", choices=["0", "1", "2"])
+            console.print(f"  [cyan][{num}][/cyan] {name:12s}  [dim]{desc}[/dim]{already}")
+        choice = Prompt.ask(
+            "\n[bold]>[/bold]",
+            choices=[num for num, _, _ in _BROKER_MENU],
+        )
 
     key, broker = _make_broker(choice)
 
