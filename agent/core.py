@@ -1136,22 +1136,41 @@ def _first_time_provider_setup() -> str:
 
 
 def _auto_detect_provider() -> str:
-    """Infer provider from environment — whichever credentials are present."""
+    """
+    Infer provider from environment — whichever credentials are present.
+
+    Priority order (most explicit intent first):
+      1. Explicit API keys — user clearly set these for this app
+      2. claude CLI binary — present means Claude subscription is available
+      3. Session tokens — slightly less reliable
+      4. GOOGLE_CLOUD_PROJECT — too ambient (Claude Code, gcloud, etc. set this
+         even without user intent to use Gemini), so it's last
+    """
     env = os.environ
+
+    # Explicit API keys first
     if env.get("ANTHROPIC_API_KEY"):
         return PROVIDER_ANTHROPIC
     if env.get("OPENAI_API_KEY"):
         return PROVIDER_OPENAI
     if env.get("GEMINI_API_KEY") or env.get("GOOGLE_API_KEY"):
         return PROVIDER_GEMINI
-    if env.get("GOOGLE_CLOUD_PROJECT"):
-        return PROVIDER_GEMINI_SUB
-    if env.get("OPENAI_SESSION_TOKEN"):
-        return PROVIDER_OPENAI_SUB
+
+    # claude CLI binary — most reliable signal of subscription intent
     import shutil
     if shutil.which("claude") or shutil.which("claude-code"):
         return PROVIDER_CLAUDE_CLI
-    return PROVIDER_ANTHROPIC   # will fail gracefully with clear error
+
+    # Less-reliable ambient signals
+    if env.get("OPENAI_SESSION_TOKEN"):
+        return PROVIDER_OPENAI_SUB
+
+    # GOOGLE_CLOUD_PROJECT is set by many tools (gcloud, Claude Code workspace,
+    # GCP VMs, etc.) — only use it as fallback, not auto-trigger
+    if env.get("GOOGLE_CLOUD_PROJECT") and env.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        return PROVIDER_GEMINI_SUB
+
+    return PROVIDER_ANTHROPIC   # triggers first-time setup via _first_time_provider_setup
 
 
 def _default_model(provider: str) -> str:
