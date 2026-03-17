@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "trading-platform"
@@ -32,7 +32,7 @@ trade = "app.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["brokers*", "market*", "analysis*", "agent*", "engine*", "ui*", "app*", "web*"]
+include = ["brokers*", "market*", "analysis*", "agent*", "engine*", "ui*", "app*", "web*", "config*"]
 
 [tool.ruff]
 line-length = 100
