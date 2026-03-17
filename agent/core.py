@@ -584,16 +584,14 @@ class ClaudeCLIProvider(LLMProvider):
         from rich.live    import Live
         from rich.spinner import Spinner
 
-        # Block file/code tools but ALLOW WebSearch + WebFetch so Claude
-        # can look up live market data, news, and fundamentals.
-        _BLOCKED = (
-            "Bash Read Write Edit Glob Grep "
-            "Agent NotebookEdit TodoWrite"
-        )
+        # Whitelist: ONLY allow WebSearch + WebFetch (for market data lookups).
+        # This implicitly blocks Bash, Read, Write, Edit, etc.
+        # Using --allowedTools (whitelist) instead of --disallowedTools (blocklist)
+        # also auto-approves the allowed tools so they work in non-interactive -p mode.
         cmd = [
             self._cli, "-p",
             "--output-format", "text",
-            "--disallowedTools", _BLOCKED,
+            "--allowedTools", "WebSearch WebFetch",
         ]
 
         # Log the full command (minus system prompt for brevity)
