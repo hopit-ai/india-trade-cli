@@ -499,15 +499,19 @@ class ClaudeCLIProvider(LLMProvider):
                        f"total {sum(len(c) for c in collected)} chars[/dim]")
 
         # ── Phase 3: synthesis — ONE CLI call to write the response ─
-        _synthesis_system = (
+        # Embed the system prompt directly in the stdin text rather than
+        # passing via --append-system-prompt, which fails on long prompts
+        # with special characters (causes API 400 errors).
+        _context = (
             self.system_prompt
             + "\n\n"
-            "IMPORTANT: Respond using ONLY the data provided. "
+            "IMPORTANT: Respond using ONLY the data provided below. "
             "Do NOT attempt to fetch more data or run any code."
         )
 
         if collected:
             synthesis_prompt = (
+                _context + "\n\n"
                 "The following live market data has already been collected for you.\n"
                 "Use it to answer the user's request.\n\n"
                 + "\n\n".join(collected)
@@ -518,16 +522,13 @@ class ClaudeCLIProvider(LLMProvider):
                 "Use bullet points, cite the actual numbers from the data above."
             )
         else:
-            synthesis_prompt = last_user_msg
+            synthesis_prompt = _context + "\n\n" + last_user_msg
 
-        # Log the CLI command and prompt size
         console.print(f"[dim]  DEBUG: synthesis prompt = {len(synthesis_prompt)} chars[/dim]")
-        console.print(f"[dim]  DEBUG: system prompt = {len(_synthesis_system)} chars[/dim]")
 
         console.print("[dim]  Generating response…[/dim]")
         response = self._call_cli(
             synthesis_prompt,
-            system=_synthesis_system,
             timeout=300,
             label="Generating response",
         )
@@ -541,7 +542,6 @@ class ClaudeCLIProvider(LLMProvider):
     def _call_cli(
         self,
         prompt:  str,
-        system:  str  = "",
         timeout: int  = 300,
         label:   str  = "Claude is thinking",
     ) -> str:
@@ -550,29 +550,22 @@ class ClaudeCLIProvider(LLMProvider):
 
         Args:
             prompt:  Full prompt text (sent via stdin to avoid OS arg-length limits).
-            system:  Optional system prompt passed via --system.  This OVERRIDES
-                     Claude Code's built-in coding-agent system prompt, giving us a
-                     clean text-only LLM without tool-use behaviour.
+                     The system prompt / trading context should already be embedded
+                     in this text (not passed via CLI flags, which fail on long
+                     strings with special characters).
             timeout: Seconds to wait before giving up (default 5 min).
             label:   Spinner label shown while waiting.
 
-        Why --system matters:
-            `claude -p` runs Claude Code — an agentic coding assistant.  Its
-            default system prompt tells it to use tools (bash, Python, etc.).
-            If we don't override it, Claude will try to "help" by running shell
-            commands instead of just responding with text.  Passing --system with
-            our own instructions suppresses that behaviour entirely.
-
         Uses subprocess.Popen + a reader thread so we can show a live spinner
         while the process runs, and still collect stdout/stderr when it exits.
+
+        --disallowedTools blocks all of Claude Code's built-in tools (Bash,
+        Read, Edit, etc.) so it can ONLY respond with text.
         """
         import threading
         from rich.live    import Live
         from rich.spinner import Spinner
 
-        # Block every Claude Code tool so it can ONLY respond with text.
-        # --allowedTools "" is interpreted as "no filter" (all allowed), so
-        # we use --disallowedTools to explicitly block every known tool.
         _BLOCKED = (
             "Bash Read Write Edit Glob Grep "
             "WebFetch WebSearch Agent NotebookEdit TodoWrite"
@@ -582,8 +575,6 @@ class ClaudeCLIProvider(LLMProvider):
             "--output-format", "text",
             "--disallowedTools", _BLOCKED,
         ]
-        if system:
-            cmd += ["--append-system-prompt", system]
 
         # Log the full command (minus system prompt for brevity)
         cmd_preview = [c if len(c) < 80 else c[:77] + "..." for c in cmd]
