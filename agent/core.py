@@ -479,18 +479,29 @@ class ClaudeCLIProvider(LLMProvider):
         """
         Invoke `claude -p` non-interactively, sending the prompt via **stdin**.
 
-        Passing the prompt as a CLI argument (`claude -p "…"`) hits OS argument-
-        length limits when the full context (system prompt + tool descriptions +
-        conversation history) is large.  Using stdin avoids that limit entirely.
+        Shows a live spinner so the user knows work is in progress — the CLI
+        can take 30–120 s for a complex prompt like morning-brief, and a blank
+        terminal makes it look frozen.
+
+        Passing the prompt via stdin (not as a CLI argument) avoids OS
+        argument-length limits on large contexts.
         """
+        from rich.live    import Live
+        from rich.spinner import Spinner
         try:
-            result = subprocess.run(
-                [self._cli, "-p", "--output-format", "text"],
-                input=prompt,          # ← prompt via stdin, NOT as a CLI argument
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+            with Live(
+                Spinner("dots", text=" Claude is thinking… (may take 1-2 min)"),
+                console=console,
+                transient=True,       # spinner disappears once the response arrives
+                refresh_per_second=8,
+            ):
+                result = subprocess.run(
+                    [self._cli, "-p", "--output-format", "text"],
+                    input=prompt,          # ← prompt via stdin, NOT as a CLI argument
+                    capture_output=True,
+                    text=True,
+                    timeout=180,           # 3 min — morning-brief can be slow
+                )
             if result.returncode != 0:
                 # Prefer stderr; fall back to stdout (some CLI versions write
                 # error text there) so the user always sees a useful message.
@@ -498,7 +509,7 @@ class ClaudeCLIProvider(LLMProvider):
                 return f"[Claude CLI error: {err}]"
             return result.stdout.strip()
         except subprocess.TimeoutExpired:
-            return "[Claude CLI timed out after 120 seconds]"
+            return "[Claude CLI timed out after 3 minutes]"
         except FileNotFoundError:
             return "[Claude CLI not found — install with: npm i -g @anthropic-ai/claude-code]"
 
