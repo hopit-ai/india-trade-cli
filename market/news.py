@@ -96,7 +96,8 @@ def get_stock_news(symbol: str, n: int = 10) -> list[NewsItem]:
         symbol: NSE symbol e.g. "RELIANCE", "HDFCBANK"
         n:      Number of articles (max 100 per call on free tier)
     """
-    api_key = os.environ.get("NEWSAPI_KEY", "")
+    from config.credentials import get_credential
+    api_key = get_credential("NEWSAPI_KEY", "NewsAPI.org Key", secret=True, required=False)
 
     if api_key:
         return _newsapi_fetch(

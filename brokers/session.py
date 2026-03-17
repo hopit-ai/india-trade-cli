@@ -45,6 +45,8 @@ from .zerodha import ZerodhaAPI
 from .groww   import GrowwAPI
 from .mock    import MockBrokerAPI
 
+from config.credentials import get_credential
+
 console = Console()
 
 # ── Module state ──────────────────────────────────────────────
@@ -140,22 +142,16 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         return key, broker
 
     elif key == "zerodha":
-        api_key    = os.environ.get("KITE_API_KEY", "")
-        api_secret = os.environ.get("KITE_API_SECRET", "")
-        if not api_key or not api_secret:
-            console.print("[red]Missing KITE_API_KEY / KITE_API_SECRET in .env[/red]")
-            raise SystemExit(1)
+        api_key    = get_credential("KITE_API_KEY",    "Zerodha API Key",    secret=False)
+        api_secret = get_credential("KITE_API_SECRET", "Zerodha API Secret", secret=True)
         return key, ZerodhaAPI(api_key=api_key, api_secret=api_secret)
 
     else:  # groww
-        client_id     = os.environ.get("GROWW_CLIENT_ID", "")
-        client_secret = os.environ.get("GROWW_CLIENT_SECRET", "")
+        client_id     = get_credential("GROWW_CLIENT_ID",     "Groww Client ID",     secret=False)
+        client_secret = get_credential("GROWW_CLIENT_SECRET",  "Groww Client Secret", secret=True)
         redirect_uri  = os.environ.get(
             "GROWW_REDIRECT_URL", "http://localhost:8765/groww/callback"
         )
-        if not client_id or not client_secret:
-            console.print("[red]Missing GROWW_CLIENT_ID / GROWW_CLIENT_SECRET in .env[/red]")
-            raise SystemExit(1)
         return key, GrowwAPI(
             client_id     = client_id,
             client_secret = client_secret,

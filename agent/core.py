@@ -65,6 +65,7 @@ from rich.console import Console
 
 from agent.prompts import build_system_prompt
 from agent.tools import build_registry, ToolRegistry
+from config.credentials import get_credential
 
 console = Console()
 
@@ -148,7 +149,9 @@ class AnthropicProvider(LLMProvider):
         try:
             import anthropic as _sdk
             self._sdk    = _sdk
-            self._client = _sdk.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+            self._client = _sdk.Anthropic(
+                api_key=get_credential("ANTHROPIC_API_KEY", "Anthropic API Key", secret=True)
+            )
         except ImportError:
             raise RuntimeError("anthropic not installed. Run: pip install anthropic")
 
@@ -273,7 +276,9 @@ class OpenAIProvider(LLMProvider):
         try:
             import openai as _sdk
             self._sdk    = _sdk
-            self._client = _sdk.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+            self._client = _sdk.OpenAI(
+                api_key=get_credential("OPENAI_API_KEY", "OpenAI API Key", secret=True)
+            )
         except ImportError:
             raise RuntimeError("openai not installed. Run: pip install openai")
 
@@ -564,7 +569,9 @@ class OpenAISubscriptionProvider(LLMProvider):
         except ImportError:
             raise RuntimeError("httpx not installed. Run: pip install httpx")
 
-        self._session_token = os.environ.get("OPENAI_SESSION_TOKEN", "")
+        self._session_token = get_credential(
+            "OPENAI_SESSION_TOKEN", "OpenAI Session Token (ChatGPT Plus)", secret=True, required=False
+        )
         if not self._session_token:
             raise RuntimeError(
                 "OPENAI_SESSION_TOKEN not set.\n"
@@ -690,7 +697,10 @@ class GeminiProvider(LLMProvider):
         try:
             import google.generativeai as genai
             self._genai = genai
-            api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+            api_key = (
+                get_credential("GEMINI_API_KEY", "Google Gemini API Key", secret=True, required=False)
+                or os.environ.get("GOOGLE_API_KEY", "")
+            )
             if not api_key:
                 raise RuntimeError(
                     "GEMINI_API_KEY not set. Get a free key at aistudio.google.com"

@@ -60,6 +60,7 @@ COMMANDS = [
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
     "ai", "provider", "tui",
+    "credentials",
     "help", "quit", "exit",
 ]
 
@@ -387,6 +388,12 @@ def cmd_help() -> None:
     tui              Launch split-panel Textual TUI
     paper            Show paper-trading mode status
 
+  [bold]Setup[/bold]
+    credentials           List which credentials are stored and their status
+    credentials setup     Interactive wizard to configure all API keys
+    credentials set KEY   Update a single credential
+    credentials delete KEY Remove a key from the OS keychain
+
   [bold]Other[/bold]
     quit / exit      Exit the platform
 """)
@@ -536,6 +543,10 @@ def run_repl(broker: BrokerAPI) -> None:
                 from ui.app import run_tui
                 run_tui()
                 console.print("[dim]Back in REPL mode.[/dim]")
+
+            elif command == "credentials":
+                from config.credentials import cmd_credentials
+                cmd_credentials(args)
 
             else:
                 console.print(
