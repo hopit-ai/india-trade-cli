@@ -1,0 +1,29 @@
+# ── Broker APIs ──────────────────────────────────────────────
+kiteconnect>=4.2.0          # Zerodha Kite Connect
+httpx>=0.27.0               # Groww REST API + general HTTP
+
+# ── AI Brain ─────────────────────────────────────────────────
+anthropic>=0.40.0           # Claude API
+openai>=1.40.0              # OpenAI GPT API
+google-generativeai>=0.8.0  # Google Gemini API (AI Studio key)
+google-cloud-aiplatform>=1.60.0  # Vertex AI (Gemini for GCP/Workspace)
+
+# ── Terminal UI ──────────────────────────────────────────────
+rich>=13.7.0                # Tables, panels, styled output
+textual>=0.80.0             # TUI framework (split panels)
+prompt_toolkit>=3.0.0       # REPL with tab-complete
+
+# ── Data & Analysis ──────────────────────────────────────────
+pandas>=2.2.0               # OHLCV data manipulation
+numpy>=1.26.0               # Numerical computations
+py_vollib>=1.0.1            # Black-Scholes, Greeks
+
+# ── News & Events ────────────────────────────────────────────
+feedparser>=6.0.11          # RSS feed parsing
+newsapi-python>=0.2.7       # NewsAPI.org client
+
+# ── Utilities ────────────────────────────────────────────────
+python-dotenv>=1.0.0        # .env file loading
+keyring>=25.2.0             # Secure OS token storage
+python-dateutil>=2.9.0      # Date parsing helpers
+pytz>=2024.1                # Timezone handling (IST)

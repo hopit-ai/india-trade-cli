@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "trading-platform"
+version = "0.1.0"
+description = "Guided stock & options trading platform for Indian markets"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    "kiteconnect>=4.2.0",
+    "httpx>=0.27.0",
+    "anthropic>=0.40.0",
+    "rich>=13.7.0",
+    "textual>=0.80.0",
+    "prompt_toolkit>=3.0.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "py_vollib>=1.0.1",
+    "feedparser>=6.0.11",
+    "newsapi-python>=0.2.7",
+    "python-dotenv>=1.0.0",
+    "keyring>=25.2.0",
+    "python-dateutil>=2.9.0",
+    "pytz>=2024.1",
+]
+
+[project.scripts]
+trade = "app.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["brokers*", "market*", "analysis*", "agent*", "engine*", "ui*", "app*", "web*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
