@@ -60,7 +60,7 @@ COMMANDS = [
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
     "ai", "alert", "alerts", "backtest", "clear", "earnings", "events",
-    "flows", "memory", "patterns", "provider", "tui", "web", "whatif",
+    "flows", "greeks", "memory", "patterns", "provider", "tui", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -432,8 +432,10 @@ def cmd_help() -> None:
     alert SYMBOL above PRICE          Set a price alert (e.g. alert NIFTY above 22500)
     alert SYMBOL below PRICE          Set a price alert (e.g. alert RELIANCE below 2600)
     alert SYMBOL RSI above 70         Set a technical alert
+    alert RELIANCE above 2800 AND RSI above 70   Conditional alert (AND)
     alert list / alerts               List all active alerts
     alert remove ID                   Remove an alert by ID
+    greeks                            Portfolio Greeks (net Delta, Theta, Vega)
 
   [bold]India Intelligence[/bold]
     earnings [SYM...]                 Upcoming quarterly results calendar
@@ -663,19 +665,55 @@ def _handle_alert_command(args: list[str]) -> None:
         return
 
     # Parse: SYMBOL [INDICATOR] ABOVE/BELOW THRESHOLD
-    # e.g. "RELIANCE above 2800" or "RELIANCE RSI above 70"
+    # Conditional: SYMBOL price above 2800 AND RSI above 70
     if len(args) < 3:
         console.print(
             "[dim]Usage:\n"
-            "  alert RELIANCE above 2800         (price alert)\n"
-            "  alert RELIANCE RSI above 70       (technical alert)\n"
-            "  alert list                        (show active alerts)\n"
-            "  alert remove <id>                 (remove alert)[/dim]"
+            "  alert RELIANCE above 2800                     (price alert)\n"
+            "  alert RELIANCE RSI above 70                   (technical alert)\n"
+            "  alert RELIANCE above 2800 AND RSI above 70    (conditional: AND)\n"
+            "  alert list                                    (show active alerts)\n"
+            "  alert remove <id>                             (remove alert)[/dim]"
         )
         return
 
     symbol = args[0].upper()
     indicators = {"RSI", "MACD", "ADX", "ATR"}
+
+    # Check for AND — conditional alert
+    remaining = " ".join(args[1:])
+    if " AND " in remaining.upper():
+        # Parse conditional: "above 2800 AND RSI above 70"
+        parts = remaining.upper().split(" AND ")
+        conditions = []
+        for part in parts:
+            tokens = part.strip().split()
+            if len(tokens) >= 3 and tokens[0] in indicators:
+                # TECHNICAL: RSI above 70
+                conditions.append({
+                    "condition_type": "TECHNICAL",
+                    "indicator": tokens[0],
+                    "condition": tokens[1],
+                    "threshold": float(tokens[2]),
+                })
+            elif len(tokens) >= 2:
+                # PRICE: above 2800
+                cond = tokens[0] if tokens[0] in ("ABOVE", "BELOW") else tokens[0]
+                conditions.append({
+                    "condition_type": "PRICE",
+                    "condition": cond,
+                    "threshold": float(tokens[1] if tokens[0] in ("ABOVE", "BELOW") else tokens[-1]),
+                })
+
+        if conditions:
+            alert = alert_manager.add_conditional_alert(symbol, conditions)
+            console.print(
+                f"[green]✓ Conditional alert created:[/green] [bold]{alert.describe()}[/bold]"
+                f"  [dim](ID: {alert.id})[/dim]"
+            )
+        else:
+            console.print("[red]Could not parse conditional alert.[/red]")
+        return
 
     if len(args) >= 4 and args[1].upper() in indicators:
         # Technical alert: SYMBOL INDICATOR CONDITION THRESHOLD
@@ -835,6 +873,10 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "flows":
                 from market.flow_intel import print_flow_report
                 print_flow_report()
+
+            elif command == "greeks":
+                from engine.portfolio import print_portfolio_greeks
+                print_portfolio_greeks()
 
             elif command == "events":
                 from engine.event_strategies import print_event_strategies

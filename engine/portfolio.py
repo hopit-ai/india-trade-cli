@@ -59,7 +59,9 @@ class PortfolioGreeks:
     net_delta:  float = 0.0    # sum of position delta × qty
     net_theta:  float = 0.0    # daily theta decay in INR
     net_vega:   float = 0.0    # vega exposure for 1% IV move
+    net_gamma:  float = 0.0    # gamma exposure
     positions_with_greeks: list[dict] = field(default_factory=list)
+    by_underlying: dict = field(default_factory=dict)  # Greeks grouped by underlying
 
 
 @dataclass
@@ -336,29 +338,61 @@ def _parse_option_symbol(symbol: str) -> dict | None:
 
 
 def _compute_net_greeks(rows: list[PositionRow]) -> PortfolioGreeks:
-    """Sum Greeks across all positions."""
-    net_delta = sum(r.delta for r in rows if r.delta is not None)
-    net_theta = sum(r.theta for r in rows if r.theta is not None)
-    net_vega  = sum(r.vega  for r in rows if r.vega  is not None)
+    """Sum Greeks across all positions, grouped by underlying."""
+    net_delta = 0.0
+    net_theta = 0.0
+    net_vega  = 0.0
+    net_gamma = 0.0
+    by_underlying: dict[str, dict] = {}
 
-    with_greeks = [
-        {
+    with_greeks = []
+    for r in rows:
+        if not any(x is not None for x in (r.delta, r.theta, r.vega)):
+            continue
+
+        d = r.delta or 0.0
+        t = r.theta or 0.0
+        v = r.vega or 0.0
+        g = getattr(r, 'gamma', None) or 0.0
+
+        net_delta += d
+        net_theta += t
+        net_vega += v
+        net_gamma += g
+
+        # Group by underlying
+        parsed = _parse_option_symbol(r.symbol)
+        underlying = parsed["underlying"] if parsed else r.symbol
+        if underlying not in by_underlying:
+            by_underlying[underlying] = {"delta": 0.0, "theta": 0.0, "vega": 0.0, "gamma": 0.0, "positions": 0}
+        by_underlying[underlying]["delta"] += d
+        by_underlying[underlying]["theta"] += t
+        by_underlying[underlying]["vega"] += v
+        by_underlying[underlying]["gamma"] += g
+        by_underlying[underlying]["positions"] += 1
+
+        with_greeks.append({
             "symbol": r.symbol,
             "qty":    r.qty,
             "delta":  r.delta,
             "theta":  r.theta,
             "vega":   r.vega,
+            "underlying": underlying,
             "broker": r.broker,
-        }
-        for r in rows
-        if any(x is not None for x in (r.delta, r.theta, r.vega))
-    ]
+        })
+
+    # Round the by_underlying values
+    for u in by_underlying:
+        for k in ("delta", "theta", "vega", "gamma"):
+            by_underlying[u][k] = round(by_underlying[u][k], 4)
 
     return PortfolioGreeks(
         net_delta             = round(net_delta, 4),
         net_theta             = round(net_theta, 2),
         net_vega              = round(net_vega, 2),
+        net_gamma             = round(net_gamma, 4),
         positions_with_greeks = with_greeks,
+        by_underlying         = by_underlying,
     )
 
 
@@ -405,3 +439,84 @@ def _compute_risk(
         max_loss_estimate  = round(max_loss_estimate, 2),
         risk_rating        = rating,
     )
+
+
+# ── Display functions ────────────────────────────────────────
+
+def print_portfolio_greeks() -> None:
+    """Display aggregated portfolio Greeks as a Rich table."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+
+    console = Console()
+
+    try:
+        greeks = get_position_greeks()
+    except Exception as e:
+        console.print(f"[red]Could not compute Greeks: {e}[/red]")
+        return
+
+    if not greeks.positions_with_greeks:
+        console.print("[dim]No F&O positions with Greeks found.[/dim]")
+        return
+
+    # Net Greeks summary
+    delta_style = "green" if greeks.net_delta >= 0 else "red"
+    theta_style = "red" if greeks.net_theta < 0 else "green"
+
+    lines = [
+        f"  [bold]Net Portfolio Greeks[/bold]",
+        f"  Delta : [{delta_style}]{greeks.net_delta:+.2f}[/{delta_style}]"
+        f"  {'(net long)' if greeks.net_delta > 0 else '(net short)' if greeks.net_delta < 0 else '(delta neutral)'}",
+        f"  Gamma : {greeks.net_gamma:+.4f}",
+        f"  Theta : [{theta_style}]{greeks.net_theta:+.2f}[/{theta_style}] /day",
+        f"  Vega  : {greeks.net_vega:+.2f}",
+    ]
+
+    console.print(Panel("\n".join(lines), title="[bold cyan]Portfolio Greeks[/bold cyan]", border_style="cyan"))
+
+    # By underlying
+    if greeks.by_underlying:
+        table = Table(title="Greeks by Underlying", show_lines=False)
+        table.add_column("Underlying", style="bold", width=14)
+        table.add_column("Positions", justify="right", width=10)
+        table.add_column("Delta", justify="right", width=10)
+        table.add_column("Theta", justify="right", width=10)
+        table.add_column("Vega", justify="right", width=10)
+
+        for underlying, g in greeks.by_underlying.items():
+            d_style = "green" if g["delta"] >= 0 else "red"
+            t_style = "red" if g["theta"] < 0 else "green"
+            table.add_row(
+                underlying,
+                str(g["positions"]),
+                f"[{d_style}]{g['delta']:+.2f}[/{d_style}]",
+                f"[{t_style}]{g['theta']:+.2f}[/{t_style}]",
+                f"{g['vega']:+.2f}",
+            )
+
+        console.print(table)
+
+    # Per-position detail
+    table2 = Table(title="Position Greeks Detail", show_lines=False)
+    table2.add_column("Symbol", style="bold", width=22)
+    table2.add_column("Qty", justify="right", width=8)
+    table2.add_column("Delta", justify="right", width=10)
+    table2.add_column("Theta", justify="right", width=10)
+    table2.add_column("Vega", justify="right", width=10)
+
+    for p in greeks.positions_with_greeks:
+        d = p.get("delta", 0) or 0
+        t = p.get("theta", 0) or 0
+        v = p.get("vega", 0) or 0
+        d_style = "green" if d >= 0 else "red"
+        table2.add_row(
+            p["symbol"],
+            str(p["qty"]),
+            f"[{d_style}]{d:+.4f}[/{d_style}]",
+            f"{t:+.2f}",
+            f"{v:+.2f}",
+        )
+
+    console.print(table2)

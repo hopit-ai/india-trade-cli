@@ -510,6 +510,61 @@ def build_registry() -> ToolRegistry:
         },
     )
 
+    reg.register(
+        name="set_conditional_alert",
+        description=(
+            "Set a conditional alert with AND logic — triggers only when ALL conditions are met. "
+            "E.g. 'Alert when RELIANCE price > 2800 AND RSI > 60'. "
+            "Each condition is either PRICE (above/below a price) or TECHNICAL (indicator above/below)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "NSE symbol"},
+                "conditions": {
+                    "type": "array",
+                    "description": "List of conditions (all must be true)",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "condition_type": {"type": "string", "enum": ["PRICE", "TECHNICAL"]},
+                            "condition":      {"type": "string", "enum": ["ABOVE", "BELOW"]},
+                            "threshold":      {"type": "number"},
+                            "indicator":      {"type": "string", "description": "For TECHNICAL: RSI, MACD, ADX, ATR"},
+                        },
+                        "required": ["condition_type", "condition", "threshold"],
+                    },
+                },
+            },
+            "required": ["symbol", "conditions"],
+        },
+        fn=lambda symbol, conditions: {
+            "status": "created",
+            "alert": alert_manager.add_conditional_alert(symbol, conditions).describe(),
+        },
+    )
+
+    # ── Portfolio Greeks ──────────────────────────────────────
+    from engine.portfolio import get_position_greeks
+
+    reg.register(
+        name="get_portfolio_greeks",
+        description=(
+            "Get aggregated portfolio Greeks (Delta, Gamma, Theta, Vega) across all F&O positions. "
+            "Shows net exposure and breakdown by underlying. "
+            "Positive delta = net long, negative = net short. Negative theta = time decay cost."
+        ),
+        parameters={"type": "object", "properties": {}, "required": []},
+        fn=lambda: {
+            "net_delta": get_position_greeks().net_delta,
+            "net_theta": get_position_greeks().net_theta,
+            "net_vega": get_position_greeks().net_vega,
+            "net_gamma": get_position_greeks().net_gamma,
+            "by_underlying": get_position_greeks().by_underlying,
+            "positions": len(get_position_greeks().positions_with_greeks),
+        },
+    )
+
     # ── India Intelligence ─────────────────────────────────────
     from market.earnings import get_earnings_calendar, get_pre_earnings_iv, is_earnings_season
     from market.flow_intel import get_flow_analysis

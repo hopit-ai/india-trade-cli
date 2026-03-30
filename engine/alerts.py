@@ -36,9 +36,23 @@ ALERTS_FILE = Path.home() / ".trading_platform" / "alerts.json"
 # ── Data model ────────────────────────────────────────────────
 
 @dataclass
+class AlertCondition:
+    """A single condition within a conditional alert."""
+    condition_type: str          # "PRICE" or "TECHNICAL"
+    condition:      str          # "ABOVE" or "BELOW"
+    threshold:      float
+    indicator:      Optional[str] = None  # for TECHNICAL: "RSI", "MACD", etc.
+
+    def describe(self) -> str:
+        if self.condition_type == "TECHNICAL":
+            return f"{self.indicator} {self.condition} {self.threshold}"
+        return f"price {self.condition} ₹{self.threshold:,.2f}"
+
+
+@dataclass
 class Alert:
     id:           str
-    alert_type:   str                 # PRICE | TECHNICAL
+    alert_type:   str                 # PRICE | TECHNICAL | CONDITIONAL
     symbol:       str                 # e.g. "RELIANCE"
     exchange:     str                 # e.g. "NSE"
     condition:    str                 # ABOVE | BELOW | CROSSES
@@ -48,8 +62,16 @@ class Alert:
     created_at:   str = ""
     triggered:    bool = False
     triggered_at: Optional[str] = None
+    # Conditional alert: multiple conditions joined by AND
+    conditions:   list[dict] = field(default_factory=list)
 
     def describe(self) -> str:
+        if self.alert_type == "CONDITIONAL" and self.conditions:
+            parts = []
+            for c in self.conditions:
+                cond = AlertCondition(**c) if isinstance(c, dict) else c
+                parts.append(cond.describe())
+            return f"{self.symbol} ({' AND '.join(parts)})"
         if self.alert_type == "TECHNICAL":
             return f"{self.symbol} {self.indicator} {self.condition} {self.threshold}"
         return f"{self.symbol} price {self.condition} ₹{self.threshold:,.2f}"
@@ -107,6 +129,43 @@ class AlertManager:
             condition=condition.upper(),
             threshold=float(threshold),
             indicator=indicator.upper(),
+            created_at=datetime.now().isoformat(timespec="seconds"),
+        )
+        alert.message = alert.describe()
+        self._alerts.append(alert)
+        self._save()
+        return alert
+
+    def add_conditional_alert(
+        self,
+        symbol:     str,
+        conditions: list[dict],
+        exchange:   str = "NSE",
+    ) -> Alert:
+        """
+        Create a conditional alert with AND logic.
+
+        conditions: list of dicts, each with:
+            condition_type: "PRICE" or "TECHNICAL"
+            condition: "ABOVE" or "BELOW"
+            threshold: float
+            indicator: str (only for TECHNICAL, e.g. "RSI")
+
+        Example:
+            add_conditional_alert("RELIANCE", [
+                {"condition_type": "PRICE", "condition": "ABOVE", "threshold": 2800},
+                {"condition_type": "TECHNICAL", "condition": "ABOVE", "threshold": 60, "indicator": "RSI"},
+            ])
+            → Triggers when RELIANCE price > 2800 AND RSI > 60
+        """
+        alert = Alert(
+            id=str(uuid.uuid4())[:8],
+            alert_type="CONDITIONAL",
+            symbol=symbol.upper(),
+            exchange=exchange.upper(),
+            condition="AND",
+            threshold=0,
+            conditions=conditions,
             created_at=datetime.now().isoformat(timespec="seconds"),
         )
         alert.message = alert.describe()
@@ -206,6 +265,8 @@ class AlertManager:
             return self._check_price(alert)
         elif alert.alert_type == "TECHNICAL":
             return self._check_technical(alert)
+        elif alert.alert_type == "CONDITIONAL":
+            return self._check_conditional(alert)
         return False
 
     def _check_price(self, alert: Alert) -> bool:
@@ -246,6 +307,61 @@ class AlertManager:
         elif alert.condition == "BELOW":
             return float(value) <= alert.threshold
         return False
+
+    def _check_conditional(self, alert: Alert) -> bool:
+        """
+        Check a conditional alert — ALL conditions must be true (AND logic).
+        Each condition is either PRICE or TECHNICAL.
+        """
+        if not alert.conditions:
+            return False
+
+        from brokers.session import get_broker
+
+        for cond_dict in alert.conditions:
+            cond = AlertCondition(**cond_dict) if isinstance(cond_dict, dict) else cond_dict
+
+            if cond.condition_type == "PRICE":
+                try:
+                    broker = get_broker()
+                    instrument = f"{alert.exchange}:{alert.symbol}"
+                    ltp = broker.get_ltp(instrument)
+                except Exception:
+                    try:
+                        from market.quotes import get_ltp
+                        ltp = get_ltp(f"{alert.exchange}:{alert.symbol}")
+                    except Exception:
+                        return False
+
+                if cond.condition == "ABOVE" and ltp < cond.threshold:
+                    return False
+                elif cond.condition == "BELOW" and ltp > cond.threshold:
+                    return False
+
+            elif cond.condition_type == "TECHNICAL":
+                try:
+                    from analysis.technical import analyse as tech_analyse
+                    snapshot = tech_analyse(alert.symbol, alert.exchange)
+                    indicator_key = (cond.indicator or "").upper()
+                    value_map = {
+                        "RSI": getattr(snapshot, "rsi", None),
+                        "MACD": getattr(snapshot, "macd", None),
+                        "ADX": getattr(snapshot, "adx", None),
+                        "ATR": getattr(snapshot, "atr", None),
+                        "SCORE": getattr(snapshot, "score", None),
+                    }
+                    value = value_map.get(indicator_key)
+                    if value is None:
+                        return False
+
+                    if cond.condition == "ABOVE" and float(value) < cond.threshold:
+                        return False
+                    elif cond.condition == "BELOW" and float(value) > cond.threshold:
+                        return False
+                except Exception:
+                    return False
+
+        return True  # all conditions passed
 
     # ── Persistence ───────────────────────────────────────────
 
