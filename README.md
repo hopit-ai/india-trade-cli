@@ -13,8 +13,10 @@ Inspired by [TradingAgents](https://github.com/TauricResearch/TradingAgents) (Ta
 ```
 analyze RELIANCE
         |
-  [5 Analyst Agents]  ← pure Python, parallel
-  Technical | Fundamental | Options | News+Sentiment(LLM) | Risk Manager
+  [7 Analyst Agents]  ← pure Python, parallel
+  Technical | Fundamental | Options | News(LLM) | Sentiment | Sector Rotation | Risk Manager
+        |
+  [Analyst Scorecard]  ← weighted composite score + conflict detection
         |
   [Multi-Round Debate]  ← 5 LLM calls
   Bull R1 → Bear R1 → Bull Rebuttal → Bear Rebuttal → Facilitator
@@ -29,15 +31,18 @@ analyze RELIANCE
   Entry orders, stop-loss, targets, position sizing, scaling logic
 ```
 
-**Total: 8 LLM calls per analysis.** Analysts and trade plans are pure Python for speed and accuracy.
+**Total: 8 LLM calls per analysis.** 7 analysts and trade plans are pure Python for speed and accuracy.
 
 ---
 
 ## Features
 
 ### Multi-Agent Analysis
-- 5 specialist analysts run in parallel (Technical, Fundamental, Options, News/Macro, Risk)
+- 7 specialist analysts run in parallel (Technical, Fundamental, Options, News/Macro, Sentiment, Sector Rotation, Risk)
 - LLM-powered news sentiment analysis (understands context, not just keywords)
+- Dedicated sentiment analyst (FII/DII flows, breadth, PCR signals)
+- Sector rotation analyst (identifies sector tailwinds/headwinds for each stock)
+- Weighted analyst scorecard with conflict detection (e.g. "Technical BULLISH vs Fundamental BEARISH")
 - 2-round bull/bear debate with facilitator summary
 - Fund manager synthesis with structured verdict
 
@@ -62,9 +67,22 @@ analyze RELIANCE
 
 ### Backtesting & Simulation
 - 4 strategies: RSI, EMA crossover, MACD, Bollinger Bands
+- Walk-forward testing: rolling window analysis across market regimes
 - Real historical data via yfinance (works without broker login)
 - Metrics: CAGR, Sharpe ratio, max drawdown, win rate vs buy-and-hold
-- What-if simulator: "If NIFTY drops 3%, what happens to my portfolio?"
+- What-if simulator with real stock beta (not assumed beta=1)
+- Multi-stock scenarios: "whatif RELIANCE -5 HDFCBANK 3"
+
+### Advanced Options
+- Iron condor, butterfly, calendar spread, ratio spread, diagonal builders
+- Earnings straddle evaluator (is the straddle fairly priced vs avg move?)
+- Full payoff calculator for any multi-leg strategy
+
+### Macro Intelligence
+- USD/INR, Brent Crude, Gold, US 10Y yield tracking
+- Per-stock macro sensitivity mapping (e.g. IT benefits from weak INR)
+- Tailwind/headwind detection based on current macro moves
+- Earnings surprise prediction (technical momentum + IV + historical beat rates)
 
 ### Trade Memory
 - Every analysis stored with full market context (VIX, FII flows, analyst scores)
@@ -158,9 +176,13 @@ backtest RELIANCE rsi              RSI overbought/oversold strategy
 backtest RELIANCE ma 20 50         20/50 EMA crossover
 backtest RELIANCE macd             MACD signal crossover
 backtest RELIANCE bb               Bollinger Bands
-whatif nifty -3                    What if NIFTY drops 3%?
+walkforward RELIANCE rsi           Walk-forward test (rolling 6-month windows)
+walkforward RELIANCE ma --period 5y    Walk-forward with custom period
+whatif nifty -3                    What if NIFTY drops 3%? (uses real beta)
 whatif RELIANCE -10                What if RELIANCE drops 10%?
 whatif RELIANCE -5 HDFCBANK 3      Custom multi-stock scenario
+macro                              USD/INR, crude, gold, US 10Y snapshot
+macro RELIANCE                     Macro impact on RELIANCE specifically
 ```
 
 ### Portfolio & Trading
@@ -231,6 +253,7 @@ india-trade-cli/
 │   ├── sentiment.py           # FII/DII data + market breadth
 │   ├── earnings.py            # Earnings season agent + pre-earnings IV
 │   ├── flow_intel.py          # FII/DII flow intelligence + signals
+│   ├── macro.py               # Currency/commodity linkage analysis
 │   └── yfinance_provider.py   # Free NSE/BSE data via Yahoo Finance
 ├── analysis/                 # Analysis engines
 │   ├── technical.py           # RSI, MACD, EMAs, Bollinger, ATR, pivots
@@ -264,12 +287,19 @@ india-trade-cli/
 
 When you run `analyze RELIANCE`:
 
-**Phase 1: Analyst Team** (parallel, ~2s)
+**Phase 1: Analyst Team** (7 analysts, parallel, ~2s)
 - Technical Analyst: RSI, MACD, EMAs, support/resistance, volume
 - Fundamental Analyst: PE, ROE, ROCE, debt, growth, promoter holding
 - Options Analyst: PCR, max pain, IV rank
 - News & Macro Analyst: headlines, FII/DII, breadth, events (1 LLM call for sentiment)
+- Sentiment Analyst: FII/DII flow signals, market breadth, PCR
+- Sector Rotation Analyst: sector performance, stock's sector tailwind/headwind
 - Risk Manager: VIX, position sizing, portfolio exposure
+
+**Phase 1.5: Analyst Scorecard** (instant)
+- Weighted composite score from all 7 analysts
+- Conflict detection (e.g. "Technical BULLISH vs Fundamental BEARISH")
+- Agreement % across analysts
 
 **Phase 2: Research Debate** (sequential, ~30-60s)
 - Round 1: Bull builds investment case → Bear counters with risks
@@ -321,6 +351,13 @@ NEWSAPI_KEY=...                    # free at newsapi.org
 - [x] Phase 5: Earnings agent, FII/DII intelligence, event strategies
 - [x] Trader Agent with 3 risk personas
 - [x] Multi-round debate with facilitator
+- [x] Sentiment Analyst + Sector Rotation Analyst (7 total)
+- [x] Weighted analyst scorecard with conflict detection
+- [x] Walk-forward backtesting (rolling window regime analysis)
+- [x] Earnings surprise prediction
+- [x] Real beta in what-if simulator
+- [x] Advanced options (iron condor, butterfly, calendar, ratio, diagonal)
+- [x] Currency/commodity macro linkages (USD/INR, crude, gold, US 10Y)
 - [ ] SEBI compliance layer (margin validation, tax harvesting)
 - [ ] Personal trading style profile (learn from trade outcomes)
 - [ ] Full LLM multi-agent mode (`--deep`, 11+ LLM calls)
