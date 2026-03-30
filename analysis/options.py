@@ -343,3 +343,128 @@ def analyse_option(
         moneyness   = moneyness,
         max_loss    = round(ltp * lot_size, 2),
     )
+
+
+# ── Advanced Strategy Builders ───────────────────────────────
+
+def build_iron_condor(
+    spot: float, lot_size: int,
+    call_sell_strike: float, call_buy_strike: float,
+    put_sell_strike: float, put_buy_strike: float,
+    call_sell_prem: float, call_buy_prem: float,
+    put_sell_prem: float, put_buy_prem: float,
+) -> list[PayoffLeg]:
+    """Build an iron condor — sell OTM call spread + sell OTM put spread."""
+    return [
+        PayoffLeg("CE", "SELL", call_sell_strike, call_sell_prem, lot_size),
+        PayoffLeg("CE", "BUY",  call_buy_strike,  call_buy_prem,  lot_size),
+        PayoffLeg("PE", "SELL", put_sell_strike,  put_sell_prem,  lot_size),
+        PayoffLeg("PE", "BUY",  put_buy_strike,   put_buy_prem,   lot_size),
+    ]
+
+
+def build_butterfly(
+    spot: float, lot_size: int,
+    lower_strike: float, middle_strike: float, upper_strike: float,
+    lower_prem: float, middle_prem: float, upper_prem: float,
+    option_type: str = "CE",
+) -> list[PayoffLeg]:
+    """Build a butterfly spread — buy 1 lower, sell 2 middle, buy 1 upper."""
+    return [
+        PayoffLeg(option_type, "BUY",  lower_strike,  lower_prem,  lot_size, lots=1),
+        PayoffLeg(option_type, "SELL", middle_strike, middle_prem, lot_size, lots=2),
+        PayoffLeg(option_type, "BUY",  upper_strike,  upper_prem,  lot_size, lots=1),
+    ]
+
+
+def build_calendar_spread(
+    strike: float, lot_size: int,
+    near_prem: float, far_prem: float,
+    option_type: str = "CE",
+) -> list[PayoffLeg]:
+    """
+    Calendar spread — sell near-term, buy far-term at same strike.
+    Profits from faster theta decay of near-term option.
+    Note: payoff at near expiry only (far-term value estimated).
+    """
+    return [
+        PayoffLeg(option_type, "SELL", strike, near_prem, lot_size, lots=1),
+        PayoffLeg(option_type, "BUY",  strike, far_prem,  lot_size, lots=1),
+    ]
+
+
+def build_ratio_spread(
+    lot_size: int,
+    buy_strike: float, sell_strike: float,
+    buy_prem: float, sell_prem: float,
+    option_type: str = "CE",
+    ratio: int = 2,
+) -> list[PayoffLeg]:
+    """
+    Ratio spread — buy 1 option, sell N options at different strike.
+    E.g. buy 1 ATM call, sell 2 OTM calls (1:2 ratio).
+    High risk if stock moves beyond short strikes.
+    """
+    return [
+        PayoffLeg(option_type, "BUY",  buy_strike,  buy_prem,  lot_size, lots=1),
+        PayoffLeg(option_type, "SELL", sell_strike, sell_prem, lot_size, lots=ratio),
+    ]
+
+
+def build_diagonal_spread(
+    lot_size: int,
+    near_strike: float, far_strike: float,
+    near_prem: float, far_prem: float,
+    option_type: str = "CE",
+) -> list[PayoffLeg]:
+    """
+    Diagonal spread — sell near-term at one strike, buy far-term at different strike.
+    Combines calendar + vertical spread characteristics.
+    """
+    return [
+        PayoffLeg(option_type, "SELL", near_strike, near_prem, lot_size, lots=1),
+        PayoffLeg(option_type, "BUY",  far_strike,  far_prem,  lot_size, lots=1),
+    ]
+
+
+def suggest_earnings_straddle(
+    underlying: str,
+    spot: float,
+    lot_size: int,
+    atm_ce_prem: float,
+    atm_pe_prem: float,
+    avg_earnings_move: float = 3.0,
+) -> dict:
+    """
+    Evaluate an earnings straddle — buy ATM call + ATM put before results.
+
+    Returns profitability analysis:
+    - Total cost of straddle
+    - Required move to break even
+    - Historical avg move vs breakeven
+    - Verdict: FAVORABLE / UNFAVORABLE / MARGINAL
+    """
+    total_cost = (atm_ce_prem + atm_pe_prem) * lot_size
+    breakeven_pct = (atm_ce_prem + atm_pe_prem) / spot * 100
+    move_vs_be = avg_earnings_move / breakeven_pct if breakeven_pct > 0 else 0
+
+    if move_vs_be > 1.3:
+        verdict = "FAVORABLE"
+        reason = f"Avg move ({avg_earnings_move:.1f}%) > breakeven ({breakeven_pct:.1f}%) by {(move_vs_be-1)*100:.0f}%"
+    elif move_vs_be > 0.9:
+        verdict = "MARGINAL"
+        reason = f"Avg move ({avg_earnings_move:.1f}%) roughly equals breakeven ({breakeven_pct:.1f}%)"
+    else:
+        verdict = "UNFAVORABLE"
+        reason = f"Avg move ({avg_earnings_move:.1f}%) < breakeven ({breakeven_pct:.1f}%) — straddle too expensive"
+
+    return {
+        "underlying": underlying,
+        "spot": spot,
+        "straddle_cost": round(total_cost, 2),
+        "breakeven_pct": round(breakeven_pct, 2),
+        "avg_earnings_move": avg_earnings_move,
+        "move_vs_breakeven": round(move_vs_be, 2),
+        "verdict": verdict,
+        "reason": reason,
+    }

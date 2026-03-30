@@ -60,7 +60,8 @@ COMMANDS = [
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
     "ai", "alert", "alerts", "backtest", "clear", "earnings", "events",
-    "flows", "greeks", "memory", "patterns", "provider", "tui", "web", "whatif",
+    "flows", "greeks", "macro", "memory", "patterns", "provider",
+    "tui", "walkforward", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -877,6 +878,30 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "greeks":
                 from engine.portfolio import print_portfolio_greeks
                 print_portfolio_greeks()
+
+            elif command == "macro":
+                from market.macro import print_macro_snapshot
+                sym = args[0].upper() if args else None
+                print_macro_snapshot(sym)
+
+            elif command == "walkforward":
+                if not args:
+                    console.print("[red]Usage: walkforward SYMBOL [strategy] [--period 3y][/red]")
+                else:
+                    from engine.backtest import walk_forward_test
+                    sym = args[0].upper()
+                    strat = args[1].lower() if len(args) > 1 else "rsi"
+                    period = "3y"
+                    if "--period" in args:
+                        idx = args.index("--period")
+                        if idx + 1 < len(args):
+                            period = args[idx + 1]
+                    console.print(f"[dim]Running walk-forward: {sym} / {strat} / {period}...[/dim]")
+                    try:
+                        result = walk_forward_test(sym, strat, total_period=period)
+                        result.print_summary()
+                    except Exception as e:
+                        console.print(f"[red]Walk-forward failed: {e}[/red]")
 
             elif command == "events":
                 from engine.event_strategies import print_event_strategies

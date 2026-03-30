@@ -85,6 +85,91 @@ class AnalystReport:
 
 
 @dataclass
+class AnalystScorecard:
+    """Weighted composite score from all analysts."""
+    scores:         dict[str, float]     # analyst_name → raw score
+    weights:        dict[str, float]     # analyst_name → weight (0-1)
+    weighted_total: float                # sum(score * weight)
+    verdict:        str                  # derived from total
+    agreement:      float                # 0-100, how much analysts agree
+    conflicts:      list[str] = field(default_factory=list)  # e.g. "Technical BULLISH vs Fundamental BEARISH"
+
+    def summary(self) -> str:
+        parts = [f"Scorecard: {self.verdict} (total: {self.weighted_total:+.1f}, agreement: {self.agreement:.0f}%)"]
+        for name, score in self.scores.items():
+            w = self.weights.get(name, 0)
+            parts.append(f"  {name:20s}: {score:+6.1f} (weight: {w:.0%})")
+        if self.conflicts:
+            parts.append(f"  Conflicts: {', '.join(self.conflicts)}")
+        return "\n".join(parts)
+
+
+# Default weights for the scorecard (customizable)
+DEFAULT_ANALYST_WEIGHTS = {
+    "Technical":        0.25,
+    "Fundamental":      0.20,
+    "Options":          0.15,
+    "News & Macro":     0.10,
+    "Sentiment":        0.10,
+    "Sector Rotation":  0.05,
+    "Risk Manager":     0.15,
+}
+
+
+def compute_scorecard(reports: list[AnalystReport]) -> AnalystScorecard:
+    """Compute a weighted scorecard from analyst reports."""
+    scores = {}
+    for r in reports:
+        if not r.error:
+            scores[r.analyst] = r.score
+
+    weights = {}
+    for name in scores:
+        weights[name] = DEFAULT_ANALYST_WEIGHTS.get(name, 0.1)
+
+    # Normalize weights to sum to 1
+    total_weight = sum(weights.values())
+    if total_weight > 0:
+        weights = {k: v / total_weight for k, v in weights.items()}
+
+    # Weighted total
+    weighted_total = sum(scores.get(k, 0) * weights.get(k, 0) for k in scores)
+
+    # Verdict from total
+    if weighted_total > 30:
+        verdict = "STRONG_BUY"
+    elif weighted_total > 10:
+        verdict = "BUY"
+    elif weighted_total < -30:
+        verdict = "STRONG_SELL"
+    elif weighted_total < -10:
+        verdict = "SELL"
+    else:
+        verdict = "HOLD"
+
+    # Agreement: how many analysts agree on direction?
+    verdicts = [r.verdict for r in reports if not r.error and r.verdict != "UNKNOWN"]
+    if verdicts:
+        from collections import Counter
+        most_common = Counter(verdicts).most_common(1)[0]
+        agreement = most_common[1] / len(verdicts) * 100
+    else:
+        agreement = 0
+
+    # Detect conflicts
+    conflicts = []
+    bulls = [r.analyst for r in reports if not r.error and r.verdict == "BULLISH"]
+    bears = [r.analyst for r in reports if not r.error and r.verdict == "BEARISH"]
+    if bulls and bears:
+        conflicts.append(f"{', '.join(bulls)} BULLISH vs {', '.join(bears)} BEARISH")
+
+    return AnalystScorecard(
+        scores=scores, weights=weights, weighted_total=round(weighted_total, 1),
+        verdict=verdict, agreement=round(agreement, 1), conflicts=conflicts,
+    )
+
+
+@dataclass
 class DebateResult:
     """Output from the multi-round bull/bear debate phase."""
     bull_argument:  str          # Round 1: bull case
@@ -517,6 +602,171 @@ class NewsMacroAnalyst(BaseAnalyst):
         return "NEUTRAL", 0, 30
 
 
+class SentimentAnalyst(BaseAnalyst):
+    """
+    Dedicated sentiment analyst — separated from News/Macro.
+    Focuses purely on market sentiment signals: FII/DII flows,
+    market breadth, VIX positioning, and options sentiment (PCR).
+    """
+
+    name = "Sentiment"
+
+    def analyze(self, symbol: str, exchange: str = "NSE") -> AnalystReport:
+        try:
+            points = []
+            data: dict[str, Any] = {}
+            score = 0.0
+
+            # FII/DII flows
+            try:
+                from market.flow_intel import get_flow_analysis
+                flow = get_flow_analysis()
+                data["flow_signal"] = flow.signal
+                data["fii_5d"] = flow.fii_5d_net
+                data["dii_5d"] = flow.dii_5d_net
+                data["divergence"] = flow.divergence
+                points.append(f"Flow signal: {flow.signal} (conf: {flow.confidence}%)")
+                if flow.divergence:
+                    points.append(f"FII-DII divergence: {flow.divergence_type}")
+                if flow.signal in ("BULLISH", "NEUTRAL_TO_BULLISH"):
+                    score += 25
+                elif flow.signal in ("BEARISH", "NEUTRAL_TO_BEARISH"):
+                    score -= 25
+            except Exception:
+                pass
+
+            # Market breadth
+            try:
+                breadth = self.registry.execute("get_market_breadth", {})
+                if isinstance(breadth, dict):
+                    ad = breadth.get("ad_ratio")
+                    data["ad_ratio"] = ad
+                    if ad and ad > 1.5:
+                        points.append(f"Breadth: Strong ({ad:.1f} A/D)")
+                        score += 15
+                    elif ad and ad < 0.7:
+                        points.append(f"Breadth: Weak ({ad:.1f} A/D)")
+                        score -= 15
+                    else:
+                        points.append(f"Breadth: Neutral ({ad:.1f} A/D)" if ad else "Breadth: N/A")
+            except Exception:
+                pass
+
+            # PCR for the symbol (options sentiment)
+            try:
+                pcr_result = self.registry.execute("get_pcr", {"underlying": symbol})
+                if isinstance(pcr_result, dict):
+                    pcr = pcr_result.get("pcr")
+                    data["pcr"] = pcr
+                    if pcr and pcr > 1.3:
+                        points.append(f"PCR: {pcr:.2f} (bearish sentiment)")
+                        score -= 15
+                    elif pcr and pcr < 0.7:
+                        points.append(f"PCR: {pcr:.2f} (bullish sentiment)")
+                        score += 15
+            except Exception:
+                pass
+
+            verdict = "BULLISH" if score > 15 else "BEARISH" if score < -15 else "NEUTRAL"
+            confidence = min(abs(int(score)) + 30, 100)
+
+            return AnalystReport(
+                analyst=self.name, verdict=verdict,
+                confidence=confidence, score=score,
+                key_points=points, data=data,
+            )
+        except Exception as e:
+            return AnalystReport(
+                analyst=self.name, verdict="UNKNOWN", confidence=0,
+                score=0, error=str(e),
+            )
+
+
+class SectorRotationAnalyst(BaseAnalyst):
+    """
+    Tracks sector performance and rotation patterns.
+    Compares the stock's sector vs broader market to identify
+    tailwinds/headwinds from sector rotation.
+    """
+
+    name = "Sector Rotation"
+
+    # Map stocks to their primary sector index
+    _SECTOR_MAP = {
+        "INFY": "IT", "TCS": "IT", "WIPRO": "IT", "HCLTECH": "IT", "TECHM": "IT",
+        "HDFCBANK": "BANK", "ICICIBANK": "BANK", "SBIN": "BANK", "KOTAKBANK": "BANK",
+        "AXISBANK": "BANK", "INDUSINDBK": "BANK", "BANDHANBNK": "BANK",
+        "SUNPHARMA": "PHARMA", "DRREDDY": "PHARMA", "CIPLA": "PHARMA", "DIVISLAB": "PHARMA",
+        "MARUTI": "AUTO", "TATAMOTORS": "AUTO", "M&M": "AUTO", "BAJAJ-AUTO": "AUTO",
+        "ITC": "FMCG", "HINDUNILVR": "FMCG", "NESTLEIND": "FMCG", "BRITANNIA": "FMCG",
+        "RELIANCE": "ENERGY", "ONGC": "ENERGY", "NTPC": "ENERGY", "POWERGRID": "ENERGY",
+        "TATASTEEL": "METAL", "JSWSTEEL": "METAL", "HINDALCO": "METAL",
+        "DLF": "REALTY", "GODREJPROP": "REALTY",
+        "BAJFINANCE": "FINANCE", "BAJFINSV": "FINANCE", "HDFCLIFE": "FINANCE",
+    }
+
+    def analyze(self, symbol: str, exchange: str = "NSE") -> AnalystReport:
+        try:
+            points = []
+            data: dict[str, Any] = {}
+            score = 0.0
+
+            # Get sector snapshot
+            try:
+                sectors = self.registry.execute("get_sector_snapshot", {})
+                if isinstance(sectors, list):
+                    data["sectors"] = sectors
+                    # Sort by performance
+                    sorted_sectors = sorted(
+                        [s for s in sectors if isinstance(s, dict)],
+                        key=lambda s: s.get("change_pct", 0),
+                        reverse=True,
+                    )
+                    if sorted_sectors:
+                        top = sorted_sectors[0]
+                        bottom = sorted_sectors[-1]
+                        points.append(f"Strongest sector: {top.get('name', '?')} ({top.get('change_pct', 0):+.1f}%)")
+                        points.append(f"Weakest sector: {bottom.get('name', '?')} ({bottom.get('change_pct', 0):+.1f}%)")
+            except Exception:
+                pass
+
+            # Check if this stock's sector is in favor
+            sector = self._SECTOR_MAP.get(symbol.upper(), "")
+            if sector and data.get("sectors"):
+                for s in data["sectors"]:
+                    s_name = s.get("name", "") if isinstance(s, dict) else ""
+                    if sector.upper() in s_name.upper():
+                        chg = s.get("change_pct", 0) if isinstance(s, dict) else 0
+                        data["stock_sector"] = sector
+                        data["sector_change"] = chg
+                        if chg > 0.5:
+                            points.append(f"{symbol}'s sector ({sector}) is outperforming: {chg:+.1f}%")
+                            score += 20
+                        elif chg < -0.5:
+                            points.append(f"{symbol}'s sector ({sector}) is underperforming: {chg:+.1f}%")
+                            score -= 20
+                        else:
+                            points.append(f"{symbol}'s sector ({sector}) is flat: {chg:+.1f}%")
+                        break
+
+            if not sector:
+                points.append(f"Sector mapping not available for {symbol}")
+
+            verdict = "BULLISH" if score > 10 else "BEARISH" if score < -10 else "NEUTRAL"
+            confidence = min(abs(int(score)) + 30, 80)
+
+            return AnalystReport(
+                analyst=self.name, verdict=verdict,
+                confidence=confidence, score=score,
+                key_points=points, data=data,
+            )
+        except Exception as e:
+            return AnalystReport(
+                analyst=self.name, verdict="UNKNOWN", confidence=0,
+                score=0, error=str(e),
+            )
+
+
 class RiskAnalyst(BaseAnalyst):
     """Evaluates risk: VIX, position sizing, portfolio exposure, upcoming events."""
 
@@ -637,6 +887,8 @@ class MultiAgentAnalyzer:
             FundamentalAnalyst(registry),
             OptionsAnalyst(registry),
             news_analyst,
+            SentimentAnalyst(registry),
+            SectorRotationAnalyst(registry),
             RiskAnalyst(registry),
         ]
 
@@ -668,6 +920,11 @@ class MultiAgentAnalyzer:
         if not valid_reports:
             console.print("[yellow]All analysts failed. Falling back to single-agent.[/yellow]")
             return self._fallback_single_agent(symbol, exchange)
+
+        # Compute scorecard
+        scorecard = compute_scorecard(reports)
+        if self.verbose:
+            console.print(f"\n[dim]{scorecard.summary()}[/dim]")
 
         # ── Phase 2: Bull/Bear Debate ────────────────────────
         if self.verbose:

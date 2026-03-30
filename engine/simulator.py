@@ -90,6 +90,7 @@ class Simulator:
         self._holdings = []
         self._positions = []
         self._loaded = False
+        self._beta_cache: dict[str, float] = {}
 
     def _load_portfolio(self) -> None:
         """Load current holdings and positions from broker."""
@@ -105,10 +106,57 @@ class Simulator:
             self._positions = []
         self._loaded = True
 
+    def _get_beta(self, symbol: str) -> float:
+        """
+        Calculate stock beta relative to NIFTY 50 from historical data.
+        Beta = covariance(stock, NIFTY) / variance(NIFTY)
+        Uses 1 year of daily returns. Caches results.
+        """
+        if symbol in self._beta_cache:
+            return self._beta_cache[symbol]
+
+        try:
+            from market.yfinance_provider import yf_get_ohlcv
+            import numpy as np
+
+            stock_data = yf_get_ohlcv(symbol, period="1y")
+            nifty_data = yf_get_ohlcv("NIFTY 50", period="1y")
+
+            if not stock_data or not nifty_data or len(stock_data) < 30:
+                self._beta_cache[symbol] = 1.0
+                return 1.0
+
+            # Align by date
+            stock_closes = {str(d["date"])[:10]: d["close"] for d in stock_data}
+            nifty_closes = {str(d["date"])[:10]: d["close"] for d in nifty_data}
+
+            common_dates = sorted(set(stock_closes) & set(nifty_closes))
+            if len(common_dates) < 30:
+                self._beta_cache[symbol] = 1.0
+                return 1.0
+
+            s_prices = [stock_closes[d] for d in common_dates]
+            n_prices = [nifty_closes[d] for d in common_dates]
+
+            s_returns = np.diff(s_prices) / s_prices[:-1]
+            n_returns = np.diff(n_prices) / n_prices[:-1]
+
+            cov = np.cov(s_returns, n_returns)[0][1]
+            var = np.var(n_returns)
+            beta = float(cov / var) if var > 0 else 1.0
+
+            # Clamp to reasonable range
+            beta = max(0.1, min(beta, 3.0))
+            self._beta_cache[symbol] = round(beta, 2)
+            return self._beta_cache[symbol]
+        except Exception:
+            self._beta_cache[symbol] = 1.0
+            return 1.0
+
     def scenario_market_move(self, nifty_change_pct: float) -> ScenarioResult:
         """
         Simulate a broad market move.
-        Assumes all holdings move with beta=1 relative to NIFTY.
+        Each stock moves by NIFTY change * its beta (calculated from historical data).
         """
         self._load_portfolio()
         change = nifty_change_pct / 100
@@ -119,8 +167,8 @@ class Simulator:
 
         for h in self._holdings:
             current_val = h.last_price * h.quantity
-            # Approximate: stock moves proportionally to market
-            projected_price = h.last_price * (1 + change)
+            beta = self._get_beta(h.symbol)
+            projected_price = h.last_price * (1 + change * beta)
             projected_val = projected_price * h.quantity
             pnl = projected_val - current_val
 
@@ -133,6 +181,7 @@ class Simulator:
                 "current_price": h.last_price,
                 "projected_price": round(projected_price, 2),
                 "pnl": round(pnl, 2),
+                "beta": beta,
             })
 
         for p in self._positions:

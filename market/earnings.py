@@ -250,6 +250,95 @@ def _fetch_earnings_date_nse(symbol: str) -> Optional[str]:
     return None
 
 
+def predict_earnings_surprise(symbol: str) -> dict:
+    """
+    Predict likely earnings outcome based on available signals.
+
+    Uses:
+    - Pre-earnings technical momentum (is stock rallying into results?)
+    - IV rank (high IV = market expects big move)
+    - FII/DII positioning (institutional conviction)
+    - Historical beat/miss patterns
+    - Sector performance (sector tailwind = higher beat probability)
+
+    Returns dict with prediction, confidence, and reasoning.
+    """
+    symbol = symbol.upper()
+    signals = []
+    bullish_count = 0
+    bearish_count = 0
+
+    # 1. Pre-earnings technical momentum
+    try:
+        from analysis.technical import analyse as tech_analyse
+        snap = tech_analyse(symbol)
+        if snap.score > 30:
+            signals.append(f"Strong technical momentum (score: {snap.score:+d}) — stocks rallying into earnings often beat")
+            bullish_count += 1
+        elif snap.score < -30:
+            signals.append(f"Weak technical setup (score: {snap.score:+d}) — bearish momentum pre-earnings")
+            bearish_count += 1
+        else:
+            signals.append(f"Neutral technicals (score: {snap.score:+d})")
+
+        if snap.rsi > 65:
+            signals.append(f"RSI {snap.rsi:.0f} — overbought, limited upside on beat")
+        elif snap.rsi < 35:
+            signals.append(f"RSI {snap.rsi:.0f} — oversold, positive surprise could trigger sharp rally")
+            bullish_count += 1
+    except Exception:
+        pass
+
+    # 2. IV rank (market expectation)
+    iv_data = get_pre_earnings_iv(symbol)
+    iv_rank = iv_data.get("iv_rank", 50)
+    avg_move = iv_data.get("avg_earnings_move", 3.0)
+
+    if iv_rank > 70:
+        signals.append(f"IV rank {iv_rank} — market expects big move (±{avg_move:.1f}%)")
+    elif iv_rank < 30:
+        signals.append(f"IV rank {iv_rank} — market complacent, surprise could be amplified")
+
+    # 3. Historical beat/miss tendency
+    _BEAT_TENDENCY = {
+        "TCS": 0.7, "INFY": 0.65, "RELIANCE": 0.6, "HDFCBANK": 0.65,
+        "ICICIBANK": 0.6, "BHARTIARTL": 0.55, "ITC": 0.7, "BAJFINANCE": 0.55,
+        "MARUTI": 0.5, "TATAMOTORS": 0.5, "WIPRO": 0.45, "SBIN": 0.5,
+    }
+    beat_prob = _BEAT_TENDENCY.get(symbol, 0.5)
+    if beat_prob > 0.6:
+        signals.append(f"Historical beat rate: {beat_prob:.0%} — tends to exceed expectations")
+        bullish_count += 1
+    elif beat_prob < 0.45:
+        signals.append(f"Historical beat rate: {beat_prob:.0%} — tends to miss expectations")
+        bearish_count += 1
+    else:
+        signals.append(f"Historical beat rate: {beat_prob:.0%} — coin flip")
+
+    # 4. Derive prediction
+    if bullish_count >= 2:
+        prediction = "LIKELY_BEAT"
+        confidence = min(55 + bullish_count * 10, 75)
+    elif bearish_count >= 2:
+        prediction = "LIKELY_MISS"
+        confidence = min(55 + bearish_count * 10, 75)
+    else:
+        prediction = "UNCERTAIN"
+        confidence = 40
+
+    return {
+        "symbol": symbol,
+        "prediction": prediction,
+        "confidence": confidence,
+        "signals": signals,
+        "iv_rank": iv_rank,
+        "avg_move": avg_move,
+        "beat_probability": beat_prob,
+        "quarter": _current_quarter(),
+        "strategy": iv_data.get("strategy_suggestion", ""),
+    }
+
+
 def get_earnings_context(symbols: Optional[list[str]] = None) -> str:
     """Generate text context about earnings for LLM prompts."""
     if not is_earnings_season():

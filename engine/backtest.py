@@ -481,3 +481,138 @@ def run_backtest(
     strategy = factory(strategy_args or [])
     bt = Backtester(symbol=symbol, period=period, capital=capital)
     return bt.run(strategy)
+
+
+# ── Walk-Forward Testing ─────────────────────────────────────
+
+@dataclass
+class WalkForwardResult:
+    """Result of walk-forward analysis."""
+    symbol:          str
+    strategy_name:   str
+    windows:         list[dict]    # each window's metrics
+    avg_return:      float
+    avg_sharpe:      float
+    avg_win_rate:    float
+    consistency:     float         # % of windows that were profitable
+    vs_buy_hold:     float         # avg alpha across windows
+
+    def print_summary(self) -> None:
+        from rich.table import Table
+        from rich.panel import Panel
+        console = Console()
+
+        lines = [
+            f"  Strategy    : {self.strategy_name}",
+            f"  Symbol      : {self.symbol}",
+            f"  Windows     : {len(self.windows)}",
+            f"  Avg Return  : {self.avg_return:+.2f}%",
+            f"  Avg Sharpe  : {self.avg_sharpe:.2f}",
+            f"  Avg Win Rate: {self.avg_win_rate:.1f}%",
+            f"  Consistency : {self.consistency:.0f}% of windows profitable",
+            f"  Avg Alpha   : {self.vs_buy_hold:+.2f}% vs buy-hold",
+        ]
+        console.print(Panel("\n".join(lines),
+                            title="[bold cyan]Walk-Forward Analysis[/bold cyan]",
+                            border_style="cyan"))
+
+        table = Table(title="Window Results", show_lines=False)
+        table.add_column("Window", width=25)
+        table.add_column("Return", justify="right", width=10)
+        table.add_column("Sharpe", justify="right", width=8)
+        table.add_column("Trades", justify="right", width=8)
+        table.add_column("Win%", justify="right", width=8)
+        table.add_column("B&H", justify="right", width=10)
+
+        for w in self.windows:
+            ret_style = "green" if w["return"] >= 0 else "red"
+            table.add_row(
+                w["period"],
+                f"[{ret_style}]{w['return']:+.2f}%[/{ret_style}]",
+                f"{w['sharpe']:.2f}",
+                str(w["trades"]),
+                f"{w['win_rate']:.0f}%",
+                f"{w['buy_hold']:+.2f}%",
+            )
+        console.print(table)
+
+
+def walk_forward_test(
+    symbol: str,
+    strategy_name: str = "rsi",
+    strategy_args: Optional[list[str]] = None,
+    total_period: str = "3y",
+    window_months: int = 6,
+    capital: float = 100000,
+) -> WalkForwardResult:
+    """
+    Walk-forward backtest: split history into rolling windows,
+    test strategy on each independently.
+
+    E.g. 3 years split into 6 windows of 6 months each.
+    Tests if the strategy works consistently across different regimes.
+    """
+    from datetime import datetime, timedelta
+
+    factory = STRATEGIES.get(strategy_name.lower())
+    if not factory:
+        raise ValueError(f"Unknown strategy: {strategy_name}")
+
+    strategy = factory(strategy_args or [])
+
+    period_days = {"1y": 365, "2y": 730, "3y": 1095, "5y": 1825}.get(total_period, 1095)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=period_days)
+
+    # Build windows
+    window_days = window_months * 30
+    windows = []
+    current = start_date
+
+    while current + timedelta(days=window_days) <= end_date:
+        w_start = current
+        w_end = current + timedelta(days=window_days)
+
+        bt = Backtester(symbol=symbol, period="1y", capital=capital)
+        # Override dates
+        from market.history import get_ohlcv
+        df = get_ohlcv(symbol=symbol, from_date=w_start, to_date=w_end, days=window_days)
+        if not df.empty:
+            df = df.dropna(subset=["close"])
+            bt._df = df
+            try:
+                result = bt.run(strategy)
+                windows.append({
+                    "period": f"{w_start.strftime('%Y-%m')} → {w_end.strftime('%Y-%m')}",
+                    "return": result.total_return,
+                    "sharpe": result.sharpe_ratio,
+                    "trades": result.total_trades,
+                    "win_rate": result.win_rate,
+                    "buy_hold": result.buy_hold_return,
+                    "max_dd": result.max_drawdown,
+                })
+            except Exception:
+                pass
+
+        current += timedelta(days=window_days)
+
+    if not windows:
+        raise RuntimeError(f"No valid windows for {symbol} over {total_period}")
+
+    avg_return = sum(w["return"] for w in windows) / len(windows)
+    avg_sharpe = sum(w["sharpe"] for w in windows) / len(windows)
+    avg_win_rate = sum(w["win_rate"] for w in windows) / len(windows)
+    profitable = sum(1 for w in windows if w["return"] > 0)
+    consistency = profitable / len(windows) * 100
+    avg_alpha = sum(w["return"] - w["buy_hold"] for w in windows) / len(windows)
+
+    return WalkForwardResult(
+        symbol=symbol,
+        strategy_name=strategy.name,
+        windows=windows,
+        avg_return=round(avg_return, 2),
+        avg_sharpe=round(avg_sharpe, 2),
+        avg_win_rate=round(avg_win_rate, 1),
+        consistency=round(consistency, 1),
+        vs_buy_hold=round(avg_alpha, 2),
+    )
