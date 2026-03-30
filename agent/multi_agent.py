@@ -683,6 +683,21 @@ class MultiAgentAnalyzer:
         synthesis = self._run_synthesis(symbol, exchange, reports, debate)
         synthesis_time = time.time() - t2
 
+        # ── Phase 4: Store to Memory ─────────────────────────
+        try:
+            from engine.memory import trade_memory
+            record = trade_memory.store_from_analysis(
+                symbol=symbol,
+                exchange=exchange,
+                analyst_reports=reports,
+                debate=debate,
+                synthesis=synthesis,
+            )
+            if self.verbose:
+                console.print(f"[dim]  Stored to trade memory (ID: {record.id})[/dim]")
+        except Exception:
+            pass  # memory storage is non-critical
+
         # Print timing summary
         total = analyst_time + debate_time + synthesis_time
         console.print()
@@ -873,6 +888,22 @@ class MultiAgentAnalyzer:
                 f"  VIX: {risk_report.data.get('vix', 'N/A')}\n"
             )
 
+        # Memory: past analyses for this symbol
+        memory_context = ""
+        try:
+            from engine.memory import trade_memory
+            memory_context = trade_memory.get_context_for_symbol(symbol)
+        except Exception:
+            pass
+
+        # Patterns: active India-specific patterns
+        pattern_context = ""
+        try:
+            from engine.patterns import get_pattern_context
+            pattern_context = get_pattern_context()
+        except Exception:
+            pass
+
         synthesis_prompt = SYNTHESIS_PROMPT.format(
             symbol=symbol,
             exchange=exchange,
@@ -880,6 +911,8 @@ class MultiAgentAnalyzer:
             bull_case=debate.bull_argument,
             bear_case=debate.bear_argument,
             risk_context=risk_context,
+            memory_context=memory_context,
+            pattern_context=pattern_context,
         )
 
         if self.verbose:
@@ -960,6 +993,12 @@ You must make the final call on {symbol} ({exchange}) after reviewing all eviden
 
 ## Risk Parameters
 {risk_context}
+
+## Trade Memory (Past Analyses)
+{memory_context}
+
+## Active Market Patterns (India-Specific)
+{pattern_context}
 
 ## Your Task
 Weigh the bull and bear arguments against the analyst data. Consider:

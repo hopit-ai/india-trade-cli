@@ -59,7 +59,7 @@ COMMANDS = [
     "holdings", "positions", "orders",
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
-    "ai", "alert", "alerts", "clear", "provider", "tui", "web",
+    "ai", "alert", "alerts", "clear", "memory", "patterns", "provider", "tui", "web",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -434,6 +434,13 @@ def cmd_help() -> None:
     alert list / alerts               List all active alerts
     alert remove ID                   Remove an alert by ID
 
+  [bold]Memory & Patterns[/bold]
+    memory                            Show recent trade analyses
+    memory stats                      Performance statistics
+    memory <SYMBOL>                   Past analyses for a symbol
+    memory outcome <ID> WIN|LOSS [pnl]  Record trade outcome
+    patterns                          Show active India market patterns
+
   [bold]Interface[/bold]
     tui              Launch split-panel Textual TUI
     web [PORT]       Start web UI server (browser-based broker login, default port 8765)
@@ -451,6 +458,88 @@ def cmd_help() -> None:
 
 
 # ── Alert command handler ──────────────────────────────────────
+
+def _handle_memory_command(args: list[str]) -> None:
+    """Handle memory commands: memory [stats|list|<symbol>|outcome <id> <result>]"""
+    from engine.memory import trade_memory
+
+    sub = args[0].lower() if args else "list"
+
+    if sub == "stats":
+        trade_memory.print_stats()
+
+    elif sub == "list":
+        n = int(args[1]) if len(args) > 1 else 10
+        trade_memory.print_recent(n)
+
+    elif sub == "outcome":
+        if len(args) < 3:
+            console.print("[red]Usage: memory outcome <trade_id> WIN|LOSS [pnl] [notes][/red]")
+            return
+        trade_id = args[1]
+        outcome = args[2].upper()
+        pnl = float(args[3]) if len(args) > 3 else None
+        notes = " ".join(args[4:]) if len(args) > 4 else ""
+        if trade_memory.record_outcome(trade_id, outcome=outcome, actual_pnl=pnl, notes=notes):
+            console.print(f"[green]Recorded outcome for {trade_id}: {outcome}[/green]")
+        else:
+            console.print(f"[red]Trade ID {trade_id} not found.[/red]")
+
+    elif sub == "clear":
+        console.print("[yellow]This will delete all trade memory. Type 'yes' to confirm:[/yellow]")
+        from rich.prompt import Prompt
+        if Prompt.ask("[bold]Confirm[/bold]", default="no") == "yes":
+            from pathlib import Path
+            p = Path.home() / ".trading_platform" / "trade_memory.json"
+            if p.exists():
+                p.unlink()
+            trade_memory._records = []
+            console.print("[green]Trade memory cleared.[/green]")
+
+    else:
+        # Treat as symbol lookup
+        symbol = sub.upper()
+        records = trade_memory.query(symbol=symbol)
+        if records:
+            console.print(f"\n[bold]Past analyses for {symbol}:[/bold]")
+            for r in records:
+                verdict_style = {"BUY": "green", "STRONG_BUY": "bold green",
+                                 "SELL": "red", "STRONG_SELL": "bold red"}.get(r.verdict, "yellow")
+                outcome_str = f" → {r.outcome}" if r.outcome else ""
+                console.print(
+                    f"  [{r.id}] {r.timestamp[:10]}  "
+                    f"[{verdict_style}]{r.verdict}[/{verdict_style}] "
+                    f"(conf: {r.confidence}%) {r.strategy or ''}{outcome_str}"
+                )
+            console.print()
+        else:
+            console.print(f"[dim]No analyses found for {symbol}.[/dim]")
+
+
+def _handle_patterns_command() -> None:
+    """Display active India-specific market patterns."""
+    from engine.patterns import get_active_patterns
+
+    patterns = get_active_patterns()
+    if not patterns:
+        console.print("[dim]No specific patterns active today.[/dim]")
+        return
+
+    console.print(f"\n[bold]Active Market Patterns ({len(patterns)}):[/bold]\n")
+    for p in patterns:
+        impact_style = {
+            "BULLISH": "green", "BEARISH": "red",
+            "VOLATILE": "yellow", "NEUTRAL": "white",
+        }.get(p.impact, "white")
+
+        console.print(
+            f"  [{impact_style}]{p.impact:9s}[/{impact_style}] "
+            f"[bold]{p.name}[/bold] (confidence: {p.confidence}%)"
+        )
+        console.print(f"             {p.description[:100]}")
+        console.print(f"             [cyan]Action:[/cyan] {p.action}")
+        console.print()
+
 
 def _handle_alert_command(args: list[str]) -> None:
     """
@@ -635,6 +724,12 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command in ("alert", "alerts"):
                 _handle_alert_command(args)
+
+            elif command == "memory":
+                _handle_memory_command(args)
+
+            elif command == "patterns":
+                _handle_patterns_command()
 
             elif command == "ai":
                 message = " ".join(args).strip()
