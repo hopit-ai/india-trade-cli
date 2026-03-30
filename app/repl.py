@@ -59,8 +59,8 @@ COMMANDS = [
     "holdings", "positions", "orders",
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
-    "ai", "alert", "alerts", "backtest", "clear", "memory", "patterns",
-    "provider", "tui", "web", "whatif",
+    "ai", "alert", "alerts", "backtest", "clear", "earnings", "events",
+    "flows", "memory", "patterns", "provider", "tui", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -434,6 +434,11 @@ def cmd_help() -> None:
     alert SYMBOL RSI above 70         Set a technical alert
     alert list / alerts               List all active alerts
     alert remove ID                   Remove an alert by ID
+
+  [bold]India Intelligence[/bold]
+    earnings [SYM...]                 Upcoming quarterly results calendar
+    flows                             FII/DII flow analysis with signals
+    events [days]                     Event-driven strategy recommendations
 
   [bold]Backtest & Simulation[/bold]
     backtest SYMBOL [strategy]        Backtest a strategy (rsi, ma, macd, bb)
@@ -821,6 +826,20 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "patterns":
                 _handle_patterns_command()
+
+            elif command == "earnings":
+                from market.earnings import print_earnings_calendar
+                syms = [a.upper() for a in args] if args else None
+                print_earnings_calendar(syms)
+
+            elif command == "flows":
+                from market.flow_intel import print_flow_report
+                print_flow_report()
+
+            elif command == "events":
+                from engine.event_strategies import print_event_strategies
+                days = int(args[0]) if args else 7
+                print_event_strategies(days)
 
             elif command == "backtest":
                 _handle_backtest_command(args)

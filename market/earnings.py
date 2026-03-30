@@ -1,0 +1,290 @@
+"""
+market/earnings.py
+──────────────────
+Earnings Season Agent — quarterly results tracking, pre-earnings IV analysis,
+and post-earnings surprise detection.
+
+India-specific:
+  - Quarterly results season: mid-Jan, mid-Apr, mid-Jul, mid-Oct
+  - NSE filings for board meeting dates
+  - Pre-earnings IV expansion tracking
+  - Consensus vs actual comparison (when available)
+
+Usage:
+    from market.earnings import (
+        get_earnings_calendar,
+        get_pre_earnings_iv,
+        is_earnings_season,
+        get_earnings_context,
+    )
+
+    # Upcoming earnings for watchlist
+    calendar = get_earnings_calendar(["RELIANCE", "TCS", "INFY"])
+
+    # Pre-earnings IV check
+    iv_data = get_pre_earnings_iv("RELIANCE")
+
+    # Is it earnings season right now?
+    if is_earnings_season():
+        print("Earnings season active — watch for stock-specific moves")
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
+from typing import Optional
+
+from rich.console import Console
+from rich.table import Table
+
+console = Console()
+
+
+@dataclass
+class EarningsEntry:
+    """A single stock's earnings event."""
+    symbol:        str
+    company_name:  str = ""
+    result_date:   str = ""       # YYYY-MM-DD or "TBD"
+    quarter:       str = ""       # "Q3FY26", "Q4FY26"
+    status:        str = "UPCOMING"  # UPCOMING / REPORTED / MISSED
+    # Pre-earnings data
+    iv_rank:       Optional[float] = None
+    iv_percentile: Optional[float] = None
+    avg_move:      Optional[float] = None   # historical avg post-earnings move %
+    # Post-earnings data (filled after results)
+    surprise:      Optional[str] = None     # "BEAT" / "MISS" / "INLINE"
+    actual_move:   Optional[float] = None   # actual % move on result day
+
+
+# ── NIFTY 50 Earnings Calendar ───────────────────────────────
+# Major companies and their typical result months
+# This serves as a baseline — actual dates come from NSE filings
+
+_NIFTY50_EARNINGS_MONTHS = {
+    # Company: [typical result months (1-indexed)]
+    "RELIANCE":   [1, 4, 7, 10],
+    "TCS":        [1, 4, 7, 10],  # TCS is usually first to report
+    "HDFCBANK":   [1, 4, 7, 10],
+    "INFY":       [1, 4, 7, 10],  # Infosys reports early (mid-month)
+    "ICICIBANK":  [1, 4, 7, 10],
+    "SBIN":       [2, 5, 8, 11],  # PSU banks report slightly later
+    "BHARTIARTL": [1, 4, 7, 10],
+    "ITC":        [1, 4, 7, 10],
+    "KOTAKBANK":  [1, 4, 7, 10],
+    "LT":         [1, 4, 7, 10],
+    "AXISBANK":   [1, 4, 7, 10],
+    "TATAMOTORS": [2, 5, 8, 11],
+    "MARUTI":     [1, 4, 7, 10],
+    "SUNPHARMA":  [2, 5, 8, 11],
+    "BAJFINANCE": [1, 4, 7, 10],
+    "TITAN":      [2, 5, 8, 11],
+    "WIPRO":      [1, 4, 7, 10],
+    "ASIANPAINT": [1, 4, 7, 10],
+    "ULTRACEMCO": [1, 4, 7, 10],
+    "TATASTEEL":  [2, 5, 8, 11],
+    "HINDUNILVR": [1, 4, 7, 10],
+    "M&M":        [2, 5, 8, 11],
+    "DRREDDY":    [2, 5, 8, 11],
+    "ADANIENT":   [2, 5, 8, 11],
+    "NTPC":       [2, 5, 8, 11],
+    "POWERGRID":  [2, 5, 8, 11],
+}
+
+# Historical average post-earnings move (absolute %) for major stocks
+_AVG_EARNINGS_MOVE = {
+    "TCS": 3.5, "INFY": 4.2, "RELIANCE": 2.8, "HDFCBANK": 2.5,
+    "ICICIBANK": 3.0, "SBIN": 4.0, "BHARTIARTL": 3.5, "ITC": 2.0,
+    "TATAMOTORS": 5.0, "BAJFINANCE": 4.5, "WIPRO": 3.8,
+    "MARUTI": 3.0, "TITAN": 3.5, "SUNPHARMA": 3.2,
+}
+
+
+def _current_quarter() -> str:
+    """Get current FY quarter label (e.g. 'Q4FY26')."""
+    today = date.today()
+    month = today.month
+    year = today.year
+
+    # Indian FY: Apr-Mar
+    if month >= 4:
+        fy = year + 1
+    else:
+        fy = year
+
+    if month in (4, 5, 6):
+        q = 1
+    elif month in (7, 8, 9):
+        q = 2
+    elif month in (10, 11, 12):
+        q = 3
+    else:
+        q = 4
+
+    return f"Q{q}FY{fy % 100}"
+
+
+def is_earnings_season() -> bool:
+    """Check if we're currently in an earnings reporting window."""
+    today = date.today()
+    month = today.month
+    day = today.day
+    # Earnings season: roughly 10th of Jan/Apr/Jul/Oct to end of following month
+    return month in (1, 2, 4, 5, 7, 8, 10, 11) and (
+        (month in (1, 4, 7, 10) and day >= 10) or
+        (month in (2, 5, 8, 11) and day <= 15)
+    )
+
+
+def get_earnings_calendar(
+    symbols: Optional[list[str]] = None,
+    days_ahead: int = 30,
+) -> list[EarningsEntry]:
+    """
+    Get upcoming earnings for given symbols (or NIFTY 50 by default).
+
+    Uses a combination of:
+    1. Known reporting patterns (which month each company typically reports)
+    2. NSE board meeting calendar (for actual dates when available)
+    """
+    today = date.today()
+    quarter = _current_quarter()
+    target_symbols = symbols or list(_NIFTY50_EARNINGS_MONTHS.keys())
+
+    entries = []
+    for sym in target_symbols:
+        sym = sym.upper()
+        months = _NIFTY50_EARNINGS_MONTHS.get(sym, [])
+
+        # Check if this stock reports in the current or next month
+        is_upcoming = any(
+            abs(today.month - m) <= 1 or abs(today.month - m) == 11
+            for m in months
+        )
+
+        if is_upcoming or symbols:  # always include if specifically requested
+            entry = EarningsEntry(
+                symbol=sym,
+                quarter=quarter,
+                result_date="TBD",
+                avg_move=_AVG_EARNINGS_MOVE.get(sym),
+            )
+
+            # Try to get actual date from NSE
+            try:
+                actual_date = _fetch_earnings_date_nse(sym)
+                if actual_date:
+                    entry.result_date = actual_date
+            except Exception:
+                pass
+
+            entries.append(entry)
+
+    # Sort by date (TBD at the end)
+    entries.sort(key=lambda e: e.result_date if e.result_date != "TBD" else "9999")
+    return entries
+
+
+def get_pre_earnings_iv(symbol: str) -> dict:
+    """
+    Check IV rank/percentile before earnings.
+    High IV rank = expensive options = consider selling premium.
+    Low IV rank = cheap options = consider buying straddles.
+    """
+    symbol = symbol.upper()
+    avg_move = _AVG_EARNINGS_MOVE.get(symbol, 3.0)
+
+    try:
+        from agent.tools import build_registry
+        reg = build_registry()
+        iv_result = reg.execute("get_iv_rank", {"symbol": symbol})
+        iv_rank = iv_result.get("iv_rank", 50) if isinstance(iv_result, dict) else 50
+    except Exception:
+        iv_rank = 50
+
+    # Strategy suggestion based on IV
+    if iv_rank > 60:
+        strategy = "SELL premium — IV elevated. Consider selling straddle/strangle."
+        action = "SELL_PREMIUM"
+    elif iv_rank < 30:
+        strategy = "BUY options — IV cheap. Consider buying straddle for earnings move."
+        action = "BUY_STRADDLE"
+    else:
+        strategy = "Neutral IV — consider iron condor or stay away."
+        action = "NEUTRAL"
+
+    return {
+        "symbol": symbol,
+        "iv_rank": iv_rank,
+        "avg_earnings_move": avg_move,
+        "strategy_suggestion": strategy,
+        "action": action,
+        "quarter": _current_quarter(),
+    }
+
+
+def _fetch_earnings_date_nse(symbol: str) -> Optional[str]:
+    """Try to get the actual earnings date from NSE corporate filings."""
+    try:
+        import httpx
+        url = "https://www.nseindia.com/api/corporate-board-meetings"
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+            "Referer": "https://www.nseindia.com",
+        }
+        with httpx.Client(headers=headers, timeout=10, follow_redirects=True) as client:
+            client.get("https://www.nseindia.com")  # cookie warmup
+            params = {"index": "equities", "symbol": symbol}
+            resp = client.get(url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                meetings = data if isinstance(data, list) else []
+                for m in meetings:
+                    purpose = (m.get("bm_purpose", "") or "").lower()
+                    if "financial result" in purpose or "quarterly" in purpose:
+                        return m.get("bm_date", "TBD")
+    except Exception:
+        pass
+    return None
+
+
+def get_earnings_context(symbols: Optional[list[str]] = None) -> str:
+    """Generate text context about earnings for LLM prompts."""
+    if not is_earnings_season():
+        return "Not currently in earnings season."
+
+    calendar = get_earnings_calendar(symbols, days_ahead=14)
+    if not calendar:
+        return "No upcoming earnings for watched symbols in next 14 days."
+
+    parts = [f"Earnings season active ({_current_quarter()}):"]
+    for e in calendar[:10]:
+        line = f"  {e.symbol}: {e.result_date}"
+        if e.avg_move:
+            line += f" (avg move: ±{e.avg_move:.1f}%)"
+        parts.append(line)
+
+    return "\n".join(parts)
+
+
+def print_earnings_calendar(symbols: Optional[list[str]] = None) -> None:
+    """Display earnings calendar as a Rich table."""
+    calendar = get_earnings_calendar(symbols)
+    if not calendar:
+        console.print("[dim]No upcoming earnings found.[/dim]")
+        return
+
+    season = "[green]ACTIVE[/green]" if is_earnings_season() else "[dim]Not active[/dim]"
+    table = Table(title=f"Earnings Calendar — {_current_quarter()} (Season: {season})")
+    table.add_column("Symbol", style="bold", width=12)
+    table.add_column("Date", width=12)
+    table.add_column("Avg Move", justify="right", width=10)
+    table.add_column("Status", width=10)
+
+    for e in calendar:
+        move_str = f"±{e.avg_move:.1f}%" if e.avg_move else "-"
+        table.add_row(e.symbol, e.result_date, move_str, e.status)
+
+    console.print(table)

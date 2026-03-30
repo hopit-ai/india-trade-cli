@@ -510,6 +510,84 @@ def build_registry() -> ToolRegistry:
         },
     )
 
+    # ── India Intelligence ─────────────────────────────────────
+    from market.earnings import get_earnings_calendar, get_pre_earnings_iv, is_earnings_season
+    from market.flow_intel import get_flow_analysis
+    from engine.event_strategies import get_event_strategies
+
+    reg.register(
+        name="get_earnings_calendar",
+        description=(
+            "Get upcoming quarterly earnings dates for NIFTY 50 stocks or specific symbols. "
+            "Shows expected result dates, historical avg post-earnings move %."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbols": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional list of symbols. Defaults to NIFTY 50.",
+                },
+            },
+            "required": [],
+        },
+        fn=lambda symbols=None: [
+            {"symbol": e.symbol, "date": e.result_date, "quarter": e.quarter,
+             "avg_move": e.avg_move, "status": e.status}
+            for e in get_earnings_calendar(symbols)
+        ],
+    )
+
+    reg.register(
+        name="get_pre_earnings_iv",
+        description=(
+            "Check IV rank before earnings for a stock. Suggests whether to buy or sell "
+            "options around the earnings event. High IV = sell premium, Low IV = buy straddle."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock symbol"},
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol: get_pre_earnings_iv(symbol),
+    )
+
+    reg.register(
+        name="get_flow_intelligence",
+        description=(
+            "Comprehensive FII/DII flow analysis: streaks, 5-day totals, divergence detection, "
+            "momentum, and a trading signal. E.g. 'FII selling 5 days straight, -8000 Cr'."
+        ),
+        parameters={"type": "object", "properties": {}, "required": []},
+        fn=lambda: {
+            k: v for k, v in get_flow_analysis().__dict__.items()
+            if k != "raw_data"
+        },
+    )
+
+    reg.register(
+        name="get_event_strategies",
+        description=(
+            "Get event-driven trading strategies for upcoming events (expiry, RBI, earnings, budget). "
+            "Each strategy includes timing, instruments, risk level, and rationale."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "days_ahead": {"type": "integer", "default": 7},
+            },
+            "required": [],
+        },
+        fn=lambda days_ahead=7: [
+            {"event": s.event, "date": s.event_date, "days": s.days_away,
+             "strategy": s.strategy, "risk": s.risk_level, "rationale": s.rationale}
+            for s in get_event_strategies(days_ahead=days_ahead)
+        ],
+    )
+
     # ── Backtest & Simulation ─────────────────────────────────
     from engine.backtest import run_backtest
     from engine.simulator import Simulator
