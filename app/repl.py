@@ -59,8 +59,9 @@ COMMANDS = [
     "holdings", "positions", "orders",
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
-    "ai", "alert", "alerts", "backtest", "clear", "earnings", "events",
-    "flows", "greeks", "macro", "memory", "patterns", "provider",
+    "ai", "alert", "alerts", "audit", "backtest", "clear", "drift",
+    "earnings", "events", "flows", "greeks", "macro", "memory",
+    "pairs", "patterns", "provider", "risk-report",
     "tui", "walkforward", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
@@ -883,6 +884,30 @@ def run_repl(broker: BrokerAPI) -> None:
                 from market.macro import print_macro_snapshot
                 sym = args[0].upper() if args else None
                 print_macro_snapshot(sym)
+
+            elif command == "risk-report":
+                from engine.risk_metrics import print_risk_report
+                print_risk_report()
+
+            elif command == "drift":
+                from engine.drift import print_drift_report
+                print_drift_report()
+
+            elif command == "pairs":
+                from engine.pairs import print_pairs_scan, analyze_pair
+                if len(args) >= 2:
+                    result = analyze_pair(args[0].upper(), args[1].upper())
+                    result.print_analysis()
+                else:
+                    syms = [a.upper() for a in args] if args else None
+                    print_pairs_scan(syms)
+
+            elif command == "audit":
+                if not args:
+                    console.print("[red]Usage: audit <trade_id>[/red]")
+                else:
+                    from engine.audit import print_audit
+                    print_audit(args[0])
 
             elif command == "walkforward":
                 if not args:
