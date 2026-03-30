@@ -16,7 +16,6 @@ from typing   import Optional
 
 import pandas as pd
 
-from brokers.session import get_broker
 
 
 # ── Interval aliases ─────────────────────────────────────────
@@ -57,6 +56,7 @@ def get_ohlcv(
         DataFrame with columns: date, open, high, low, close, volume
         Index: date (datetime)
     """
+    from brokers.session import get_broker
     broker = get_broker()
 
     to_date   = to_date   or datetime.now()
@@ -117,6 +117,7 @@ def _yfinance_fallback(
 
 def _get_instrument_token(symbol: str, exchange: str) -> int:
     """Look up instrument token from broker's instrument list."""
+    from brokers.session import get_broker
     broker = get_broker()
     if not hasattr(broker, "kite"):
         return 0

@@ -10,7 +10,7 @@ Credentials needed (store via `credentials setup`):
     FYERS_APP_ID      — from myapi.fyers.in (format: XXXX-100 or your App ID)
     FYERS_SECRET_KEY  — client secret from app dashboard
     FYERS_REDIRECT_URL — registered redirect URI
-                         (default: http://localhost:8765/fyers/callback)
+                         (default: http://127.0.0.1:8765/fyers/callback)
 
 Login flow:
   1. `get_login_url()` returns the Fyers auth URL
@@ -55,7 +55,7 @@ class FyersAPI(BrokerAPI):
         self,
         app_id:       str,
         secret_key:   str,
-        redirect_uri: str = "http://localhost:8765/fyers/callback",
+        redirect_uri: str = "http://127.0.0.1:8765/fyers/callback",
     ) -> None:
         self._app_id       = app_id
         self._secret_key   = secret_key
@@ -94,54 +94,78 @@ class FyersAPI(BrokerAPI):
 
     def _get(self, path: str, **params) -> dict:
         url  = f"{FYERS_BASE}{path}"
-        resp = httpx.get(url, headers=self._headers(), params=params, timeout=15)
+        resp = httpx.get(url, headers=self._headers(), params=params, timeout=60)
         resp.raise_for_status()
         return resp.json()
 
     def _post(self, path: str, data: dict) -> dict:
         url  = f"{FYERS_BASE}{path}"
-        resp = httpx.post(url, headers=self._headers(), json=data, timeout=15)
+        resp = httpx.post(url, headers=self._headers(), json=data, timeout=60)
         resp.raise_for_status()
         return resp.json()
 
     # ── Auth ──────────────────────────────────────────────────
 
     def get_login_url(self) -> str:
-        """Returns the Fyers OAuth2 authorization URL."""
-        app_hash = hashlib.sha256(
-            f"{self._app_id}:{self._secret_key}".encode()
-        ).hexdigest()
-        return (
-            f"{AUTH_BASE}/generate-authcode?"
-            f"client_id={self._app_id}&"
-            f"redirect_uri={self._redirect_uri}&"
-            f"response_type=code&"
-            f"state=india_trade_cli&"
-            f"nonce={app_hash[:16]}"
-        )
+        """Returns the Fyers OAuth2 authorization URL using the official SDK."""
+        try:
+            from fyers_apiv3 import fyersModel
+            session = fyersModel.SessionModel(
+                client_id=self._app_id,
+                secret_key=self._secret_key,
+                redirect_uri=self._redirect_uri,
+                response_type="code",
+                grant_type="authorization_code",
+                state="india_trade_cli",
+            )
+            return session.generate_authcode()
+        except ImportError:
+            # Fallback to manual URL if SDK not installed
+            return (
+                f"https://api-t1.fyers.in/api/v3/generate-authcode?"
+                f"client_id={self._app_id}&"
+                f"redirect_uri={self._redirect_uri}&"
+                f"response_type=code&"
+                f"state=india_trade_cli"
+            )
 
     def complete_login(self, auth_code: str = "", **kwargs) -> UserProfile:
         """Exchange the auth code for an access token."""
-        # Fyers requires SHA-256 hash of app_id:app_secret for validation
-        app_id_hash = hashlib.sha256(
-            f"{self._app_id}:{self._secret_key}".encode()
-        ).hexdigest()
-
-        resp = httpx.post(
-            f"{AUTH_BASE}/validate-authcode",
-            json={
-                "grant_type": "authorization_code",
-                "appIdHash":  app_id_hash,
-                "code":       auth_code,
-            },
-            headers={"Content-Type": "application/json"},
-            timeout=20,
-        )
-        resp.raise_for_status()
-        payload = resp.json()
-        token   = payload.get("access_token", "")
-        if not token:
-            raise RuntimeError(f"Fyers login failed: {payload}")
+        try:
+            from fyers_apiv3 import fyersModel
+            session = fyersModel.SessionModel(
+                client_id=self._app_id,
+                secret_key=self._secret_key,
+                redirect_uri=self._redirect_uri,
+                response_type="code",
+                grant_type="authorization_code",
+                state="india_trade_cli",
+            )
+            session.set_token(auth_code)
+            response = session.generate_token()
+            token = response.get("access_token", "")
+            if not token:
+                raise RuntimeError(f"Fyers login failed: {response}")
+        except ImportError:
+            # Fallback to manual token exchange if SDK not installed
+            app_id_hash = hashlib.sha256(
+                f"{self._app_id}:{self._secret_key}".encode()
+            ).hexdigest()
+            resp = httpx.post(
+                f"{AUTH_BASE}/validate-authcode",
+                json={
+                    "grant_type": "authorization_code",
+                    "appIdHash":  app_id_hash,
+                    "code":       auth_code,
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=20,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            token = payload.get("access_token", "")
+            if not token:
+                raise RuntimeError(f"Fyers login failed: {payload}")
 
         self._access_token = token
         self._token_ts     = time.time()
@@ -151,13 +175,9 @@ class FyersAPI(BrokerAPI):
     def is_authenticated(self) -> bool:
         if not self._access_token:
             return False
-        if time.time() - self._token_ts >= TOKEN_EXPIRY:
+        if self._token_ts and time.time() - self._token_ts >= TOKEN_EXPIRY:
             return False
-        try:
-            self.get_profile()
-            return True
-        except Exception:
-            return False
+        return True
 
     def logout(self) -> None:
         self._access_token = ""
@@ -179,7 +199,6 @@ class FyersAPI(BrokerAPI):
             name     = payload.get("name", ""),
             email    = payload.get("email_id", ""),
             broker   = "Fyers",
-            metadata = payload,
         )
         return self._profile
 

@@ -208,7 +208,7 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         app_id     = get_credential("FYERS_APP_ID",    "Fyers App ID",     secret=False)
         secret_key = get_credential("FYERS_SECRET_KEY", "Fyers Secret Key", secret=True)
         redirect_uri = os.environ.get(
-            "FYERS_REDIRECT_URL", "http://localhost:8765/fyers/callback"
+            "FYERS_REDIRECT_URL", "http://127.0.0.1:8765/fyers/callback"
         )
         return key, FyersAPI(
             app_id       = app_id,
@@ -259,7 +259,7 @@ def _do_auth(key: str, broker: BrokerAPI) -> None:
     elif key == "fyers":
         console.print(
             "[dim]After login, the browser will redirect to a URL like:[/dim]\n"
-            "[dim]  http://localhost:8765/fyers/callback?[bold]auth_code=XXXXXX[/bold][/dim]\n"
+            "[dim]  http://127.0.0.1:8765/fyers/callback?[bold]auth_code=XXXXXX[/bold][/dim]\n"
         )
         code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
         broker.complete_login(auth_code=code)
@@ -268,7 +268,10 @@ def _do_auth(key: str, broker: BrokerAPI) -> None:
 def _print_welcome(broker: BrokerAPI, role: str = "primary") -> None:
     """Print a styled welcome panel after successful login."""
     profile = broker.get_profile()
-    funds   = broker.get_funds()
+    try:
+        funds = broker.get_funds()
+    except Exception:
+        funds = None
 
     lines = Text()
     lines.append(f"  Name    : ", style="dim")
@@ -277,10 +280,14 @@ def _print_welcome(broker: BrokerAPI, role: str = "primary") -> None:
     lines.append(f"{profile.broker}\n", style="bold cyan")
     lines.append(f"  Role    : ", style="dim")
     lines.append(f"{role.title()}\n", style="bold yellow" if role != "primary" else "bold green")
-    lines.append(f"  Cash    : ", style="dim")
-    lines.append(f"₹{funds.available_cash:,.2f}\n", style="bold green")
-    lines.append(f"  Margin  : ", style="dim")
-    lines.append(f"₹{funds.used_margin:,.2f} used", style="yellow")
+    if funds:
+        lines.append(f"  Cash    : ", style="dim")
+        lines.append(f"₹{funds.available_cash:,.2f}\n", style="bold green")
+        lines.append(f"  Margin  : ", style="dim")
+        lines.append(f"₹{funds.used_margin:,.2f} used", style="yellow")
+    else:
+        lines.append(f"  Cash    : ", style="dim")
+        lines.append(f"(loading...)", style="dim yellow")
 
     title = (
         "[bold green]✅  LOGIN SUCCESSFUL[/bold green]"
