@@ -698,6 +698,22 @@ class MultiAgentAnalyzer:
         except Exception:
             pass  # memory storage is non-critical
 
+        # ── Phase 5: Trader Agent — Generate Trade Plan ────────
+        try:
+            from engine.trader import TraderAgent
+            trader = TraderAgent()
+            trade_plan = trader.generate_plan_from_reports(
+                symbol=symbol,
+                exchange=exchange,
+                reports=reports,
+                synthesis=synthesis,
+            )
+            if trade_plan:
+                console.print()
+                trade_plan.print_plan()
+        except Exception:
+            pass  # trade plan generation is non-critical
+
         # Print timing summary
         total = analyst_time + debate_time + synthesis_time
         console.print()
