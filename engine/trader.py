@@ -68,6 +68,82 @@ MARGIN_PCT = {
 }
 
 
+# ── Risk Persona Profiles ────────────────────────────────────
+
+@dataclass
+class RiskProfile:
+    """Configuration for a risk persona."""
+    name:            str          # "Aggressive" / "Neutral" / "Conservative"
+    risk_pct:        float        # % of capital to risk per trade
+    sl_atr_mult:     float        # ATR multiplier for stop-loss
+    max_position_pct: float       # max % of capital in a single position
+    target_rr:       float        # minimum reward:risk ratio
+    t1_rr:           float        # R:R at which to take first partial profit
+    t1_close_pct:    str          # what to close at T1
+    trail_trigger:   float        # % gain to start trailing
+    trail_step:      float        # % trailing step
+    prefer_options:  bool         # prefer options over equity
+    prefer_spreads:  bool         # prefer spreads over naked options
+    max_hold_swing:  int          # max days for swing trades
+    max_hold_pos:    int          # max days for positional trades
+    description:     str = ""
+
+
+RISK_PROFILES = {
+    "aggressive": RiskProfile(
+        name="Aggressive",
+        risk_pct=3.0,
+        sl_atr_mult=1.0,            # tight stop: 1x ATR
+        max_position_pct=25.0,
+        target_rr=3.0,              # aim for 3:1
+        t1_rr=1.5,
+        t1_close_pct="CLOSE_33%",   # take 1/3 at T1, let rest run
+        trail_trigger=3.0,
+        trail_step=1.0,
+        prefer_options=True,
+        prefer_spreads=False,        # ok with naked options
+        max_hold_swing=15,
+        max_hold_pos=60,
+        description="High risk, high reward. Larger positions, tighter stops, "
+                    "prefers options for leverage. Suitable for experienced traders.",
+    ),
+    "neutral": RiskProfile(
+        name="Neutral",
+        risk_pct=2.0,
+        sl_atr_mult=1.5,            # standard: 1.5x ATR
+        max_position_pct=20.0,
+        target_rr=2.0,              # aim for 2:1
+        t1_rr=1.5,
+        t1_close_pct="CLOSE_50%",   # take half at T1
+        trail_trigger=2.0,
+        trail_step=0.5,
+        prefer_options=False,
+        prefer_spreads=True,
+        max_hold_swing=10,
+        max_hold_pos=45,
+        description="Balanced risk/reward. Standard position sizing, ATR-based stops, "
+                    "mix of equity and spreads. Default for most traders.",
+    ),
+    "conservative": RiskProfile(
+        name="Conservative",
+        risk_pct=1.0,
+        sl_atr_mult=2.0,            # wide stop: 2x ATR (less likely to get stopped out)
+        max_position_pct=15.0,
+        target_rr=1.5,              # accept 1.5:1 (higher probability)
+        t1_rr=1.0,
+        t1_close_pct="CLOSE_50%",   # take half at 1:1
+        trail_trigger=1.5,
+        trail_step=0.5,
+        prefer_options=False,
+        prefer_spreads=True,         # always use defined-risk
+        max_hold_swing=7,
+        max_hold_pos=30,
+        description="Capital preservation first. Smaller positions, wider stops, "
+                    "prefers equity delivery and spreads. Avoid naked options.",
+    ),
+}
+
+
 # ── Data Models ──────────────────────────────────────────────
 
 @dataclass
@@ -225,8 +301,13 @@ class TraderAgent:
     """
     Converts analysis verdicts into executable trade plans.
 
+    Supports 3 risk personas:
+      - Aggressive: larger positions, tighter stops, prefers options
+      - Neutral: balanced, ATR-based stops, mix of equity and spreads
+      - Conservative: smaller positions, wider stops, equity delivery + spreads
+
     Takes into account:
-      - Capital and risk parameters
+      - Capital and risk parameters (per persona)
       - Current portfolio exposure
       - VIX regime (adjusts sizing)
       - ATR for dynamic stop-loss
@@ -238,9 +319,11 @@ class TraderAgent:
         self,
         capital:  Optional[float] = None,
         risk_pct: Optional[float] = None,
+        profile:  Optional[str] = None,     # "aggressive" / "neutral" / "conservative"
     ) -> None:
         self.capital = capital or float(os.environ.get("TOTAL_CAPITAL", "200000"))
         self.risk_pct = risk_pct or float(os.environ.get("DEFAULT_RISK_PCT", "2"))
+        self.profile = RISK_PROFILES.get(profile or "neutral", RISK_PROFILES["neutral"])
 
     def generate_plan(
         self,
@@ -390,6 +473,149 @@ class TraderAgent:
             synthesis_text=synthesis,
         )
 
+    # ── All 3 Risk Personas ────────────────────────────────────
+
+    def generate_all_plans(
+        self,
+        symbol: str,
+        exchange: str = "NSE",
+        reports: Optional[list] = None,
+        synthesis: str = "",
+        **kwargs,
+    ) -> dict[str, Optional['TradePlan']]:
+        """
+        Generate trade plans for all 3 risk personas.
+        Returns dict: {"aggressive": plan, "neutral": plan, "conservative": plan}
+        """
+        results = {}
+        original_profile = self.profile
+
+        for profile_name in ("aggressive", "neutral", "conservative"):
+            self.profile = RISK_PROFILES[profile_name]
+            if reports and synthesis:
+                plan = self.generate_plan_from_reports(symbol, exchange, reports, synthesis)
+            else:
+                plan = self.generate_plan(symbol=symbol, exchange=exchange, **kwargs)
+            results[profile_name] = plan
+
+        self.profile = original_profile
+        return results
+
+    @staticmethod
+    def print_all_plans(plans: dict[str, Optional['TradePlan']]) -> None:
+        """Display all 3 risk persona trade plans side by side."""
+        console.print()
+        console.rule("[bold cyan]Risk Management Team — 3 Perspectives[/bold cyan]", style="cyan")
+
+        table = Table(show_header=True, header_style="bold", show_lines=True)
+        table.add_column("", width=16, style="bold")
+        table.add_column("[red]Aggressive[/red]", ratio=1)
+        table.add_column("[yellow]Neutral[/yellow]", ratio=1)
+        table.add_column("[green]Conservative[/green]", ratio=1)
+
+        plans_list = [
+            plans.get("aggressive"),
+            plans.get("neutral"),
+            plans.get("conservative"),
+        ]
+
+        def _val(plan, attr, fmt="{}", default="-"):
+            if plan is None:
+                return "NO TRADE"
+            val = getattr(plan, attr, None)
+            if val is None:
+                return default
+            return fmt.format(val)
+
+        # Strategy
+        table.add_row(
+            "Strategy",
+            _val(plans_list[0], "strategy_name"),
+            _val(plans_list[1], "strategy_name"),
+            _val(plans_list[2], "strategy_name"),
+        )
+
+        # Capital deployed
+        table.add_row(
+            "Capital",
+            _val(plans_list[0], "capital_deployed", "{:,.0f}") +
+            f" ({_val(plans_list[0], 'capital_pct', '{:.0f}')}%)",
+            _val(plans_list[1], "capital_deployed", "{:,.0f}") +
+            f" ({_val(plans_list[1], 'capital_pct', '{:.0f}')}%)",
+            _val(plans_list[2], "capital_deployed", "{:,.0f}") +
+            f" ({_val(plans_list[2], 'capital_pct', '{:.0f}')}%)",
+        )
+
+        # Max risk
+        table.add_row(
+            "Max Risk",
+            _val(plans_list[0], "max_risk", "{:,.0f}"),
+            _val(plans_list[1], "max_risk", "{:,.0f}"),
+            _val(plans_list[2], "max_risk", "{:,.0f}"),
+        )
+
+        # Quantity
+        def _qty(plan):
+            if not plan or not plan.entry_orders:
+                return "-"
+            total = sum(o.quantity for o in plan.entry_orders)
+            return str(total)
+
+        table.add_row("Quantity", _qty(plans_list[0]), _qty(plans_list[1]), _qty(plans_list[2]))
+
+        # Stop-loss
+        def _sl(plan):
+            if not plan or not plan.exit_plan:
+                return "-"
+            ep = plan.exit_plan
+            return f"{ep.stop_loss:,.1f} ({ep.stop_loss_pct:+.1f}%)"
+
+        table.add_row("Stop-Loss", _sl(plans_list[0]), _sl(plans_list[1]), _sl(plans_list[2]))
+
+        # Target 1
+        def _t1(plan):
+            if not plan or not plan.exit_plan:
+                return "-"
+            ep = plan.exit_plan
+            return f"{ep.target_1:,.1f} ({ep.target_1_pct:+.1f}%)\n→ {ep.target_1_action}"
+
+        table.add_row("Target 1", _t1(plans_list[0]), _t1(plans_list[1]), _t1(plans_list[2]))
+
+        # Target 2
+        def _t2(plan):
+            if not plan or not plan.exit_plan:
+                return "-"
+            ep = plan.exit_plan
+            if ep.target_2:
+                return f"{ep.target_2:,.1f} ({ep.target_2_pct:+.1f}%)"
+            return "-"
+
+        table.add_row("Target 2", _t2(plans_list[0]), _t2(plans_list[1]), _t2(plans_list[2]))
+
+        # R:R
+        table.add_row(
+            "R:R Ratio",
+            _val(plans_list[0], "reward_risk", "{:.1f}"),
+            _val(plans_list[1], "reward_risk", "{:.1f}"),
+            _val(plans_list[2], "reward_risk", "{:.1f}"),
+        )
+
+        # Max hold
+        def _hold(plan):
+            if not plan or not plan.exit_plan or not plan.exit_plan.max_hold_days:
+                return "-"
+            return f"{plan.exit_plan.max_hold_days}d"
+
+        table.add_row("Max Hold", _hold(plans_list[0]), _hold(plans_list[1]), _hold(plans_list[2]))
+
+        console.print(table)
+
+        # Print profile descriptions
+        for name, profile in RISK_PROFILES.items():
+            style = {"aggressive": "red", "neutral": "yellow", "conservative": "green"}[name]
+            console.print(f"  [{style}]{profile.name}[/{style}]: [dim]{profile.description}[/dim]")
+        console.print()
+
     # ── Strategy Selection ───────────────────────────────────
 
     def _select_strategy(
@@ -510,16 +736,17 @@ class TraderAgent:
         self, ltp, atr, strategy, vix_factor, confidence,
     ) -> dict:
         """
-        Risk-based position sizing.
+        Risk-based position sizing using the active risk profile.
 
-        Method: Risk per trade = capital * risk_pct * vix_adjustment
+        Method: Risk per trade = capital * profile.risk_pct * vix_adjustment
         Shares = risk_amount / (SL distance per share)
         """
-        risk_amount = self.capital * (self.risk_pct / 100) * vix_factor
+        risk_pct = self.profile.risk_pct
+        risk_amount = self.capital * (risk_pct / 100) * vix_factor
 
-        # SL distance: use ATR if available, else 3% default
+        # SL distance: use ATR * profile multiplier, else 3% default
         if atr and atr > 0:
-            sl_distance = atr * 1.5   # 1.5x ATR stop
+            sl_distance = atr * self.profile.sl_atr_mult
         else:
             sl_distance = ltp * 0.03  # 3% default
 
@@ -531,8 +758,8 @@ class TraderAgent:
         if shares <= 0:
             shares = 1
 
-        # Cap at 20% of capital in a single stock
-        max_capital = self.capital * 0.20
+        # Cap at profile's max position %
+        max_capital = self.capital * (self.profile.max_position_pct / 100)
         max_shares = int(max_capital / ltp) if ltp > 0 else shares
         shares = min(shares, max_shares)
 
@@ -646,8 +873,8 @@ class TraderAgent:
         # SL type
         sl_type = "ATR_BASED" if atr else "FIXED"
 
-        # Target 1: 1.5x risk distance
-        t1_distance = sl_distance * 1.5
+        # Target 1: profile's T1 R:R
+        t1_distance = sl_distance * self.profile.t1_rr
         if is_long:
             t1 = ltp + t1_distance
             if resistance and t1 > resistance:
@@ -657,25 +884,25 @@ class TraderAgent:
 
         t1_pct = ((t1 - ltp) / ltp * 100)
 
-        # Target 2: 3x risk distance (full target)
-        t2_distance = sl_distance * 3
+        # Target 2: profile's full target R:R
+        t2_distance = sl_distance * self.profile.target_rr
         t2 = ltp + t2_distance if is_long else ltp - t2_distance
         t2_pct = ((t2 - ltp) / ltp * 100)
 
-        # Trailing logic: start trailing after +2%
-        trail_trigger = 2.0
-        trail_step = 0.5
+        # Trailing logic from profile
+        trail_trigger = self.profile.trail_trigger
+        trail_step = self.profile.trail_step
 
-        # Timeframe-based exit
+        # Timeframe-based exit from profile
         time_exit = ""
         max_hold = None
         if strategy["timeframe"] == "INTRADAY":
             time_exit = "SAME_DAY"
             max_hold = 1
         elif strategy["timeframe"] == "SWING":
-            max_hold = 10
+            max_hold = self.profile.max_hold_swing
         elif strategy["timeframe"] == "POSITIONAL":
-            max_hold = 45
+            max_hold = self.profile.max_hold_pos
 
         return ExitPlan(
             stop_loss=round(sl_price, 2),
@@ -683,7 +910,7 @@ class TraderAgent:
             stop_loss_type=sl_type,
             target_1=round(t1, 2),
             target_1_pct=round(t1_pct, 2),
-            target_1_action="CLOSE_50%",
+            target_1_action=self.profile.t1_close_pct,
             target_2=round(t2, 2),
             target_2_pct=round(t2_pct, 2),
             target_2_action="CLOSE_REMAINING",

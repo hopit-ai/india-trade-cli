@@ -24,9 +24,12 @@ Architecture:
   │   Fund Manager — weighs debate + risk profile → recommendation │
   └─────────────────────────────────────────────────────────────────┘
 
-Total LLM calls: 4 (news sentiment, bull, bear, synthesis)
+Total LLM calls: 8 (news sentiment, bull, bear, bull rebuttal, bear rebuttal,
+                     facilitator, synthesis — plus trader agent is pure Python)
 Analysts: pure Python — call tools directly via ToolRegistry.
 Exception: NewsMacroAnalyst uses 1 LLM call for real news sentiment analysis.
+Debate: 2 rounds with facilitator summary (5 LLM calls).
+Risk Management: 3 trade plans (aggressive/neutral/conservative) generated locally.
 
 Key design choices:
   - Analysts return structured AnalystReport (dataclass), not free text
@@ -83,10 +86,14 @@ class AnalystReport:
 
 @dataclass
 class DebateResult:
-    """Output from the bull/bear debate phase."""
-    bull_argument: str
-    bear_argument: str
-    winner:        str    # "BULL" or "BEAR" (determined by synthesis)
+    """Output from the multi-round bull/bear debate phase."""
+    bull_argument:  str          # Round 1: bull case
+    bear_argument:  str          # Round 1: bear counter
+    bull_rebuttal:  str = ""     # Round 2: bull responds to bear
+    bear_rebuttal:  str = ""     # Round 2: bear responds to bull rebuttal
+    facilitator:    str = ""     # Facilitator summary: key agreements/disagreements
+    winner:         str = ""     # "BULL" or "BEAR" (determined by facilitator)
+    rounds:         int = 1      # how many rounds were run
 
 
 @dataclass
@@ -698,19 +705,18 @@ class MultiAgentAnalyzer:
         except Exception:
             pass  # memory storage is non-critical
 
-        # ── Phase 5: Trader Agent — Generate Trade Plan ────────
+        # ── Phase 5: Risk Management Team — 3 Perspectives ────
         try:
             from engine.trader import TraderAgent
             trader = TraderAgent()
-            trade_plan = trader.generate_plan_from_reports(
+            all_plans = trader.generate_all_plans(
                 symbol=symbol,
                 exchange=exchange,
                 reports=reports,
                 synthesis=synthesis,
             )
-            if trade_plan:
-                console.print()
-                trade_plan.print_plan()
+            if any(p for p in all_plans.values()):
+                TraderAgent.print_all_plans(all_plans)
         except Exception:
             pass  # trade plan generation is non-critical
 
@@ -838,24 +844,33 @@ class MultiAgentAnalyzer:
         self, symbol: str, exchange: str, reports: list[AnalystReport]
     ) -> DebateResult:
         """
-        Run bull and bear researchers via LLM calls.
-        Each gets the same analyst data but argues from their assigned perspective.
+        Run multi-round bull/bear debate with facilitator.
+
+        Round 1: Bull builds case → Bear counters
+        Round 2: Bull rebuts bear's points → Bear rebuts bull's rebuttal
+        Facilitator: Summarizes key agreements, disagreements, and picks a winner.
+
+        Total: 5 LLM calls for debate (bull, bear, bull rebuttal, bear rebuttal, facilitator)
         """
         analyst_context = "\n\n".join(r.summary_text() for r in reports if not r.error)
 
-        # Bull researcher
+        # ── Round 1: Opening arguments ───────────────────────
+        if self.verbose:
+            console.print("\n[bold]Round 1[/bold]")
+
+        # Bull opening
         bull_prompt = BULL_RESEARCHER_PROMPT.format(
             symbol=symbol, exchange=exchange, analyst_data=analyst_context,
         )
         if self.verbose:
-            console.print("\n[green]Bull Researcher[/green] building investment case...")
+            console.print("[green]Bull Researcher[/green] building investment case...")
 
         bull_argument = self.llm.chat(
             messages=[{"role": "user", "content": bull_prompt}],
             stream=self.verbose,
         )
 
-        # Bear researcher
+        # Bear counter
         bear_prompt = BEAR_RESEARCHER_PROMPT.format(
             symbol=symbol, exchange=exchange, analyst_data=analyst_context,
             bull_case=bull_argument,
@@ -868,10 +883,72 @@ class MultiAgentAnalyzer:
             stream=self.verbose,
         )
 
+        # ── Round 2: Rebuttals ───────────────────────────────
+        if self.verbose:
+            console.print(f"\n[bold]Round 2[/bold]")
+
+        # Bull rebuttal
+        bull_rebuttal_prompt = BULL_REBUTTAL_PROMPT.format(
+            symbol=symbol, exchange=exchange,
+            bull_case=bull_argument,
+            bear_case=bear_argument,
+        )
+        if self.verbose:
+            console.print("[green]Bull Researcher[/green] responding to bear's points...")
+
+        bull_rebuttal = self.llm.chat(
+            messages=[{"role": "user", "content": bull_rebuttal_prompt}],
+            stream=self.verbose,
+        )
+
+        # Bear rebuttal
+        bear_rebuttal_prompt = BEAR_REBUTTAL_PROMPT.format(
+            symbol=symbol, exchange=exchange,
+            bear_case=bear_argument,
+            bull_rebuttal=bull_rebuttal,
+        )
+        if self.verbose:
+            console.print("\n[red]Bear Researcher[/red] final counter...")
+
+        bear_rebuttal = self.llm.chat(
+            messages=[{"role": "user", "content": bear_rebuttal_prompt}],
+            stream=self.verbose,
+        )
+
+        # ── Facilitator: Summarize & pick winner ─────────────
+        facilitator_prompt = FACILITATOR_PROMPT.format(
+            symbol=symbol, exchange=exchange,
+            bull_r1=bull_argument,
+            bear_r1=bear_argument,
+            bull_r2=bull_rebuttal,
+            bear_r2=bear_rebuttal,
+        )
+        if self.verbose:
+            console.print("\n[cyan]Facilitator[/cyan] summarizing debate...")
+
+        facilitator_summary = self.llm.chat(
+            messages=[{"role": "user", "content": facilitator_prompt}],
+            stream=self.verbose,
+        )
+
+        # Extract winner from facilitator
+        winner = ""
+        for line in facilitator_summary.splitlines():
+            if "WINNER:" in line.upper():
+                if "BULL" in line.upper():
+                    winner = "BULL"
+                elif "BEAR" in line.upper():
+                    winner = "BEAR"
+                break
+
         return DebateResult(
             bull_argument=bull_argument,
             bear_argument=bear_argument,
-            winner="",  # determined by synthesis
+            bull_rebuttal=bull_rebuttal,
+            bear_rebuttal=bear_rebuttal,
+            facilitator=facilitator_summary,
+            winner=winner,
+            rounds=2,
         )
 
     def _print_debate(self, debate: DebateResult, elapsed: float) -> None:
@@ -920,12 +997,24 @@ class MultiAgentAnalyzer:
         except Exception:
             pass
 
+        # Build debate section with full multi-round context
+        debate_text = (
+            f"## Bull Case (Round 1)\n{debate.bull_argument}\n\n"
+            f"## Bear Case (Round 1)\n{debate.bear_argument}\n\n"
+        )
+        if debate.bull_rebuttal:
+            debate_text += f"## Bull Rebuttal (Round 2)\n{debate.bull_rebuttal}\n\n"
+        if debate.bear_rebuttal:
+            debate_text += f"## Bear Rebuttal (Round 2)\n{debate.bear_rebuttal}\n\n"
+        if debate.facilitator:
+            debate_text += f"## Facilitator Summary\n{debate.facilitator}\n\n"
+            debate_text += f"Debate Winner: {debate.winner}\n"
+
         synthesis_prompt = SYNTHESIS_PROMPT.format(
             symbol=symbol,
             exchange=exchange,
             analyst_data=analyst_context,
-            bull_case=debate.bull_argument,
-            bear_case=debate.bear_argument,
+            debate_text=debate_text,
             risk_context=risk_context,
             memory_context=memory_context,
             pattern_context=pattern_context,
@@ -995,17 +1084,72 @@ Build a compelling BEAR CASE against {symbol}:
 Keep it concise (200-300 words). Cite specific numbers from the data.
 Be skeptical but fair — this is about protecting capital, not being contrarian for its own sake."""
 
+BULL_REBUTTAL_PROMPT = """You are the BULLISH researcher. The BEAR researcher has countered your case for {symbol} ({exchange}).
+
+Your original bull case:
+{bull_case}
+
+Bear's counter-argument:
+{bear_case}
+
+Respond to the bear's strongest points. For each bear argument:
+1. Acknowledge valid concerns (don't dismiss legitimate risks)
+2. Provide counter-evidence or explain why the risk is overstated
+3. Reinforce the strongest parts of your bull case that weren't adequately challenged
+4. Address the timing question: even if bear is right long-term, is the short-term setup favorable?
+
+Keep it concise (150-200 words). This is Round 2 — be surgical, not repetitive."""
+
+BEAR_REBUTTAL_PROMPT = """You are the BEARISH researcher. The BULL researcher has responded to your counter-argument for {symbol} ({exchange}).
+
+Your original bear case:
+{bear_case}
+
+Bull's rebuttal:
+{bull_rebuttal}
+
+Final counter-argument:
+1. Which of your original concerns did the bull fail to address?
+2. Point out any circular reasoning or wishful thinking in the rebuttal
+3. If the bull made valid points, concede them honestly
+4. State your final position: should this trade be taken, and if so, with what modifications?
+
+Keep it concise (150-200 words). This is your final word — make it count."""
+
+FACILITATOR_PROMPT = """You are the DEBATE FACILITATOR reviewing the {symbol} ({exchange}) investment debate.
+
+## Round 1 — Opening Arguments
+Bull: {bull_r1}
+Bear: {bear_r1}
+
+## Round 2 — Rebuttals
+Bull Rebuttal: {bull_r2}
+Bear Rebuttal: {bear_r2}
+
+Summarize the debate outcome. Provide:
+
+AGREEMENTS:
+- [points both sides agree on]
+
+DISAGREEMENTS:
+- [unresolved points of contention]
+
+KEY INSIGHT: [the single most important takeaway from this debate]
+
+WINNER: [BULL / BEAR] — which researcher presented the stronger, more evidence-backed case?
+
+VERDICT MODIFIER: [Should the fund manager lean more bullish or bearish based on debate quality? Any conditions?]
+
+Keep it to 100-150 words. Be objective."""
+
 SYNTHESIS_PROMPT = """You are the FUND MANAGER at an Indian trading firm.
 You must make the final call on {symbol} ({exchange}) after reviewing all evidence.
 
 ## Analyst Reports
 {analyst_data}
 
-## Bull Case
-{bull_case}
-
-## Bear Case
-{bear_case}
+## Research Debate (2 Rounds)
+{debate_text}
 
 ## Risk Parameters
 {risk_context}
