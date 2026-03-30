@@ -65,8 +65,8 @@ def get_ohlcv(
     # Normalize interval alias
     kite_interval = INTERVAL_MAP.get(interval, interval)
 
-    # Use the unified broker interface; fall back to mock data if the
-    # broker doesn't support historical data (e.g. Groww, or not logged in).
+    # Use the unified broker interface; fall back to yfinance (real data)
+    # if the broker doesn't support historical data, then mock as last resort.
     try:
         raw = broker.get_historical_data(
             symbol    = symbol,
@@ -76,7 +76,9 @@ def get_ohlcv(
             to_date   = to_date,
         )
     except (NotImplementedError, Exception):
-        raw = _mock_ohlcv(symbol, from_date, to_date)
+        raw = _yfinance_fallback(symbol, exchange, kite_interval, from_date, to_date)
+        if not raw:
+            raw = _mock_ohlcv(symbol, from_date, to_date)
 
     if not raw:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
@@ -88,6 +90,29 @@ def get_ohlcv(
     df = df[["open", "high", "low", "close", "volume"]].astype(float)
     df.sort_index(inplace=True)
     return df
+
+
+def _yfinance_fallback(
+    symbol: str,
+    exchange: str,
+    interval: str,
+    from_date: datetime,
+    to_date: datetime,
+) -> list[dict]:
+    """Try yfinance for real market data when broker API is unavailable."""
+    try:
+        from market.yfinance_provider import yf_get_ohlcv, yf_available
+        if not yf_available():
+            return []
+        return yf_get_ohlcv(
+            symbol=symbol,
+            exchange=exchange,
+            interval=interval,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    except Exception:
+        return []
 
 
 def _get_instrument_token(symbol: str, exchange: str) -> int:

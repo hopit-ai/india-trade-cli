@@ -10,8 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing      import Optional
 
-from brokers.base    import Quote
-from brokers.session import get_broker
+from brokers.base import Quote
 
 
 # ── Key instruments ──────────────────────────────────────────
@@ -64,8 +63,12 @@ def get_index(name: str) -> IndexSnapshot:
     if not instrument:
         raise ValueError(f"Unknown index: {name}. Valid: {list(INDEX_INSTRUMENTS)}")
 
-    quotes = get_broker().get_quote([instrument])
-    q      = quotes[instrument]
+    from market.quotes import get_quote
+    quotes = get_quote([instrument])
+    q      = quotes.get(instrument)
+    if not q:
+        return IndexSnapshot(name=name, instrument=instrument,
+                             ltp=0, change=0, change_pct=0, open=0, high=0, low=0)
 
     return IndexSnapshot(
         name       = name,
@@ -90,7 +93,8 @@ def get_market_snapshot() -> MarketSnapshot:
         INDEX_INSTRUMENTS["VIX"],
         INDEX_INSTRUMENTS["SENSEX"],
     ]
-    quotes = get_broker().get_quote(instruments)
+    from market.quotes import get_quote
+    quotes = get_quote(instruments)
 
     def snap(name: str) -> IndexSnapshot:
         inst = INDEX_INSTRUMENTS[name]
@@ -159,15 +163,18 @@ def _market_posture(nifty: IndexSnapshot, vix: IndexSnapshot) -> tuple[str, str]
 
 def get_vix() -> float:
     """Quick India VIX level."""
-    q = get_broker().get_quote([INDEX_INSTRUMENTS["VIX"]])
-    return q[INDEX_INSTRUMENTS["VIX"]].last_price
+    from market.quotes import get_quote
+    q = get_quote([INDEX_INSTRUMENTS["VIX"]])
+    vix_quote = q.get(INDEX_INSTRUMENTS["VIX"])
+    return vix_quote.last_price if vix_quote else 0.0
 
 
 def get_sector_snapshot() -> list[IndexSnapshot]:
     """Return snapshots for all sector indices in one batched call."""
     sector_keys = ["IT", "PHARMA", "AUTO", "FMCG", "REALTY", "METAL", "ENERGY"]
     instruments = [INDEX_INSTRUMENTS[k] for k in sector_keys]
-    quotes      = get_broker().get_quote(instruments)
+    from market.quotes import get_quote
+    quotes = get_quote(instruments)
 
     snaps = []
     for key in sector_keys:

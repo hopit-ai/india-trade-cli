@@ -17,6 +17,7 @@ prompt_toolkit>=3.0.0       # REPL with tab-complete
 pandas>=2.2.0               # OHLCV data manipulation
 numpy>=1.26.0               # Numerical computations
 py_vollib>=1.0.1            # Black-Scholes, Greeks
+yfinance>=0.2.40            # Free market data (NSE/BSE) — no broker needed
 
 # ── News & Events ────────────────────────────────────────────
 feedparser>=6.0.11          # RSS feed parsing

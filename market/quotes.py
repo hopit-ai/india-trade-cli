@@ -1,14 +1,26 @@
 """
 market/quotes.py
 ────────────────
-Live market quotes — thin wrapper over the active broker session.
-All functions are broker-agnostic; they call get_broker() internally.
+Live market quotes — tries the active broker first, falls back to
+Yahoo Finance (yfinance) for free ~15 min delayed data when no broker
+is logged in or the broker call fails.
 """
 
 from __future__ import annotations
 
 from brokers.base    import Quote
 from brokers.session import get_broker
+
+
+def _yf_fallback_quotes(instruments: list[str]) -> dict[str, Quote]:
+    """Try yfinance when broker is unavailable."""
+    try:
+        from market.yfinance_provider import yf_get_quotes, yf_available
+        if yf_available():
+            return yf_get_quotes(instruments)
+    except Exception:
+        pass
+    return {}
 
 
 def get_quote(instruments: list[str]) -> dict[str, Quote]:
@@ -22,7 +34,10 @@ def get_quote(instruments: list[str]) -> dict[str, Quote]:
     Returns:
         Dict keyed by instrument string → Quote dataclass.
     """
-    return get_broker().get_quote(instruments)
+    try:
+        return get_broker().get_quote(instruments)
+    except (RuntimeError, Exception):
+        return _yf_fallback_quotes(instruments)
 
 
 def get_ltp(instrument: str) -> float:
@@ -35,7 +50,13 @@ def get_ltp(instrument: str) -> float:
     Returns:
         Last traded price as float.
     """
-    return get_broker().get_ltp(instrument)
+    try:
+        return get_broker().get_ltp(instrument)
+    except (RuntimeError, Exception):
+        quotes = _yf_fallback_quotes([instrument])
+        if instrument in quotes:
+            return quotes[instrument].last_price
+        return 0.0
 
 
 def get_ltp_many(instruments: list[str]) -> dict[str, float]:
@@ -45,7 +66,7 @@ def get_ltp_many(instruments: list[str]) -> dict[str, float]:
     Returns:
         Dict of instrument → ltp float.
     """
-    quotes = get_broker().get_quote(instruments)
+    quotes = get_quote(instruments)
     return {sym: q.last_price for sym, q in quotes.items()}
 
 
@@ -56,7 +77,11 @@ def get_ohlc(instrument: str) -> dict:
     Returns:
         Dict with keys: open, high, low, close, last_price, volume
     """
-    q = get_broker().get_quote([instrument])[instrument]
+    quotes = get_quote([instrument])
+    q = quotes.get(instrument)
+    if not q:
+        return {"open": 0, "high": 0, "low": 0, "close": 0,
+                "last_price": 0, "volume": 0, "change": 0, "change_pct": 0}
     return {
         "open":       q.open,
         "high":       q.high,
