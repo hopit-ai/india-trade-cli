@@ -1657,6 +1657,29 @@ class TradingAgent:
 
         return response
 
+    def run_multi_agent_analysis(self, symbol: str, exchange: str = "NSE") -> str:
+        """
+        Run multi-agent analysis pipeline: 5 analysts + bull/bear debate + synthesis.
+
+        Falls back to single-agent analysis if multi-agent fails.
+        """
+        try:
+            from agent.multi_agent import MultiAgentAnalyzer
+
+            analyzer = MultiAgentAnalyzer(
+                registry=self._registry,
+                llm_provider=self._provider,
+                parallel=True,
+                verbose=True,
+            )
+            return analyzer.analyze(symbol, exchange)
+        except Exception as exc:
+            console.print(
+                f"[yellow]Multi-agent pipeline failed: {exc}[/yellow]\n"
+                "[dim]Falling back to single-agent analysis...[/dim]"
+            )
+            return self.run_command("analyze", symbol=symbol)
+
     def switch_provider(self, provider: str, model: str | None = None) -> None:
         """
         Hot-switch LLM provider mid-session.

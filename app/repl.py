@@ -627,7 +627,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[red]Usage: analyze <SYMBOL>   e.g. analyze RELIANCE[/red]")
                 else:
                     agent = get_agent()
-                    agent.run_command("analyze", symbol=symbol)
+                    agent.run_multi_agent_analysis(symbol)
 
             elif command == "clear":
                 agent = get_agent()
