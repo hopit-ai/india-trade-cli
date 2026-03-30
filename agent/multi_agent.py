@@ -24,8 +24,9 @@ Architecture:
   │   Fund Manager — weighs debate + risk profile → recommendation │
   └─────────────────────────────────────────────────────────────────┘
 
-Total LLM calls: 3 (bull, bear, synthesis)
-Analysts: pure Python — call tools directly via ToolRegistry, no LLM needed.
+Total LLM calls: 4 (news sentiment, bull, bear, synthesis)
+Analysts: pure Python — call tools directly via ToolRegistry.
+Exception: NewsMacroAnalyst uses 1 LLM call for real news sentiment analysis.
 
 Key design choices:
   - Analysts return structured AnalystReport (dataclass), not free text
@@ -287,23 +288,44 @@ class OptionsAnalyst(BaseAnalyst):
 
 
 class NewsMacroAnalyst(BaseAnalyst):
-    """Gathers news, FII/DII flows, market breadth, upcoming events."""
+    """
+    Gathers news, FII/DII flows, market breadth, upcoming events.
+
+    Two modes:
+      - Without LLM: counts bullish/bearish keywords in headlines (fast, free)
+      - With LLM: sends headlines + macro data to LLM for real sentiment
+        analysis — understands context, sarcasm, implications (1 extra LLM call)
+
+    Set llm_provider via set_llm() before calling analyze() to enable LLM mode.
+    """
 
     name = "News & Macro"
+
+    def __init__(self, registry: ToolRegistry) -> None:
+        super().__init__(registry)
+        self._llm: Any = None
+
+    def set_llm(self, llm_provider: Any) -> None:
+        """Enable LLM-powered sentiment analysis."""
+        self._llm = llm_provider
 
     def analyze(self, symbol: str, exchange: str = "NSE") -> AnalystReport:
         try:
             points = []
             data: dict[str, Any] = {}
 
+            # ── Gather raw data (pure Python, no LLM) ───────────
+
             # Stock-specific news
-            news = self.registry.execute("get_stock_news", {"symbol": symbol, "n": 5})
+            news = self.registry.execute("get_stock_news", {"symbol": symbol, "n": 8})
             if isinstance(news, list) and news:
-                data["news"] = news[:5]
+                data["news"] = news[:8]
                 points.append(f"{len(news)} recent news articles found")
-                # Summarize top headline
-                if isinstance(news[0], dict) and "title" in news[0]:
-                    points.append(f"Latest: {news[0]['title'][:80]}")
+
+            # Market-wide news
+            market_news = self.registry.execute("get_market_news", {"n": 5})
+            if isinstance(market_news, list) and market_news:
+                data["market_news"] = market_news[:5]
 
             # FII/DII flows
             fii = self.registry.execute("get_fii_dii_data", {"days": 3})
@@ -334,20 +356,23 @@ class NewsMacroAnalyst(BaseAnalyst):
                 data["events"] = events
                 points.append("Checked upcoming events (expiry, earnings, RBI)")
 
-            # Derive sentiment
-            bullish_signals = sum(1 for p in points if any(w in p.lower() for w in ["buying", "strong"]))
-            bearish_signals = sum(1 for p in points if any(w in p.lower() for w in ["selling", "weak"]))
+            # ── Sentiment analysis ───────────────────────────────
 
-            if bullish_signals > bearish_signals:
-                verdict, score = "BULLISH", 30
-            elif bearish_signals > bullish_signals:
-                verdict, score = "BEARISH", -30
+            if self._llm and (data.get("news") or data.get("market_news")):
+                # LLM mode: real sentiment analysis
+                verdict, score, confidence, llm_points = self._llm_sentiment(
+                    symbol, exchange, data
+                )
+                points.extend(llm_points)
+                data["sentiment_mode"] = "llm"
             else:
-                verdict, score = "NEUTRAL", 0
+                # Fallback: keyword-based sentiment
+                verdict, score, confidence = self._keyword_sentiment(points)
+                data["sentiment_mode"] = "keyword"
 
             return AnalystReport(
                 analyst=self.name, verdict=verdict,
-                confidence=40, score=score,
+                confidence=confidence, score=score,
                 key_points=points, data=data,
             )
         except Exception as e:
@@ -355,6 +380,134 @@ class NewsMacroAnalyst(BaseAnalyst):
                 analyst=self.name, verdict="UNKNOWN", confidence=0,
                 score=0, error=str(e),
             )
+
+    def _llm_sentiment(
+        self, symbol: str, exchange: str, data: dict,
+    ) -> tuple[str, float, int, list[str]]:
+        """
+        Use the LLM to analyze news sentiment. Returns (verdict, score, confidence, points).
+
+        The LLM reads actual headlines and macro data, understands context
+        (e.g. "RBI holds rates" is neutral, not negative), and produces a
+        structured sentiment assessment.
+        """
+        # Build headlines text
+        headlines = []
+        for article in data.get("news", []):
+            if isinstance(article, dict):
+                title = article.get("title", "")
+                source = article.get("source", "")
+                if title:
+                    headlines.append(f"- {title}" + (f" ({source})" if source else ""))
+
+        for article in data.get("market_news", []):
+            if isinstance(article, dict):
+                title = article.get("title", "")
+                if title:
+                    headlines.append(f"- [Market] {title}")
+
+        if not headlines:
+            return self._keyword_sentiment([]) + ([],)
+
+        headlines_text = "\n".join(headlines[:12])
+
+        # Build macro context
+        macro_parts = []
+        fii_dii = data.get("fii_dii", [])
+        if fii_dii and isinstance(fii_dii, list):
+            macro_parts.append(f"FII/DII data (last 3 days): {json.dumps(fii_dii[:3])}")
+        breadth = data.get("breadth", {})
+        if breadth:
+            macro_parts.append(f"Market breadth: {json.dumps(breadth)}")
+        events = data.get("events")
+        if events:
+            events_str = json.dumps(events) if isinstance(events, (dict, list)) else str(events)
+            if len(events_str) > 500:
+                events_str = events_str[:500] + "..."
+            macro_parts.append(f"Upcoming events: {events_str}")
+
+        macro_text = "\n".join(macro_parts) if macro_parts else "No macro data available."
+
+        prompt = NEWS_SENTIMENT_PROMPT.format(
+            symbol=symbol,
+            exchange=exchange,
+            headlines=headlines_text,
+            macro_data=macro_text,
+        )
+
+        try:
+            if self._llm:
+                console.print(f"  [dim cyan]Analyzing news sentiment for {symbol} via LLM...[/dim cyan]")
+            response = self._llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                stream=False,
+            )
+            return self._parse_sentiment_response(response)
+        except Exception as e:
+            # LLM failed — fall back to keyword sentiment
+            console.print(f"  [dim yellow]LLM sentiment failed: {e} — using keyword fallback[/dim yellow]")
+            return self._keyword_sentiment([]) + ([f"LLM sentiment unavailable: {e}"],)
+
+    def _parse_sentiment_response(self, response: str) -> tuple[str, float, int, list[str]]:
+        """Parse the structured LLM sentiment response."""
+        verdict = "NEUTRAL"
+        score = 0.0
+        confidence = 50
+        points: list[str] = []
+
+        for line in response.splitlines():
+            line = line.strip()
+            upper = line.upper()
+
+            if upper.startswith("SENTIMENT:"):
+                val = line.split(":", 1)[1].strip().upper()
+                if "BULLISH" in val:
+                    verdict = "BULLISH"
+                elif "BEARISH" in val:
+                    verdict = "BEARISH"
+                else:
+                    verdict = "NEUTRAL"
+
+            elif upper.startswith("SCORE:"):
+                try:
+                    score = float(line.split(":", 1)[1].strip().rstrip("%"))
+                except (ValueError, IndexError):
+                    pass
+
+            elif upper.startswith("CONFIDENCE:"):
+                try:
+                    confidence = int(line.split(":", 1)[1].strip().rstrip("%"))
+                except (ValueError, IndexError):
+                    pass
+
+            elif line.startswith("- ") or line.startswith("* "):
+                points.append(line.lstrip("-* ").strip())
+
+        # If no points parsed, use the whole response as a single point
+        if not points and response.strip():
+            # Take first 2 sentences
+            sentences = response.strip().split(". ")
+            points = [s.strip() + "." for s in sentences[:2] if s.strip()]
+
+        return verdict, score, confidence, points
+
+    @staticmethod
+    def _keyword_sentiment(points: list[str]) -> tuple[str, float, int]:
+        """Fallback: count bullish/bearish keywords in existing points."""
+        bullish_signals = sum(
+            1 for p in points
+            if any(w in p.lower() for w in ["buying", "strong", "rally", "surge"])
+        )
+        bearish_signals = sum(
+            1 for p in points
+            if any(w in p.lower() for w in ["selling", "weak", "decline", "crash", "fall"])
+        )
+
+        if bullish_signals > bearish_signals:
+            return "BULLISH", 30, 40
+        elif bearish_signals > bullish_signals:
+            return "BEARISH", -30, 40
+        return "NEUTRAL", 0, 30
 
 
 class RiskAnalyst(BaseAnalyst):
@@ -442,9 +595,11 @@ class MultiAgentAnalyzer:
     Orchestrates the full multi-agent analysis pipeline.
 
     Pipeline:
-      1. Run 5 analyst agents (parallel or sequential)
+      1. Run 5 analyst agents (parallel or sequential, 1 uses LLM for sentiment)
       2. Feed analyst reports into bull/bear debate (2 LLM calls)
       3. Synthesize final verdict + trade recommendation (1 LLM call)
+
+    Total: 4 LLM calls per analysis.
 
     Usage:
         from agent.multi_agent import MultiAgentAnalyzer
@@ -467,11 +622,14 @@ class MultiAgentAnalyzer:
         self.parallel = parallel
         self.verbose = verbose
 
+        news_analyst = NewsMacroAnalyst(registry)
+        news_analyst.set_llm(llm_provider)
+
         self.analysts = [
             TechnicalAnalyst(registry),
             FundamentalAnalyst(registry),
             OptionsAnalyst(registry),
-            NewsMacroAnalyst(registry),
+            news_analyst,
             RiskAnalyst(registry),
         ]
 
@@ -833,3 +991,28 @@ RISKS (2-3 bullets):
 - [secondary risk]
 
 Keep the output concise and terminal-friendly. Use bullets. All prices in INR."""
+
+NEWS_SENTIMENT_PROMPT = """You are a NEWS & SENTIMENT ANALYST at an Indian trading firm.
+Analyze the following news headlines and macro data for {symbol} ({exchange}).
+
+## Recent Headlines
+{headlines}
+
+## Macro Context
+{macro_data}
+
+Provide a structured sentiment assessment. Consider:
+- Is the news flow positive, negative, or mixed for this stock?
+- Are there sector-wide or macro tailwinds/headwinds?
+- Any upcoming catalysts or risks (earnings, policy, expiry)?
+- How might FII/DII flows impact sentiment?
+- Distinguish between noise and signal — not every headline matters.
+
+Respond in EXACTLY this format (no extra text before or after):
+
+SENTIMENT: [BULLISH / BEARISH / NEUTRAL]
+SCORE: [number from -100 to +100]
+CONFIDENCE: [0-100]%
+- [key insight 1 — most important finding]
+- [key insight 2 — second finding]
+- [key insight 3 — third finding, if relevant]"""
