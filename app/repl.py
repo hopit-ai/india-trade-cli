@@ -59,7 +59,8 @@ COMMANDS = [
     "holdings", "positions", "orders",
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
-    "ai", "alert", "alerts", "clear", "memory", "patterns", "provider", "tui", "web",
+    "ai", "alert", "alerts", "backtest", "clear", "memory", "patterns",
+    "provider", "tui", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -434,6 +435,13 @@ def cmd_help() -> None:
     alert list / alerts               List all active alerts
     alert remove ID                   Remove an alert by ID
 
+  [bold]Backtest & Simulation[/bold]
+    backtest SYMBOL [strategy]        Backtest a strategy (rsi, ma, macd, bb)
+    backtest RELIANCE rsi             RSI overbought/oversold (30/70)
+    backtest RELIANCE ma 20 50        EMA crossover strategy
+    whatif nifty -3                   What if NIFTY drops 3%?
+    whatif RELIANCE -10               What if RELIANCE drops 10%?
+
   [bold]Memory & Patterns[/bold]
     memory                            Show recent trade analyses
     memory stats                      Performance statistics
@@ -458,6 +466,89 @@ def cmd_help() -> None:
 
 
 # ── Alert command handler ──────────────────────────────────────
+
+def _handle_backtest_command(args: list[str]) -> None:
+    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y]"""
+    if not args:
+        console.print(
+            "[red]Usage: backtest SYMBOL [strategy] [args][/red]\n"
+            "[dim]  backtest RELIANCE rsi              RSI(30/70) strategy\n"
+            "  backtest RELIANCE ma 20 50          EMA crossover\n"
+            "  backtest RELIANCE macd              MACD signal crossover\n"
+            "  backtest RELIANCE bb                Bollinger Bands\n"
+            "  Strategies: rsi, ma, ema, macd, bb/bollinger[/dim]"
+        )
+        return
+
+    from engine.backtest import run_backtest
+
+    symbol = args[0].upper()
+    strategy_name = args[1].lower() if len(args) > 1 else "rsi"
+    strategy_args = args[2:] if len(args) > 2 else []
+
+    # Check for --period flag
+    period = "1y"
+    if "--period" in args:
+        idx = args.index("--period")
+        if idx + 1 < len(args):
+            period = args[idx + 1]
+            strategy_args = [a for a in strategy_args if a not in ("--period", period)]
+
+    console.print(f"\n[dim]Running backtest: {symbol} / {strategy_name} / {period}...[/dim]")
+
+    try:
+        result = run_backtest(
+            symbol=symbol,
+            strategy_name=strategy_name,
+            strategy_args=strategy_args,
+            period=period,
+        )
+        result.print_summary()
+        result.print_trades(10)
+    except Exception as e:
+        console.print(f"[red]Backtest failed: {e}[/red]")
+
+
+def _handle_whatif_command(args: list[str]) -> None:
+    """Handle: whatif nifty -3 | whatif RELIANCE -10 | whatif RELIANCE -5 HDFCBANK 3"""
+    if not args:
+        console.print(
+            "[red]Usage: whatif <scenario>[/red]\n"
+            "[dim]  whatif nifty -3              NIFTY drops 3%\n"
+            "  whatif RELIANCE -10           RELIANCE drops 10%\n"
+            "  whatif RELIANCE -5 TCS 3      Multiple stocks move[/dim]"
+        )
+        return
+
+    from engine.simulator import Simulator
+    sim = Simulator()
+
+    first = args[0].upper()
+
+    if first in ("NIFTY", "MARKET", "NIFTY50"):
+        if len(args) < 2:
+            console.print("[red]Usage: whatif nifty -3[/red]")
+            return
+        pct = float(args[1])
+        result = sim.scenario_market_move(pct)
+
+    elif len(args) >= 4 and len(args) % 2 == 0:
+        # Multiple: whatif RELIANCE -5 HDFCBANK 3
+        moves = {}
+        for i in range(0, len(args), 2):
+            moves[args[i].upper()] = float(args[i + 1])
+        result = sim.scenario_custom(moves)
+
+    elif len(args) >= 2:
+        # Single stock: whatif RELIANCE -10
+        result = sim.scenario_stock_move(first, float(args[1]))
+
+    else:
+        console.print("[red]Invalid scenario format.[/red]")
+        return
+
+    result.print_summary()
+
 
 def _handle_memory_command(args: list[str]) -> None:
     """Handle memory commands: memory [stats|list|<symbol>|outcome <id> <result>]"""
@@ -730,6 +821,12 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "patterns":
                 _handle_patterns_command()
+
+            elif command == "backtest":
+                _handle_backtest_command(args)
+
+            elif command == "whatif":
+                _handle_whatif_command(args)
 
             elif command == "ai":
                 message = " ".join(args).strip()

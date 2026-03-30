@@ -510,4 +510,68 @@ def build_registry() -> ToolRegistry:
         },
     )
 
+    # ── Backtest & Simulation ─────────────────────────────────
+    from engine.backtest import run_backtest
+    from engine.simulator import Simulator
+
+    reg.register(
+        name="run_backtest",
+        description=(
+            "Backtest a trading strategy on historical data. "
+            "Strategies: rsi, ma (EMA crossover), macd, bb (Bollinger). "
+            "Returns total return, Sharpe ratio, win rate, max drawdown vs buy-and-hold."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol":   {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
+                "strategy": {"type": "string", "enum": ["rsi", "ma", "macd", "bb"],
+                             "description": "Strategy to test"},
+                "period":   {"type": "string", "default": "1y",
+                             "description": "Lookback: 1y, 2y, 3y, 5y"},
+            },
+            "required": ["symbol", "strategy"],
+        },
+        fn=lambda symbol, strategy="rsi", period="1y": {
+            k: v for k, v in run_backtest(symbol, strategy, period=period).__dict__.items()
+            if k not in ("trades", "equity_curve")
+        },
+    )
+
+    reg.register(
+        name="whatif_market_move",
+        description=(
+            "Simulate what happens to the user's portfolio if NIFTY moves by a given %. "
+            "E.g. 'What if NIFTY drops 3%?' Shows position-wise impact."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "nifty_change_pct": {
+                    "type": "number",
+                    "description": "NIFTY change in %. Negative for drop, positive for rally.",
+                },
+            },
+            "required": ["nifty_change_pct"],
+        },
+        fn=lambda nifty_change_pct: Simulator().scenario_market_move(nifty_change_pct).__dict__,
+    )
+
+    reg.register(
+        name="whatif_stock_move",
+        description=(
+            "Simulate what happens if a specific stock moves by a given %. "
+            "Shows impact on portfolio positions in that stock."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol":     {"type": "string", "description": "Stock symbol"},
+                "change_pct": {"type": "number", "description": "% change (negative for drop)"},
+            },
+            "required": ["symbol", "change_pct"],
+        },
+        fn=lambda symbol, change_pct: Simulator().scenario_stock_move(symbol, change_pct).__dict__,
+    )
+
     return reg

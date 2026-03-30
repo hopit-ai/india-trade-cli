@@ -56,9 +56,6 @@ def get_ohlcv(
         DataFrame with columns: date, open, high, low, close, volume
         Index: date (datetime)
     """
-    from brokers.session import get_broker
-    broker = get_broker()
-
     to_date   = to_date   or datetime.now()
     from_date = from_date or (to_date - timedelta(days=days))
 
@@ -66,8 +63,12 @@ def get_ohlcv(
     kite_interval = INTERVAL_MAP.get(interval, interval)
 
     # Use the unified broker interface; fall back to yfinance (real data)
-    # if the broker doesn't support historical data, then mock as last resort.
+    # if the broker doesn't support historical data or isn't logged in,
+    # then mock as last resort.
+    raw = None
     try:
+        from brokers.session import get_broker
+        broker = get_broker()
         raw = broker.get_historical_data(
             symbol    = symbol,
             exchange  = exchange,
@@ -75,10 +76,13 @@ def get_ohlcv(
             from_date = from_date,
             to_date   = to_date,
         )
-    except (NotImplementedError, Exception):
+    except Exception:
+        pass
+
+    if not raw:
         raw = _yfinance_fallback(symbol, exchange, kite_interval, from_date, to_date)
-        if not raw:
-            raw = _mock_ohlcv(symbol, from_date, to_date)
+    if not raw:
+        raw = _mock_ohlcv(symbol, from_date, to_date)
 
     if not raw:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
