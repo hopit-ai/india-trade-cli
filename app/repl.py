@@ -59,9 +59,10 @@ COMMANDS = [
     "holdings", "positions", "orders",
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
-    "ai", "alert", "alerts", "audit", "backtest", "clear", "drift",
+    "ai", "alert", "alerts", "audit", "backtest", "clear",
+    "deep-analyze", "drift",
     "earnings", "events", "flows", "greeks", "macro", "memory",
-    "pairs", "patterns", "provider", "risk-report",
+    "pairs", "patterns", "profile", "provider", "risk-report",
     "tui", "walkforward", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
@@ -908,6 +909,28 @@ def run_repl(broker: BrokerAPI) -> None:
                 else:
                     from engine.audit import print_audit
                     print_audit(args[0])
+
+            elif command == "profile":
+                from engine.profile import print_profile
+                print_profile()
+
+            elif command == "deep-analyze":
+                symbol = args[0].upper() if args else ""
+                if not symbol:
+                    console.print("[red]Usage: deep-analyze <SYMBOL>   e.g. deep-analyze RELIANCE[/red]")
+                else:
+                    agent = get_agent()
+                    try:
+                        from agent.deep_agent import DeepAnalyzer
+                        deep = DeepAnalyzer(
+                            registry=agent._registry,
+                            llm_provider=agent._provider,
+                        )
+                        deep.analyze(symbol)
+                    except Exception as e:
+                        console.print(f"[red]Deep analysis failed: {e}[/red]")
+                        console.print("[dim]Falling back to standard analysis...[/dim]")
+                        agent.run_multi_agent_analysis(symbol)
 
             elif command == "walkforward":
                 if not args:

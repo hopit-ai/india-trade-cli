@@ -1,0 +1,398 @@
+"""
+agent/deep_agent.py
+───────────────────
+Full LLM multi-agent mode ("--deep") — inspired by TradingAgents paper.
+
+Every agent is LLM-powered (vs default mode where analysts are pure Python).
+11+ LLM calls per analysis — expensive but much deeper reasoning.
+
+Architecture:
+  Phase 1: 5 LLM Analyst calls (each reads raw data + reasons about it)
+  Phase 2: 2-round debate (5 LLM calls: bull, bear, bull rebuttal, bear rebuttal, facilitator)
+  Phase 3: 1 LLM synthesis call
+  Total: 11 LLM calls minimum
+
+Requires API key (not subscription) due to high call volume.
+
+Usage:
+    from agent.deep_agent import DeepAnalyzer
+
+    analyzer = DeepAnalyzer(registry, llm_provider)
+    result = analyzer.analyze("RELIANCE")
+
+    # Or via REPL:
+    deep-analyze RELIANCE
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from typing import Any, Optional
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from agent.tools import ToolRegistry
+from agent.multi_agent import (
+    AnalystReport, DebateResult, MultiAgentAnalyzer,
+    compute_scorecard, console,
+    BULL_RESEARCHER_PROMPT, BEAR_RESEARCHER_PROMPT,
+    BULL_REBUTTAL_PROMPT, BEAR_REBUTTAL_PROMPT,
+    FACILITATOR_PROMPT, SYNTHESIS_PROMPT,
+)
+
+
+# ── LLM Analyst Prompts ──────────────────────────────────────
+
+DEEP_TECHNICAL_PROMPT = """You are a TECHNICAL ANALYST at an Indian trading firm.
+Analyze {symbol} ({exchange}) using the following raw market data.
+
+{tool_data}
+
+Provide a thorough technical analysis covering:
+1. Trend analysis: EMA20 vs EMA50 vs SMA200, trend direction and strength
+2. Momentum: RSI level and divergences, MACD crossover state
+3. Volatility: Bollinger Band position, ATR relative to price
+4. Volume: is volume confirming the trend or diverging?
+5. Support/Resistance: key levels from pivot points
+6. Pattern recognition: any chart patterns forming?
+
+Respond with:
+VERDICT: [BULLISH / BEARISH / NEUTRAL]
+CONFIDENCE: [0-100]%
+SCORE: [-100 to +100]
+KEY_POINTS:
+- [point 1]
+- [point 2]
+- [point 3]"""
+
+DEEP_FUNDAMENTAL_PROMPT = """You are a FUNDAMENTAL ANALYST at an Indian trading firm.
+Evaluate {symbol} ({exchange}) business quality using this data.
+
+{tool_data}
+
+Analyze:
+1. Valuation: PE relative to sector, PB vs historical, is it cheap or expensive?
+2. Quality: ROE, ROCE trends — is the business generating adequate returns?
+3. Growth: Revenue and profit CAGR — accelerating or decelerating?
+4. Balance sheet: Debt/equity, interest coverage — any stress?
+5. Promoter: Holding %, pledge % — are insiders confident?
+6. Red flags: any concerning patterns in the numbers?
+
+Respond with:
+VERDICT: [BULLISH / BEARISH / NEUTRAL]
+CONFIDENCE: [0-100]%
+SCORE: [-100 to +100]
+KEY_POINTS:
+- [point 1]
+- [point 2]
+- [point 3]"""
+
+DEEP_OPTIONS_PROMPT = """You are an OPTIONS ANALYST at an Indian trading firm.
+Analyze {symbol} ({exchange}) options market for sentiment signals.
+
+{tool_data}
+
+Analyze:
+1. PCR interpretation: what does the put-call ratio tell us about sentiment?
+2. Max pain: where is the gravitational pull for expiry?
+3. IV rank: is implied volatility elevated or cheap? What does this mean for strategy?
+4. OI patterns: any unusual buildup at specific strikes?
+5. Strategy suggestion: based on IV and direction, what's the optimal options play?
+
+Respond with:
+VERDICT: [BULLISH / BEARISH / NEUTRAL]
+CONFIDENCE: [0-100]%
+SCORE: [-100 to +100]
+KEY_POINTS:
+- [point 1]
+- [point 2]
+- [point 3]"""
+
+DEEP_SENTIMENT_PROMPT = """You are a SENTIMENT & NEWS ANALYST at an Indian trading firm.
+Assess the sentiment landscape for {symbol} ({exchange}).
+
+{tool_data}
+
+Analyze:
+1. News sentiment: are recent headlines positive, negative, or mixed?
+2. FII/DII positioning: what are institutions doing? Any divergence signals?
+3. Market breadth: is the broader market supporting or diverging?
+4. Sector rotation: is money flowing into or out of this stock's sector?
+5. Event risk: any upcoming events that could change the picture?
+6. Social sentiment: any unusual retail interest or buzz?
+
+Respond with:
+VERDICT: [BULLISH / BEARISH / NEUTRAL]
+CONFIDENCE: [0-100]%
+SCORE: [-100 to +100]
+KEY_POINTS:
+- [point 1]
+- [point 2]
+- [point 3]"""
+
+DEEP_RISK_PROMPT = """You are a RISK MANAGER at an Indian trading firm.
+Assess the risk profile for a potential trade in {symbol} ({exchange}).
+
+{tool_data}
+
+Analyze:
+1. VIX regime: what does current VIX say about market risk appetite?
+2. Position sizing: given the capital and risk tolerance, what's appropriate?
+3. Concentration: is this trade adding to existing sector concentration?
+4. Upcoming events: any events that could cause sharp adverse moves?
+5. Liquidity: is this stock liquid enough for the intended position size?
+6. Correlation: does this trade correlate with existing positions?
+7. Macro risks: any currency, commodity, or rate risks?
+
+Respond with:
+VERDICT: [BULLISH / BEARISH / NEUTRAL]  (from a risk perspective — BULLISH = low risk)
+CONFIDENCE: [0-100]%
+SCORE: [-100 to +100]
+RISK_LEVEL: [LOW / MEDIUM / HIGH / DANGER]
+KEY_POINTS:
+- [point 1]
+- [point 2]
+- [point 3]"""
+
+
+# ── Deep Analyzer ────────────────────────────────────────────
+
+class DeepAnalyzer:
+    """
+    Full LLM multi-agent analysis — every analyst is LLM-powered.
+
+    11+ LLM calls per analysis:
+      5 analyst calls + 5 debate calls + 1 synthesis = 11
+
+    Uses the same debate and synthesis from MultiAgentAnalyzer
+    but replaces pure-Python analysts with LLM analysts.
+    """
+
+    def __init__(
+        self,
+        registry: ToolRegistry,
+        llm_provider: Any,
+        verbose: bool = True,
+    ) -> None:
+        self.registry = registry
+        self.llm = llm_provider
+        self.verbose = verbose
+
+    def analyze(self, symbol: str, exchange: str = "NSE") -> str:
+        """Run full LLM deep analysis."""
+        symbol = symbol.upper()
+        exchange = exchange.upper()
+
+        console.print()
+        console.rule(
+            f"[bold magenta]Deep Analysis (Full LLM): {exchange}:{symbol}[/bold magenta]",
+            style="magenta",
+        )
+        console.print("[dim]  11+ LLM calls — this will take a few minutes...[/dim]")
+
+        # ── Phase 1: LLM Analyst Team ────────────────────────
+        t0 = time.time()
+        reports = self._run_llm_analysts(symbol, exchange)
+        analyst_time = time.time() - t0
+
+        if self.verbose:
+            self._print_reports(reports, analyst_time)
+
+        valid = [r for r in reports if not r.error]
+        if not valid:
+            console.print("[yellow]All LLM analysts failed.[/yellow]")
+            return ""
+
+        # Scorecard
+        scorecard = compute_scorecard(reports)
+        if self.verbose:
+            console.print(f"\n[dim]{scorecard.summary()}[/dim]")
+
+        # ── Phase 2: Debate (reuse MultiAgentAnalyzer's debate) ──
+        if self.verbose:
+            console.print()
+            console.rule("[bold yellow]Deep Debate (2 rounds)[/bold yellow]", style="yellow")
+
+        t1 = time.time()
+        # Create a temporary MultiAgentAnalyzer just for debate + synthesis
+        multi = MultiAgentAnalyzer(self.registry, self.llm, verbose=self.verbose)
+        debate = multi._run_debate(symbol, exchange, reports)
+        debate_time = time.time() - t1
+
+        # ── Phase 3: Synthesis ───────────────────────────────
+        if self.verbose:
+            console.print()
+            console.rule("[bold green]Deep Synthesis[/bold green]", style="green")
+
+        t2 = time.time()
+        synthesis = multi._run_synthesis(symbol, exchange, reports, debate)
+        synthesis_time = time.time() - t2
+
+        # ── Trade plans ──────────────────────────────────────
+        try:
+            from engine.trader import TraderAgent
+            trader = TraderAgent()
+            all_plans = trader.generate_all_plans(
+                symbol=symbol, exchange=exchange,
+                reports=reports, synthesis=synthesis,
+            )
+            if any(p for p in all_plans.values()):
+                TraderAgent.print_all_plans(all_plans)
+        except Exception:
+            pass
+
+        # ── Memory ───────────────────────────────────────────
+        try:
+            from engine.memory import trade_memory
+            record = trade_memory.store_from_analysis(
+                symbol=symbol, exchange=exchange,
+                analyst_reports=reports, debate=debate,
+                synthesis=synthesis,
+            )
+            if self.verbose:
+                console.print(f"[dim]  Stored to memory (ID: {record.id})[/dim]")
+        except Exception:
+            pass
+
+        total = analyst_time + debate_time + synthesis_time
+        console.print(
+            f"\n[dim]Deep analysis complete in {total:.1f}s "
+            f"(analysts: {analyst_time:.1f}s, debate: {debate_time:.1f}s, "
+            f"synthesis: {synthesis_time:.1f}s) — "
+            f"11 LLM calls[/dim]"
+        )
+        console.rule(style="magenta")
+        return synthesis
+
+    def _run_llm_analysts(self, symbol: str, exchange: str) -> list[AnalystReport]:
+        """Run all 5 analysts as LLM calls, feeding them raw tool data."""
+        import os
+        os.environ["_CLI_BATCH_MODE"] = "1"
+
+        analysts = [
+            ("Technical",  DEEP_TECHNICAL_PROMPT,  ["technical_analyse", "get_quote"]),
+            ("Fundamental", DEEP_FUNDAMENTAL_PROMPT, ["fundamental_analyse"]),
+            ("Options",    DEEP_OPTIONS_PROMPT,     ["get_pcr", "get_max_pain", "get_iv_rank"]),
+            ("Sentiment",  DEEP_SENTIMENT_PROMPT,   ["get_stock_news", "get_fii_dii_data", "get_market_breadth"]),
+            ("Risk",       DEEP_RISK_PROMPT,        ["get_vix", "get_quote", "get_upcoming_events"]),
+        ]
+
+        reports = []
+        for name, prompt_template, tools in analysts:
+            if self.verbose:
+                console.print(f"  [dim]{name:15s}[/dim] gathering data + reasoning...")
+
+            try:
+                # Phase A: gather raw tool data
+                tool_data_parts = []
+                for tool_name in tools:
+                    args = {}
+                    if "symbol" in str(self.registry._tools.get(tool_name, {}).get("parameters", {})):
+                        args["symbol"] = symbol
+                    elif "underlying" in str(self.registry._tools.get(tool_name, {}).get("parameters", {})):
+                        args["underlying"] = symbol
+                    elif "instruments" in str(self.registry._tools.get(tool_name, {}).get("parameters", {})):
+                        args["instruments"] = [f"{exchange}:{symbol}"]
+
+                    result = self.registry.execute(tool_name, args)
+                    tool_data_parts.append(
+                        f"[{tool_name}]\n{json.dumps(result, indent=2, default=str)}"
+                    )
+
+                tool_data = "\n\n".join(tool_data_parts)
+
+                # Phase B: LLM reasoning
+                prompt = prompt_template.format(
+                    symbol=symbol, exchange=exchange, tool_data=tool_data,
+                )
+
+                response = self.llm.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    stream=False,
+                )
+
+                report = self._parse_llm_report(name, response)
+                reports.append(report)
+
+                if self.verbose:
+                    status = f"[green]{report.verdict}[/green]" if not report.error else f"[red]FAIL[/red]"
+                    console.print(f"  [dim]{name:15s}[/dim] {status}")
+
+            except Exception as e:
+                reports.append(AnalystReport(
+                    analyst=name, verdict="UNKNOWN", confidence=0,
+                    score=0, error=str(e),
+                ))
+                if self.verbose:
+                    console.print(f"  [dim]{name:15s}[/dim] [red]FAIL: {e}[/red]")
+
+        os.environ.pop("_CLI_BATCH_MODE", None)
+        return reports
+
+    def _parse_llm_report(self, analyst: str, response: str) -> AnalystReport:
+        """Parse an LLM analyst response into AnalystReport."""
+        verdict = "NEUTRAL"
+        confidence = 50
+        score = 0.0
+        points = []
+
+        for line in response.splitlines():
+            stripped = line.strip()
+            upper = stripped.upper()
+
+            if upper.startswith("VERDICT:"):
+                val = stripped.split(":", 1)[1].strip().upper()
+                for v in ("BULLISH", "BEARISH", "NEUTRAL"):
+                    if v in val:
+                        verdict = v
+                        break
+            elif upper.startswith("CONFIDENCE:"):
+                try:
+                    confidence = int(stripped.split(":", 1)[1].strip().rstrip("%"))
+                except (ValueError, IndexError):
+                    pass
+            elif upper.startswith("SCORE:"):
+                try:
+                    score = float(stripped.split(":", 1)[1].strip())
+                except (ValueError, IndexError):
+                    pass
+            elif stripped.startswith("- ") or stripped.startswith("* "):
+                points.append(stripped.lstrip("-* ").strip())
+
+        return AnalystReport(
+            analyst=analyst,
+            verdict=verdict,
+            confidence=confidence,
+            score=score,
+            key_points=points[:5],
+        )
+
+    def _print_reports(self, reports: list[AnalystReport], elapsed: float) -> None:
+        """Display LLM analyst results."""
+        table = Table(
+            title=f"Deep LLM Analyst Reports ({elapsed:.1f}s)",
+            show_header=True, header_style="bold magenta", show_lines=True,
+        )
+        table.add_column("Analyst", style="bold", width=14)
+        table.add_column("Verdict", width=10)
+        table.add_column("Conf", justify="right", width=8)
+        table.add_column("Score", justify="right", width=8)
+        table.add_column("Key Points", ratio=1)
+
+        for r in reports:
+            if r.error:
+                table.add_row(r.analyst, "[red]ERROR[/red]", "-", "-", f"[red]{r.error[:50]}[/red]")
+            else:
+                v_style = {"BULLISH": "green", "BEARISH": "red"}.get(r.verdict, "yellow")
+                table.add_row(
+                    r.analyst,
+                    f"[{v_style}]{r.verdict}[/{v_style}]",
+                    f"{r.confidence}%",
+                    f"{r.score:+.0f}",
+                    "\n".join(r.key_points[:3]) if r.key_points else "-",
+                )
+
+        console.print(table)
