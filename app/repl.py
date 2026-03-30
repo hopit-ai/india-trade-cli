@@ -59,7 +59,7 @@ COMMANDS = [
     "holdings", "positions", "orders",
     "morning-brief", "analyze", "trade",
     "portfolio", "paper",
-    "ai", "clear", "provider", "tui", "web",
+    "ai", "alert", "alerts", "clear", "provider", "tui", "web",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -427,6 +427,13 @@ def cmd_help() -> None:
     clear            Clear AI conversation history (start fresh)
     provider         Show / switch AI provider (anthropic / openai / gemini / …)
 
+  [bold]Alerts[/bold]
+    alert SYMBOL above PRICE          Set a price alert (e.g. alert NIFTY above 22500)
+    alert SYMBOL below PRICE          Set a price alert (e.g. alert RELIANCE below 2600)
+    alert SYMBOL RSI above 70         Set a technical alert
+    alert list / alerts               List all active alerts
+    alert remove ID                   Remove an alert by ID
+
   [bold]Interface[/bold]
     tui              Launch split-panel Textual TUI
     web [PORT]       Start web UI server (browser-based broker login, default port 8765)
@@ -443,6 +450,78 @@ def cmd_help() -> None:
 """)
 
 
+# ── Alert command handler ──────────────────────────────────────
+
+def _handle_alert_command(args: list[str]) -> None:
+    """
+    Handle alert / alerts commands.
+
+    Usage:
+        alert RELIANCE above 2800          → price alert
+        alert NIFTY below 22000            → price alert
+        alert RELIANCE RSI above 70        → technical alert
+        alert list  /  alerts              → list all active alerts
+        alert remove <id>                  → remove an alert
+    """
+    from engine.alerts import alert_manager
+
+    if not args or args[0].lower() == "list":
+        alert_manager.print_alerts()
+        return
+
+    if args[0].lower() == "remove" and len(args) >= 2:
+        removed = alert_manager.remove_alert(args[1])
+        if removed:
+            console.print(f"[green]Alert {args[1]} removed.[/green]")
+        else:
+            console.print(f"[red]Alert {args[1]} not found.[/red]")
+        return
+
+    # Parse: SYMBOL [INDICATOR] ABOVE/BELOW THRESHOLD
+    # e.g. "RELIANCE above 2800" or "RELIANCE RSI above 70"
+    if len(args) < 3:
+        console.print(
+            "[dim]Usage:\n"
+            "  alert RELIANCE above 2800         (price alert)\n"
+            "  alert RELIANCE RSI above 70       (technical alert)\n"
+            "  alert list                        (show active alerts)\n"
+            "  alert remove <id>                 (remove alert)[/dim]"
+        )
+        return
+
+    symbol = args[0].upper()
+    indicators = {"RSI", "MACD", "ADX", "ATR"}
+
+    if len(args) >= 4 and args[1].upper() in indicators:
+        # Technical alert: SYMBOL INDICATOR CONDITION THRESHOLD
+        indicator = args[1].upper()
+        condition = args[2].upper()
+        try:
+            threshold = float(args[3])
+        except ValueError:
+            console.print("[red]Invalid threshold value.[/red]")
+            return
+        alert = alert_manager.add_technical_alert(
+            symbol, indicator, condition, threshold,
+        )
+    else:
+        # Price alert: SYMBOL CONDITION THRESHOLD
+        condition = args[1].upper()
+        if condition == "CROSSES":
+            condition = "ABOVE"
+        try:
+            threshold = float(args[2])
+        except ValueError:
+            console.print("[red]Invalid threshold value.[/red]")
+            return
+        alert = alert_manager.add_price_alert(symbol, condition, threshold)
+
+    console.print(
+        f"[green]✓ Alert created:[/green] [bold]{alert.describe()}[/bold]"
+        f"  [dim](ID: {alert.id})[/dim]"
+    )
+
+
 # ── Main REPL loop ────────────────────────────────────────────
 
 def run_repl(broker: BrokerAPI) -> None:
@@ -456,6 +535,10 @@ def run_repl(broker: BrokerAPI) -> None:
         completer  = WordCompleter(COMMANDS, ignore_case=True),
         style      = STYLE,
     )
+
+    # Start background alert poller (daemon thread, checks every 60s)
+    from engine.alerts import alert_manager
+    alert_manager.start_polling(interval=60)
 
     console.print(
         "\n[dim]Type [bold]help[/bold] for commands, "
@@ -549,6 +632,9 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "clear":
                 agent = get_agent()
                 agent.clear_history()
+
+            elif command in ("alert", "alerts"):
+                _handle_alert_command(args)
 
             elif command == "ai":
                 message = " ".join(args).strip()

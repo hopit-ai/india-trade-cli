@@ -368,3 +368,54 @@ class FyersAPI(BrokerAPI):
             return True
         except Exception:
             return False
+
+    # ── Historical Data ──────────────────────────────────────
+
+    def get_historical_data(
+        self,
+        symbol:    str,
+        exchange:  str = "NSE",
+        interval:  str = "day",
+        from_date: Optional[datetime] = None,
+        to_date:   Optional[datetime] = None,
+    ) -> list[dict]:
+        resolution_map = {
+            "day":      "D",
+            "minute":   "1",
+            "5minute":  "5",
+            "15minute": "15",
+            "30minute": "30",
+            "60minute": "60",
+        }
+        resolution = resolution_map.get(interval, "D")
+        to_date   = to_date   or datetime.now()
+        from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
+
+        # Fyers symbol format: "NSE:RELIANCE-EQ"
+        fyers_symbol = f"{exchange}:{symbol}-EQ"
+
+        try:
+            data = self._get("/history", **{
+                "symbol":      fyers_symbol,
+                "resolution":  resolution,
+                "date_format":  "1",
+                "range_from":  str(int(from_date.timestamp())),
+                "range_to":    str(int(to_date.timestamp())),
+                "cont_flag":   "1",
+            })
+
+            candles = data.get("candles", [])
+            # Each candle: [epoch, open, high, low, close, volume]
+            return [
+                {
+                    "date":   datetime.fromtimestamp(candle[0]),
+                    "open":   candle[1],
+                    "high":   candle[2],
+                    "low":    candle[3],
+                    "close":  candle[4],
+                    "volume": candle[5],
+                }
+                for candle in candles
+            ]
+        except Exception as e:
+            raise RuntimeError(f"Fyers historical data error: {e}") from e

@@ -278,3 +278,51 @@ class ZerodhaAPI(BrokerAPI):
             order_id = order_id,
         )
         return True
+
+    # ── Historical Data ──────────────────────────────────────
+
+    def get_historical_data(
+        self,
+        symbol:    str,
+        exchange:  str = "NSE",
+        interval:  str = "day",
+        from_date: Optional[datetime] = None,
+        to_date:   Optional[datetime] = None,
+    ) -> list[dict]:
+        interval_map = {
+            "day":      "day",
+            "minute":   "minute",
+            "5minute":  "5minute",
+            "15minute": "15minute",
+            "30minute": "30minute",
+            "60minute": "60minute",
+        }
+        kite_interval = interval_map.get(interval, "day")
+        to_date   = to_date   or datetime.now()
+        from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
+
+        try:
+            # Look up instrument token
+            instruments = self.kite.instruments(exchange)
+            token = None
+            for inst in instruments:
+                if inst["tradingsymbol"] == symbol:
+                    token = inst["instrument_token"]
+                    break
+            if token is None:
+                raise ValueError(f"Instrument {symbol} not found on {exchange}")
+
+            raw = self.kite.historical_data(token, from_date, to_date, kite_interval)
+            return [
+                {
+                    "date":   candle["date"],
+                    "open":   candle["open"],
+                    "high":   candle["high"],
+                    "low":    candle["low"],
+                    "close":  candle["close"],
+                    "volume": candle["volume"],
+                }
+                for candle in raw
+            ]
+        except Exception as e:
+            raise RuntimeError(f"Zerodha historical data error: {e}") from e

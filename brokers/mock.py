@@ -7,6 +7,7 @@ Returns realistic fake data for all BrokerAPI methods.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from .base import (
@@ -14,6 +15,7 @@ from .base import (
     Position, Quote, OptionsContract,
     OrderRequest, OrderResponse, Order,
 )
+from market.history import _mock_ohlcv
 
 
 class MockBrokerAPI(BrokerAPI):
@@ -224,3 +226,20 @@ class MockBrokerAPI(BrokerAPI):
     def cancel_order(self, order_id: str) -> bool:
         self._orders = [o for o in self._orders if o.order_id != order_id]
         return True
+
+    # ── Historical Data ──────────────────────────────────────
+
+    def get_historical_data(
+        self,
+        symbol:    str,
+        exchange:  str = "NSE",
+        interval:  str = "day",
+        from_date: Optional[datetime] = None,
+        to_date:   Optional[datetime] = None,
+    ) -> list[dict]:
+        to_date   = to_date   or datetime.now()
+        from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
+        try:
+            return _mock_ohlcv(symbol, from_date, to_date)
+        except Exception as e:
+            raise RuntimeError(f"Mock historical data error: {e}") from e

@@ -325,3 +325,7 @@ class GrowwAPI(BrokerAPI):
     def cancel_order(self, order_id: str) -> bool:
         self._delete(f"/orders/{order_id}")
         return True
+
+    # ── Historical Data ──────────────────────────────────────
+    # Groww Partner API does not expose a historical candle endpoint.
+    # Falls back to base class NotImplementedError.

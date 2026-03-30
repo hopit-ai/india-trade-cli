@@ -65,14 +65,18 @@ def get_ohlcv(
     # Normalize interval alias
     kite_interval = INTERVAL_MAP.get(interval, interval)
 
-    # Zerodha / Groww provide historical data as list of dicts
-    raw = broker.kite.historical_data(   # type: ignore[attr-defined]
-        instrument_token = _get_instrument_token(symbol, exchange),
-        from_date        = from_date,
-        to_date          = to_date,
-        interval         = kite_interval,
-        continuous       = False,
-    ) if hasattr(broker, "kite") else _mock_ohlcv(symbol, from_date, to_date)
+    # Use the unified broker interface; fall back to mock data if the
+    # broker doesn't support historical data (e.g. Groww, or not logged in).
+    try:
+        raw = broker.get_historical_data(
+            symbol    = symbol,
+            exchange  = exchange,
+            interval  = kite_interval,
+            from_date = from_date,
+            to_date   = to_date,
+        )
+    except (NotImplementedError, Exception):
+        raw = _mock_ohlcv(symbol, from_date, to_date)
 
     if not raw:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])

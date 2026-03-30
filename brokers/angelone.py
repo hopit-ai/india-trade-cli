@@ -431,6 +431,64 @@ class AngelOneAPI(BrokerAPI):
         data = self._obj.cancelOrder(order_id, "NORMAL")
         return bool(data and data.get("status") is not False)
 
+    # ── Historical Data ──────────────────────────────────────
+
+    def get_historical_data(
+        self,
+        symbol:    str,
+        exchange:  str = "NSE",
+        interval:  str = "day",
+        from_date: Optional[datetime] = None,
+        to_date:   Optional[datetime] = None,
+    ) -> list[dict]:
+        if not self._obj:
+            raise RuntimeError("Not authenticated.")
+
+        interval_map = {
+            "day":      "ONE_DAY",
+            "minute":   "ONE_MINUTE",
+            "5minute":  "FIVE_MINUTE",
+            "15minute": "FIFTEEN_MINUTE",
+            "30minute": "THIRTY_MINUTE",
+            "60minute": "ONE_HOUR",
+        }
+        angel_interval = interval_map.get(interval, "ONE_DAY")
+        to_date   = to_date   or datetime.now()
+        from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
+
+        try:
+            # Angel One needs symboltoken — look it up
+            search = self._obj.searchScrip(exchange, symbol)
+            scrip_list = search.get("data", []) if search else []
+            if not scrip_list:
+                raise ValueError(f"Symbol {symbol} not found on {exchange}")
+            symbol_token = scrip_list[0].get("symboltoken", "")
+
+            params = {
+                "exchange":    exchange,
+                "symboltoken": symbol_token,
+                "interval":    angel_interval,
+                "fromdate":    from_date.strftime("%Y-%m-%d %H:%M"),
+                "todate":      to_date.strftime("%Y-%m-%d %H:%M"),
+            }
+            data = self._obj.getCandleData(params)
+            candles = data.get("data", []) if data else []
+
+            # Each candle: [timestamp, open, high, low, close, volume]
+            return [
+                {
+                    "date":   candle[0],
+                    "open":   candle[1],
+                    "high":   candle[2],
+                    "low":    candle[3],
+                    "close":  candle[4],
+                    "volume": candle[5],
+                }
+                for candle in candles
+            ]
+        except Exception as e:
+            raise RuntimeError(f"Angel One historical data error: {e}") from e
+
 
 # ── Field mapping helpers ─────────────────────────────────────
 

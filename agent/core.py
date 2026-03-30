@@ -471,8 +471,9 @@ class ClaudeCLIProvider(LLMProvider):
         # permission to run Python), we scan the prompt text for tool
         # names that exist in our registry.  This is instant and reliable.
         tool_plan = self._match_tools_in_text(last_user_msg)
-        console.print(f"[dim]  DEBUG: matched {len(tool_plan)} tools: "
-                       f"{[t[0] for t in tool_plan]}[/dim]")
+        if tool_plan:
+            console.print(f"[dim]  Matched {len(tool_plan)} tools: "
+                           f"{[t[0] for t in tool_plan]}[/dim]")
 
         # ── Phase 2: execute matched tools locally (fast) ─────────
         # Suppress interactive credential prompts during batch tool execution.
@@ -489,14 +490,13 @@ class ClaudeCLIProvider(LLMProvider):
                     f"{json.dumps(result, indent=2)}\n"
                     f"</tool_result>"
                 )
-                console.print(f"[dim]  DEBUG: {name} → OK "
-                               f"({len(json.dumps(result))} chars)[/dim]")
+                pass  # tool executed OK
             except Exception as exc:
                 console.print(f"[dim]  ⚠ {name} skipped: {exc}[/dim]")
         os.environ.pop("_CLI_BATCH_MODE", None)
 
-        console.print(f"[dim]  DEBUG: {len(collected)} tool results collected, "
-                       f"total {sum(len(c) for c in collected)} chars[/dim]")
+        if collected:
+            console.print(f"[dim]  {len(collected)} tool results fetched[/dim]")
 
         # ── Phase 3: synthesis — ONE CLI call to write the response ─
         # Build the full prompt with: system context + conversation history
@@ -549,16 +549,12 @@ class ClaudeCLIProvider(LLMProvider):
 
         synthesis_prompt = "\n".join(parts)
 
-        console.print(f"[dim]  DEBUG: synthesis prompt = {len(synthesis_prompt)} chars[/dim]")
-
         console.print("[dim]  Generating response…[/dim]")
         response = self._call_cli(
             synthesis_prompt,
             timeout=300,
             label="Generating response",
         )
-        # Log first 200 chars of the response to see what came back
-        console.print(f"[dim]  DEBUG: response preview = {response[:200]!r}[/dim]")
         console.print(response, highlight=False)
         return response
 
@@ -593,18 +589,14 @@ class ClaudeCLIProvider(LLMProvider):
 
         # Whitelist: ONLY allow WebSearch + WebFetch (for market data lookups).
         # This implicitly blocks Bash, Read, Write, Edit, etc.
-        # Using --allowedTools (whitelist) instead of --disallowedTools (blocklist)
-        # also auto-approves the allowed tools so they work in non-interactive -p mode.
+        # Each tool must be a separate --allowedTools flag (space-separated
+        # in a single string is treated as one tool name by the CLI parser).
         cmd = [
             self._cli, "-p",
             "--output-format", "text",
-            "--allowedTools", "WebSearch WebFetch",
+            "--allowedTools", "WebSearch",
+            "--allowedTools", "WebFetch",
         ]
-
-        # Log the full command (minus system prompt for brevity)
-        cmd_preview = [c if len(c) < 80 else c[:77] + "..." for c in cmd]
-        console.print(f"[dim]  DEBUG _call_cli: cmd = {cmd_preview}[/dim]")
-        console.print(f"[dim]  DEBUG _call_cli: prompt size = {len(prompt)} chars[/dim]")
 
         try:
             proc = subprocess.Popen(
@@ -652,10 +644,7 @@ class ClaudeCLIProvider(LLMProvider):
             t_out.join(timeout=5)
             t_err.join(timeout=5)
 
-            console.print(f"[dim]  DEBUG _call_cli: returncode = {proc.returncode}[/dim]")
             stderr_text = "".join(err_buf).strip()
-            if stderr_text:
-                console.print(f"[dim]  DEBUG _call_cli: stderr = {stderr_text[:300]!r}[/dim]")
 
             if proc.returncode != 0:
                 err = stderr_text or "".join(out_buf).strip() or "non-zero exit"
@@ -670,61 +659,215 @@ class ClaudeCLIProvider(LLMProvider):
                 "then run: claude login]"
             )
 
+    # ── Keyword → tool mapping for freeform questions ───────────
+    # When users type "ai how's reliance doing?", no tool names appear in
+    # the text.  This map lets us infer which tools are relevant from
+    # natural-language keywords.
+
+    _KEYWORD_TOOL_MAP: dict[str, list[str]] = {
+        # Market overview
+        "market":       ["get_market_snapshot", "get_vix"],
+        "nifty":        ["get_market_snapshot"],
+        "banknifty":    ["get_market_snapshot"],
+        "sensex":       ["get_market_snapshot"],
+        "vix":          ["get_vix"],
+        "sector":       ["get_sector_snapshot"],
+        "sectors":      ["get_sector_snapshot"],
+        # Stock analysis
+        "price":        ["get_quote"],
+        "quote":        ["get_quote"],
+        "doing":        ["get_quote"],
+        "trading at":   ["get_quote"],
+        "ltp":          ["get_quote"],
+        "news":         ["get_market_news"],
+        "headlines":    ["get_market_news"],
+        "technical":    ["technical_analyse"],
+        "rsi":          ["technical_analyse"],
+        "macd":         ["technical_analyse"],
+        "chart":        ["technical_analyse"],
+        "support":      ["technical_analyse"],
+        "resistance":   ["technical_analyse"],
+        "fundamental":  ["fundamental_analyse"],
+        "pe ratio":     ["fundamental_analyse"],
+        "roe":          ["fundamental_analyse"],
+        "financials":   ["fundamental_analyse"],
+        "balance sheet": ["fundamental_analyse"],
+        "analyze":      ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "analyse":      ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "analysis":     ["get_quote", "technical_analyse", "fundamental_analyse"],
+        # Options
+        "option":       ["get_options_chain"],
+        "options":      ["get_options_chain"],
+        "chain":        ["get_options_chain"],
+        "pcr":          ["get_pcr"],
+        "put call":     ["get_pcr"],
+        "max pain":     ["get_max_pain"],
+        "greeks":       ["compute_greeks"],
+        "iv rank":      ["get_iv_rank"],
+        "straddle":     ["get_options_chain"],
+        "strangle":     ["get_options_chain"],
+        "iron condor":  ["get_options_chain"],
+        # Portfolio
+        "holdings":     ["get_holdings"],
+        "portfolio":    ["get_holdings", "get_positions"],
+        "positions":    ["get_positions"],
+        "orders":       ["get_orders"],
+        "funds":        ["get_funds"],
+        "balance":      ["get_funds"],
+        # Flows & breadth
+        "fii":          ["get_fii_dii_data"],
+        "dii":          ["get_fii_dii_data"],
+        "breadth":      ["get_market_breadth"],
+        "advance":      ["get_market_breadth"],
+        "decline":      ["get_market_breadth"],
+        # Events
+        "expiry":       ["get_upcoming_events"],
+        "earnings":     ["get_upcoming_events"],
+        "events":       ["get_upcoming_events"],
+        "rbi":          ["get_upcoming_events"],
+        # Alerts
+        "alert":        ["set_price_alert", "set_technical_alert"],
+        "notify":       ["set_price_alert"],
+        "alerts":       ["list_alerts"],
+        # Morning brief (catch "brief" / "morning" without full command)
+        "brief":        ["get_market_snapshot", "get_market_news",
+                         "get_fii_dii_data", "get_market_breadth",
+                         "get_upcoming_events"],
+        "morning":      ["get_market_snapshot", "get_market_news",
+                         "get_fii_dii_data", "get_market_breadth",
+                         "get_upcoming_events"],
+    }
+
+    # Common stock name → NSE symbol (case-insensitive lookup)
+    _STOCK_NAMES: dict[str, str] = {
+        "reliance": "RELIANCE", "hdfc": "HDFCBANK", "hdfc bank": "HDFCBANK",
+        "infosys": "INFY", "infy": "INFY", "tcs": "TCS", "wipro": "WIPRO",
+        "icici": "ICICIBANK", "icici bank": "ICICIBANK",
+        "sbi": "SBIN", "state bank": "SBIN",
+        "bharti": "BHARTIARTL", "airtel": "BHARTIARTL",
+        "kotak": "KOTAKBANK", "kotak bank": "KOTAKBANK",
+        "axis": "AXISBANK", "axis bank": "AXISBANK",
+        "maruti": "MARUTI", "tata motors": "TATAMOTORS", "tatamotors": "TATAMOTORS",
+        "tata steel": "TATASTEEL", "tatasteel": "TATASTEEL",
+        "tata power": "TATAPOWER", "adani": "ADANIENT",
+        "adani ports": "ADANIPORTS", "adani ent": "ADANIENT",
+        "lt": "LT", "larsen": "LT", "bajaj finance": "BAJFINANCE",
+        "bajaj finserv": "BAJFINSV", "bajaj": "BAJFINANCE",
+        "hul": "HINDUNILVR", "hindustan unilever": "HINDUNILVR",
+        "itc": "ITC", "ongc": "ONGC", "coal india": "COALINDIA",
+        "power grid": "POWERGRID", "ntpc": "NTPC", "sun pharma": "SUNPHARMA",
+        "dr reddy": "DRREDDY", "divi": "DIVISLAB", "cipla": "CIPLA",
+        "titan": "TITAN", "asian paints": "ASIANPAINT",
+        "ultra cement": "ULTRACEMCO", "ultratech": "ULTRACEMCO",
+        "m&m": "M&M", "mahindra": "M&M",
+        "indusind": "INDUSINDBK", "bandhan": "BANDHANBNK",
+        "zomato": "ZOMATO", "paytm": "PAYTM",
+        "shakti": "SHAKTIPUMP", "shakti pumps": "SHAKTIPUMP",
+        "muthoot": "MUTHOOTFIN", "muthoot finance": "MUTHOOTFIN",
+        "oil india": "OIL",
+    }
+
     def _match_tools_in_text(self, text: str) -> list[tuple[str, dict]]:
         """
-        Scan prompt text for registered tool names and return matches.
+        Determine which tools to call, using two strategies:
 
-        This replaces the old "planner CLI call" approach: instead of asking
-        the Claude CLI which tools to call (which triggers Claude Code's
-        coding-agent behaviour), we match tool names directly in the user's
-        prompt.  The structured command prompts (MORNING_BRIEF_PROMPT,
-        ANALYZE_STOCK_PROMPT, etc.) already list tool names explicitly, so
-        simple string matching is reliable and instant.
+          1. Exact tool-name matching — for structured command prompts
+             (MORNING_BRIEF_PROMPT, ANALYZE_STOCK_PROMPT) which list tool
+             names explicitly.  Instant and reliable.
 
-        For tools that need arguments (e.g. get_quote needs symbols), we
-        try to infer them from the prompt text.  If we can't, the tool is
-        called with {} and its implementation uses sensible defaults.
+          2. Keyword inference — for freeform ``ai`` questions like
+             "how's Reliance doing?" where no tool names appear.
+             Maps natural-language keywords to relevant tools.
+
+        Also extracts stock symbols from natural language (both uppercase
+        "RELIANCE" and lowercase "reliance" / "hdfc bank").
 
         Returns list of (tool_name, arguments_dict) tuples.
         """
         import re
         known = {t["name"] for t in self.registry.anthropic_schema()}
-        matched: list[tuple[str, dict]] = []
-        seen: set[str] = set()
+        seen:    set[str]                = set()
+        matched: list[tuple[str, dict]]  = []
 
-        # Try to extract a stock symbol from the prompt, for tools that need one.
-        # Matches patterns like: "NSE:RELIANCE", '"RELIANCE"', 'of RELIANCE', etc.
-        sym_match = re.search(
-            r'(?:NSE:|BSE:)?([A-Z][A-Z0-9]{1,19})'
-            r'(?=[\s"\'.,;:\]\)—]|$)',
-            text,
-        )
-        symbol = sym_match.group(1) if sym_match else ""
-        # Filter out noise words that look like symbols
-        _noise = {
-            "NIFTY", "BANKNIFTY", "VIX", "SYSTEM", "USER", "ASSISTANT",
-            "JSON", "NSE", "BSE", "IST", "AM", "PM", "RSI", "MACD", "PE",
-            "CE", "PUT", "CALL", "BUY", "SELL", "STT", "GST", "RBI",
-            "FII", "DII", "NOT", "USE", "THE", "FOR", "AND",
-        }
-        if symbol in _noise:
-            symbol = ""
+        # ── Extract stock symbol ──────────────────────────────────
+        symbol = self._extract_symbol(text)
 
+        # ── Strategy 1: exact tool-name matching ──────────────────
         for name in known:
             if name in text and name not in seen:
                 seen.add(name)
-                # Infer arguments for common tool parameter patterns
-                args: dict = {}
-                schema = self.registry._tools[name].get("parameters", {})
-                props  = schema.get("properties", {})
-                if symbol:
-                    if "symbol" in props:
-                        args["symbol"] = symbol
-                    elif "symbols" in props:
-                        args["symbols"] = [f"NSE:{symbol}"]
-                matched.append((name, args))
+
+        # ── Strategy 2: keyword inference (freeform questions) ────
+        text_lower = text.lower()
+        for keyword, tools in self._KEYWORD_TOOL_MAP.items():
+            if keyword in text_lower:
+                for t in tools:
+                    if t in known and t not in seen:
+                        seen.add(t)
+
+        # ── Auto-add stock-specific tools if symbol detected ──────
+        if symbol and not seen.intersection({
+            "get_quote", "technical_analyse", "get_stock_news",
+            "fundamental_analyse",
+        }):
+            for default in ("get_quote",):
+                if default in known:
+                    seen.add(default)
+
+        # ── Build (name, args) tuples ─────────────────────────────
+        for name in seen:
+            args: dict = {}
+            schema = self.registry._tools[name].get("parameters", {})
+            props  = schema.get("properties", {})
+            if symbol:
+                if "symbol" in props:
+                    args["symbol"] = symbol
+                elif "symbols" in props:
+                    args["symbols"] = [f"NSE:{symbol}"]
+                elif "underlying" in props:
+                    args["underlying"] = symbol
+            matched.append((name, args))
 
         return matched
+
+    def _extract_symbol(self, text: str) -> str:
+        """
+        Extract a stock symbol from user text.
+
+        Handles:
+          - Explicit symbols: "NSE:RELIANCE", "RELIANCE"
+          - Natural names:    "reliance", "hdfc bank", "tata motors"
+        """
+        import re
+
+        # 1. Try the stock-name dictionary first (longest match wins)
+        text_lower = text.lower()
+        best_name = ""
+        best_sym  = ""
+        for name, sym in self._STOCK_NAMES.items():
+            if name in text_lower and len(name) > len(best_name):
+                best_name = name
+                best_sym  = sym
+        if best_sym:
+            return best_sym
+
+        # 2. Fall back to uppercase regex: "NSE:RELIANCE" or standalone "RELIANCE"
+        _noise = {
+            "NIFTY", "BANKNIFTY", "VIX", "SYSTEM", "USER", "ASSISTANT",
+            "JSON", "NSE", "BSE", "IST", "RSI", "MACD", "PE", "CE", "PUT",
+            "CALL", "BUY", "SELL", "STT", "GST", "RBI", "FII", "DII",
+            "NOT", "USE", "THE", "FOR", "AND", "NFO", "CNC", "MIS",
+            "NRML", "SL", "AM", "PM", "EMA", "SMA", "ATR",
+        }
+        m = re.search(
+            r'(?:NSE:|BSE:)?([A-Z][A-Z0-9&]{1,19})'
+            r'(?=[\s"\'.,;:\]\)—?!]|$)',
+            text,
+        )
+        if m and m.group(1) not in _noise:
+            return m.group(1)
+
+        return ""
 
 
 # ── OpenAI subscription provider (session token) ───────────────

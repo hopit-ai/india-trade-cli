@@ -438,4 +438,76 @@ def build_registry() -> ToolRegistry:
         fn=lambda: get_market_breadth(),
     )
 
+    # ── Alerts ─────────────────────────────────────────────────
+    from engine.alerts import alert_manager
+
+    reg.register(
+        name="set_price_alert",
+        description=(
+            "Set a price alert for a stock or index. "
+            "E.g. alert when NIFTY crosses 22500, or when RELIANCE goes above 2800."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol":    {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
+                "condition": {"type": "string", "enum": ["ABOVE", "BELOW", "CROSSES"]},
+                "threshold": {"type": "number", "description": "Price level"},
+                "exchange":  {"type": "string", "default": "NSE"},
+            },
+            "required": ["symbol", "condition", "threshold"],
+        },
+        fn=lambda symbol, condition, threshold, exchange="NSE": {
+            "status": "created",
+            "alert": alert_manager.add_price_alert(symbol, condition, threshold, exchange).describe(),
+        },
+    )
+
+    reg.register(
+        name="set_technical_alert",
+        description=(
+            "Set a technical indicator alert. "
+            "E.g. alert when RELIANCE RSI goes above 70, or INFY RSI below 30."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol":    {"type": "string"},
+                "indicator": {"type": "string", "enum": ["RSI", "MACD", "ADX", "ATR"]},
+                "condition": {"type": "string", "enum": ["ABOVE", "BELOW"]},
+                "threshold": {"type": "number"},
+                "exchange":  {"type": "string", "default": "NSE"},
+            },
+            "required": ["symbol", "indicator", "condition", "threshold"],
+        },
+        fn=lambda symbol, indicator, condition, threshold, exchange="NSE": {
+            "status": "created",
+            "alert": alert_manager.add_technical_alert(
+                symbol, indicator, condition, threshold, exchange
+            ).describe(),
+        },
+    )
+
+    reg.register(
+        name="list_alerts",
+        description="List all active price and technical alerts.",
+        parameters={"type": "object", "properties": {}, "required": []},
+        fn=lambda: {"alerts": alert_manager.list_alerts()},
+    )
+
+    reg.register(
+        name="remove_alert",
+        description="Remove an alert by its ID.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "alert_id": {"type": "string", "description": "Alert ID to remove"},
+            },
+            "required": ["alert_id"],
+        },
+        fn=lambda alert_id: {
+            "removed": alert_manager.remove_alert(alert_id),
+        },
+    )
+
     return reg

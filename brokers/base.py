@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 
 
@@ -241,6 +242,28 @@ class BrokerAPI(ABC):
     def cancel_order(self, order_id: str) -> bool:
         """Cancel a pending order. Returns True on success."""
         ...
+
+    # ── Historical Data ────────────────────────────────────────
+
+    def get_historical_data(
+        self,
+        symbol:    str,
+        exchange:  str = "NSE",
+        interval:  str = "day",
+        from_date: Optional[datetime] = None,
+        to_date:   Optional[datetime] = None,
+    ) -> list[dict]:
+        """
+        Return historical OHLCV candles as list of dicts.
+
+        Each dict: {date, open, high, low, close, volume}
+
+        Override in broker subclasses that support historical data.
+        Falls back to NotImplementedError so the caller can use mock data.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support historical data"
+        )
 
     # ── Convenience helpers (non-abstract, shared by all) ─────
 

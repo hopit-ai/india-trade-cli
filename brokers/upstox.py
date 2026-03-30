@@ -351,6 +351,57 @@ class UpstoxAPI(BrokerAPI):
         resp.raise_for_status()
         return resp.json()
 
+    # ── Historical Data ──────────────────────────────────────
+
+    def get_historical_data(
+        self,
+        symbol:    str,
+        exchange:  str = "NSE",
+        interval:  str = "day",
+        from_date: Optional[datetime] = None,
+        to_date:   Optional[datetime] = None,
+    ) -> list[dict]:
+        interval_map = {
+            "day":      "1d",
+            "minute":   "1minute",
+            "5minute":  "5minute",
+            "15minute": "15minute",
+            "30minute": "30minute",
+            "60minute": "60minute",
+        }
+        upstox_interval = interval_map.get(interval, "1d")
+        to_date   = to_date   or datetime.now()
+        from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
+
+        to_str   = to_date.strftime("%Y-%m-%d")
+        from_str = from_date.strftime("%Y-%m-%d")
+
+        # Upstox instrument key format for equities: NSE_EQ|<symbol>
+        exchange_seg = f"{exchange}_EQ"
+        instrument_key = f"{exchange_seg}|{symbol}"
+
+        try:
+            url = f"{UPSTOX_BASE}/historical-candle/{instrument_key}/{upstox_interval}/{to_str}/{from_str}"
+            resp = httpx.get(url, headers=self._headers(), timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+
+            candles = data.get("data", {}).get("candles", [])
+            # Each candle: [timestamp, open, high, low, close, volume, oi]
+            return [
+                {
+                    "date":   candle[0],
+                    "open":   candle[1],
+                    "high":   candle[2],
+                    "low":    candle[3],
+                    "close":  candle[4],
+                    "volume": candle[5],
+                }
+                for candle in candles
+            ]
+        except Exception as e:
+            raise RuntimeError(f"Upstox historical data error: {e}") from e
+
     # ── Helpers ───────────────────────────────────────────────
 
     def _map_product(self, product: str) -> str:
