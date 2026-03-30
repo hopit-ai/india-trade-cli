@@ -1,60 +1,204 @@
-# 🇮🇳 Indian Trading Platform
+# India Trade CLI
 
-A guided, AI-powered stock & options trading terminal for Indian markets (NSE/BSE/NFO).
+AI-powered multi-agent stock & options analysis platform for Indian markets (NSE/BSE/NFO).
 
-> **Philosophy:** Every trade must be justified — fundamental → technical → options → risk → confirm.
+> **Philosophy:** Every trade must be justified. Analyze first, debate second, execute third.
 
-Built with Claude (Anthropic) as the reasoning engine, supporting Zerodha and Groww as brokers.
+Inspired by [TradingAgents](https://github.com/TauricResearch/TradingAgents) (Tauric Research) but purpose-built for India with real broker integration.
+
+---
+
+## Architecture
+
+```
+analyze RELIANCE
+        |
+  [5 Analyst Agents]  ← pure Python, parallel
+  Technical | Fundamental | Options | News+Sentiment(LLM) | Risk Manager
+        |
+  [Multi-Round Debate]  ← 5 LLM calls
+  Bull R1 → Bear R1 → Bull Rebuttal → Bear Rebuttal → Facilitator
+        |
+  [Fund Manager Synthesis]  ← 1 LLM call
+  Verdict: BUY/SELL/HOLD + confidence + rationale
+        |
+  [Risk Management Team]  ← pure Python
+  Aggressive | Neutral | Conservative trade plans
+        |
+  [Trade Plan]
+  Entry orders, stop-loss, targets, position sizing, scaling logic
+```
+
+**Total: 8 LLM calls per analysis.** Analysts and trade plans are pure Python for speed and accuracy.
 
 ---
 
 ## Features
 
-- 🔐 Login via **Zerodha** (Kite Connect) or **Groww** (Partner API)
-- 📊 Live quotes, OHLCV history, options chain
-- 🧠 **Claude AI** guides every decision step-by-step
-- 📰 Real-time news, corporate events, RBI calendar
-- 📐 Technical analysis: RSI, MACD, MAs, support/resistance
-- 📋 Fundamental analysis: PE, ROE, ROCE, Screener.in data
-- 🎲 Options analytics: Greeks, IV rank, PCR, max pain, payoff
-- 📝 **Paper trading** mode — practice without real money
-- 💼 Portfolio tracker with live P&L and net Greeks
-- 🖥️ Claude Code-style split terminal UI
+### Multi-Agent Analysis
+- 5 specialist analysts run in parallel (Technical, Fundamental, Options, News/Macro, Risk)
+- LLM-powered news sentiment analysis (understands context, not just keywords)
+- 2-round bull/bear debate with facilitator summary
+- Fund manager synthesis with structured verdict
+
+### Risk Management Team
+- 3 risk personas: Aggressive (3% risk, tight stops), Neutral (2%, balanced), Conservative (1%, wide stops)
+- Side-by-side comparison of all 3 trade plans
+- ATR-based dynamic stop-loss, VIX-adjusted position sizing
+- Dual profit targets with trailing logic
+
+### Trader Agent
+- Converts "BUY RELIANCE" into an executable trade plan
+- Risk-based position sizing (not fixed %)
+- Scale-in logic (50% market + 50% limit at support)
+- Entry orders, stop-loss, target 1 (partial close), target 2, trailing stop
+- F&O lot size handling for options strategies
+
+### India Intelligence
+- Earnings season calendar (NIFTY 50 stocks, pre-earnings IV analysis)
+- FII/DII flow intelligence (streaks, divergence detection, momentum signals)
+- Event-driven strategies (expiry, RBI policy, budget, earnings)
+- 15+ India-specific calendar patterns (Monday gaps, Diwali rally, FY-end selling)
+
+### Backtesting & Simulation
+- 4 strategies: RSI, EMA crossover, MACD, Bollinger Bands
+- Real historical data via yfinance (works without broker login)
+- Metrics: CAGR, Sharpe ratio, max drawdown, win rate vs buy-and-hold
+- What-if simulator: "If NIFTY drops 3%, what happens to my portfolio?"
+
+### Trade Memory
+- Every analysis stored with full market context (VIX, FII flows, analyst scores)
+- Query past analyses by symbol, date, conditions
+- Record outcomes (WIN/LOSS/P&L) to track performance over time
+- Past analyses injected into synthesis prompt for continuity
+
+### Market Data
+- Real-time quotes via Fyers API (free)
+- Free data via yfinance when no broker logged in (~15 min delayed)
+- Historical OHLCV up to 20 years
+- NSE options chain, PCR, max pain, IV rank
+- FII/DII flows, market breadth, sector indices
+
+### 6 AI Providers
+| Provider | Command | Cost |
+|----------|---------|------|
+| Claude subscription | `provider claude_subscription` | Free (your plan) |
+| Claude API | `provider anthropic` | Pay per token |
+| Gemini | `provider gemini` | Free tier available |
+| OpenAI GPT-4o | `provider openai` | Pay per token |
+| ChatGPT subscription | `provider openai_subscription` | Unofficial |
+| Gemini Vertex AI | `provider gemini_subscription` | GCP billing |
+
+### 6 Brokers
+| Broker | API Cost | Auth Method |
+|--------|----------|-------------|
+| Zerodha | Paid (Rs 2k/mo) | OAuth redirect |
+| Fyers | Free | OAuth redirect |
+| Upstox | Free | OAuth redirect |
+| Angel One | Free | TOTP auto-login |
+| Groww | Free (limited) | OAuth redirect |
+| Mock/Demo | Free | No login needed |
 
 ---
 
-## Setup
+## Quick Start
 
 ### 1. Clone & install
 
 ```bash
-git clone <repo>
-cd trading-platform
+git clone https://github.com/ArchieIndian/india-trade-cli.git
+cd india-trade-cli
 python -m venv .venv
-source .venv/bin/activate       # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment
-
-```bash
-cp .env.example .env
-# Edit .env and fill in your API keys
-```
-
-### Keys needed
-
-| Key | Where to get |
-|-----|-------------|
-| `KITE_API_KEY` + `KITE_API_SECRET` | [developers.kite.trade](https://developers.kite.trade) |
-| `GROWW_CLIENT_ID` + `GROWW_CLIENT_SECRET` | Groww Partner portal |
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) |
-| `NEWSAPI_KEY` | [newsapi.org](https://newsapi.org) (free tier) |
-
-### 3. Run
+### 2. Run
 
 ```bash
 python -m app.main
+```
+
+First run will prompt you to:
+1. Choose a broker (or Demo for mock data)
+2. Choose an AI provider (Claude subscription, Gemini free tier, etc.)
+
+**No broker needed for analysis** — yfinance provides free Indian market data.
+
+### 3. Optional: Fyers setup (free real-time data)
+
+1. Create account at [fyers.in](https://fyers.in)
+2. Create API app at [myapi.fyers.in](https://myapi.fyers.in)
+3. Set redirect URL: `http://127.0.0.1:8765/fyers/callback`
+4. Login via the platform: `login` → choose Fyers
+
+---
+
+## CLI Commands
+
+### Core Analysis
+```
+analyze RELIANCE         Full multi-agent analysis (8 LLM calls)
+ai <message>             Chat with AI agent (freeform questions)
+morning-brief            Daily market context + AI narrative
+```
+
+### Market Data
+```
+earnings                 Quarterly results calendar (NIFTY 50)
+earnings RELIANCE TCS    Earnings for specific stocks
+flows                    FII/DII flow intelligence with signals
+events                   Event-driven strategy recommendations
+patterns                 Active India-specific market patterns
+```
+
+### Backtesting & Simulation
+```
+backtest RELIANCE rsi              RSI overbought/oversold strategy
+backtest RELIANCE ma 20 50         20/50 EMA crossover
+backtest RELIANCE macd             MACD signal crossover
+backtest RELIANCE bb               Bollinger Bands
+whatif nifty -3                    What if NIFTY drops 3%?
+whatif RELIANCE -10                What if RELIANCE drops 10%?
+whatif RELIANCE -5 HDFCBANK 3      Custom multi-stock scenario
+```
+
+### Portfolio & Trading
+```
+portfolio                Unified view — all brokers, Greeks, risk
+holdings                 Long-term delivery holdings
+positions                Open intraday/F&O positions
+orders                   Today's orders and status
+funds                    Available cash and margin
+```
+
+### Memory & History
+```
+memory                   Recent trade analyses
+memory stats             Performance statistics (win rate, P&L)
+memory RELIANCE          Past analyses for a symbol
+memory outcome ID WIN 1250   Record trade outcome
+```
+
+### Alerts
+```
+alert RELIANCE above 2800        Price alert
+alert NIFTY below 22000          Price alert
+alert RELIANCE RSI above 70      Technical indicator alert
+alert list                       Show all active alerts
+alert remove <ID>                Remove an alert
+```
+
+### Account
+```
+login                    Connect to a broker
+connect                  Add a second broker
+disconnect               Remove a secondary broker
+brokers                  List all connected brokers
+logout                   Disconnect all brokers
+profile                  Account details
+provider                 Show/switch AI provider
+clear                    Reset AI conversation history
 ```
 
 ---
@@ -62,67 +206,128 @@ python -m app.main
 ## Project Structure
 
 ```
-trading-platform/
-├── brokers/            # Broker API integrations
-│   ├── base.py         # Unified BrokerAPI abstract interface
-│   ├── zerodha.py      # Zerodha Kite Connect implementation
-│   ├── groww.py        # Groww REST API implementation
-│   └── session.py      # Login flow + singleton session
-├── market/             # Market data layer
-│   ├── quotes.py       # Live quotes
-│   ├── history.py      # OHLCV historical data
-│   ├── options.py      # Options chain
-│   ├── indices.py      # NIFTY, BANKNIFTY, India VIX
-│   ├── news.py         # NewsAPI + RSS feeds
-│   ├── events.py       # Earnings, RBI, expiry calendar
-│   └── sentiment.py    # FII/DII data + news sentiment
-├── analysis/           # Analysis engines
-│   ├── technical.py    # RSI, MACD, MAs, pivots
-│   ├── fundamental.py  # PE, ROE, Screener.in data
-│   └── options.py      # Greeks, IV rank, payoff
-├── agent/              # Claude AI layer
-│   ├── core.py         # TradingAgent (tool-calling)
-│   ├── tools.py        # Tool schemas for Claude
-│   └── prompts.py      # System + command prompts
-├── engine/             # Trading logic
-│   ├── paper.py        # Paper trading engine
-│   ├── portfolio.py    # Portfolio tracker + Greeks
-│   └── strategy.py     # Strategy recommendation engine
-├── platform/           # CLI entry points
-│   ├── main.py         # App entry point
-│   ├── repl.py         # REPL command loop
-│   └── commands/       # Individual command handlers
-│       ├── morning_brief.py
-│       └── trade.py
-├── ui/                 # Textual TUI
-│   ├── app.py          # Split panel layout
-│   └── widgets/        # Reusable UI components
-└── web/                # FastAPI backend (future)
-    └── api.py
+india-trade-cli/
+├── agent/                    # AI layer
+│   ├── core.py               # TradingAgent + 6 LLM providers
+│   ├── multi_agent.py         # Multi-agent pipeline (analysts, debate, synthesis)
+│   ├── tools.py               # 40+ tool definitions for LLM function calling
+│   └── prompts.py             # System prompt + command templates
+├── brokers/                  # Broker integrations
+│   ├── base.py                # Unified BrokerAPI abstract interface
+│   ├── zerodha.py             # Zerodha Kite Connect
+│   ├── fyers.py               # Fyers API v3
+│   ├── upstox.py              # Upstox API v2
+│   ├── angelone.py            # Angel One SmartAPI
+│   ├── groww.py               # Groww Partner API
+│   ├── mock.py                # Mock broker (paper trading)
+│   └── session.py             # Multi-broker session manager
+├── market/                   # Market data
+│   ├── quotes.py              # Live quotes (broker → yfinance fallback)
+│   ├── history.py             # Historical OHLCV (broker → yfinance → mock)
+│   ├── options.py             # NSE options chain
+│   ├── indices.py             # NIFTY 50, BANKNIFTY, India VIX, sectors
+│   ├── news.py                # NewsAPI + RSS feeds (ET, MC, BS)
+│   ├── events.py              # Earnings calendar, RBI, expiry dates
+│   ├── sentiment.py           # FII/DII data + market breadth
+│   ├── earnings.py            # Earnings season agent + pre-earnings IV
+│   ├── flow_intel.py          # FII/DII flow intelligence + signals
+│   └── yfinance_provider.py   # Free NSE/BSE data via Yahoo Finance
+├── analysis/                 # Analysis engines
+│   ├── technical.py           # RSI, MACD, EMAs, Bollinger, ATR, pivots
+│   ├── fundamental.py         # PE, ROE, ROCE from Screener.in
+│   └── options.py             # Greeks, IV rank, payoff calculator
+├── engine/                   # Trading logic
+│   ├── trader.py              # Trader Agent + 3 risk personas
+│   ├── backtest.py            # Strategy backtester (RSI, MA, MACD, BB)
+│   ├── simulator.py           # What-if portfolio stress testing
+│   ├── memory.py              # Trade memory (situation-outcome pairs)
+│   ├── patterns.py            # India-specific market pattern knowledge
+│   ├── event_strategies.py    # Event-driven strategy recommendations
+│   ├── alerts.py              # Price + technical alerts with polling
+│   ├── paper.py               # Paper trading engine
+│   ├── portfolio.py           # Portfolio tracker + Greeks
+│   └── strategy.py            # Strategy recommendation engine
+├── app/                      # Application layer
+│   ├── main.py                # Entry point
+│   ├── repl.py                # Command REPL with tab-complete
+│   └── commands/              # Command handlers
+├── config/                   # Configuration
+│   └── credentials.py        # OS keychain credential management
+├── web/                      # Web API (FastAPI)
+│   └── api.py                # REST + WebSocket endpoints
+└── requirements.txt
 ```
 
 ---
 
-## Trading Modes
+## How Multi-Agent Analysis Works
 
-| Mode | Description |
-|------|-------------|
-| `PAPER` | Simulated trades, no real money. **Default.** |
-| `LIVE`  | Real orders via connected broker. Requires explicit switch. |
+When you run `analyze RELIANCE`:
 
-Switch in `.env`: `TRADING_MODE=PAPER` or `TRADING_MODE=LIVE`
+**Phase 1: Analyst Team** (parallel, ~2s)
+- Technical Analyst: RSI, MACD, EMAs, support/resistance, volume
+- Fundamental Analyst: PE, ROE, ROCE, debt, growth, promoter holding
+- Options Analyst: PCR, max pain, IV rank
+- News & Macro Analyst: headlines, FII/DII, breadth, events (1 LLM call for sentiment)
+- Risk Manager: VIX, position sizing, portfolio exposure
+
+**Phase 2: Research Debate** (sequential, ~30-60s)
+- Round 1: Bull builds investment case → Bear counters with risks
+- Round 2: Bull rebuts bear's points → Bear's final counter
+- Facilitator: summarizes agreements, disagreements, picks winner
+
+**Phase 3: Fund Manager Synthesis** (1 LLM call, ~15s)
+- Weighs analyst data + debate + trade memory + market patterns
+- Outputs: VERDICT, CONFIDENCE, STRATEGY, ENTRY, SL, TARGET
+
+**Phase 4: Risk Management Team** (pure Python, instant)
+- Generates 3 trade plans: Aggressive, Neutral, Conservative
+- Side-by-side comparison with different sizing, stops, targets
+
+**Phase 5: Trade Plan** (pure Python, instant)
+- Concrete entry orders (market/limit/scale-in)
+- Dynamic stop-loss (ATR-based, support-aware)
+- Dual profit targets with trailing logic
+- Pre-condition checks (events, VIX, confidence)
 
 ---
 
-## CLI Commands
+## Environment Variables
 
+```bash
+# AI Provider (choose one)
+AI_PROVIDER=claude_subscription    # or: anthropic, openai, gemini
+ANTHROPIC_API_KEY=sk-ant-...       # only if using anthropic provider
+OPENAI_API_KEY=sk-...              # only if using openai provider
+GEMINI_API_KEY=AIza...             # only if using gemini provider
+
+# Trading
+TOTAL_CAPITAL=200000               # your trading capital in INR
+DEFAULT_RISK_PCT=2                 # max risk per trade (%)
+TRADING_MODE=PAPER                 # PAPER or LIVE
+
+# News (optional)
+NEWSAPI_KEY=...                    # free at newsapi.org
 ```
-login           → Connect to Zerodha or Groww
-morning-brief   → Daily market context + AI narrative
-analyze <SYM>   → Full fundamental + technical + options analysis
-portfolio       → Live holdings, positions, Greeks
-trade           → Interactive strategy builder
-orders          → Today's orders and status
-paper           → Toggle paper trading mode
-help            → Claude-guided help
-```
+
+---
+
+## Roadmap
+
+- [x] Phase 1: WebSearch, historical OHLCV, smart tools, alerts
+- [x] Phase 2: Multi-agent analysis (5 analysts + debate + synthesis)
+- [x] Phase 3: Trade memory + India pattern knowledge base
+- [x] Phase 4: Strategy backtesting + what-if simulator
+- [x] Phase 5: Earnings agent, FII/DII intelligence, event strategies
+- [x] Trader Agent with 3 risk personas
+- [x] Multi-round debate with facilitator
+- [ ] SEBI compliance layer (margin validation, tax harvesting)
+- [ ] Personal trading style profile (learn from trade outcomes)
+- [ ] Full LLM multi-agent mode (`--deep`, 11+ LLM calls)
+- [ ] WhatsApp/Telegram bot integration
+
+---
+
+## License
+
+Private. All rights reserved.
