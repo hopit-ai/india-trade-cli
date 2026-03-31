@@ -347,12 +347,12 @@ class OptionsAnalyst(BaseAnalyst):
                 has_data = True
                 points.append(f"Max Pain: {mp_result['max_pain']}")
 
-            # IV Rank
+            # IV Rank (note: mock_iv_rank is synthetic — don't count as real data)
             iv_result = self.registry.execute("get_iv_rank", {"symbol": symbol})
             if isinstance(iv_result, dict) and "error" not in iv_result and "iv_rank" in iv_result:
                 iv_rank = iv_result["iv_rank"]
                 data["iv_rank"] = iv_rank
-                has_data = True
+                # Don't set has_data — IV rank is always mock, not from real options market
                 if iv_rank is not None:
                     if iv_rank > 50:
                         points.append(f"IV Rank: {iv_rank} (elevated — good for selling premium)")
