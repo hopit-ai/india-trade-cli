@@ -478,30 +478,33 @@ def cmd_help() -> None:
 # ── Alert command handler ──────────────────────────────────────
 
 def _handle_backtest_command(args: list[str]) -> None:
-    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y]"""
-    if not args:
+    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain]"""
+    from engine.output import parse_output_flags, handle_output_flags
+
+    clean_args, wants_pdf, wants_explain = parse_output_flags(args)
+    if not clean_args:
         console.print(
-            "[red]Usage: backtest SYMBOL [strategy] [args][/red]\n"
+            "[red]Usage: backtest SYMBOL [strategy] [--pdf] [--explain][/red]\n"
             "[dim]  backtest RELIANCE rsi              RSI(30/70) strategy\n"
             "  backtest RELIANCE ma 20 50          EMA crossover\n"
-            "  backtest RELIANCE macd              MACD signal crossover\n"
-            "  backtest RELIANCE bb                Bollinger Bands\n"
+            "  backtest RELIANCE macd --pdf         Export to PDF\n"
+            "  backtest RELIANCE bb --explain       Add simple explanation\n"
             "  Strategies: rsi, ma, ema, macd, bb/bollinger[/dim]"
         )
         return
 
     from engine.backtest import run_backtest
 
-    symbol = args[0].upper()
-    strategy_name = args[1].lower() if len(args) > 1 else "rsi"
-    strategy_args = args[2:] if len(args) > 2 else []
+    symbol = clean_args[0].upper()
+    strategy_name = clean_args[1].lower() if len(clean_args) > 1 else "rsi"
+    strategy_args = clean_args[2:] if len(clean_args) > 2 else []
 
     # Check for --period flag
     period = "1y"
-    if "--period" in args:
-        idx = args.index("--period")
-        if idx + 1 < len(args):
-            period = args[idx + 1]
+    if "--period" in clean_args:
+        idx = clean_args.index("--period")
+        if idx + 1 < len(clean_args):
+            period = clean_args[idx + 1]
             strategy_args = [a for a in strategy_args if a not in ("--period", period)]
 
     console.print(f"\n[dim]Running backtest: {symbol} / {strategy_name} / {period}...[/dim]")
@@ -515,6 +518,19 @@ def _handle_backtest_command(args: list[str]) -> None:
         )
         result.print_summary()
         result.print_trades(10)
+        if wants_pdf or wants_explain:
+            # Build text summary for export
+            summary = (
+                f"Backtest: {result.strategy_name} on {result.symbol}\n"
+                f"Period: {result.start_date} to {result.end_date}\n"
+                f"Return: {result.total_return:+.2f}% vs Buy&Hold: {result.buy_hold_return:+.2f}%\n"
+                f"Sharpe: {result.sharpe_ratio:.2f}, Max DD: {result.max_drawdown:.2f}%\n"
+                f"Trades: {result.total_trades}, Win Rate: {result.win_rate:.1f}%\n"
+                f"Avg Win: {result.avg_win:+.2f}%, Avg Loss: {result.avg_loss:+.2f}%\n"
+                f"Profit Factor: {result.profit_factor:.2f}"
+            )
+            handle_output_flags(summary, f"Backtest {symbol} {strategy_name}",
+                                wants_pdf, wants_explain)
     except Exception as e:
         console.print(f"[red]Backtest failed: {e}[/red]")
 
@@ -874,12 +890,20 @@ def run_repl(broker: BrokerAPI) -> None:
                 brief_run(use_agent=True)
 
             elif command == "analyze":
-                symbol = args[0].upper() if args else ""
+                from engine.output import parse_output_flags, handle_output_flags
+                clean_args, wants_pdf, wants_explain = parse_output_flags(args)
+                symbol = clean_args[0].upper() if clean_args else ""
                 if not symbol:
-                    console.print("[red]Usage: analyze <SYMBOL>   e.g. analyze RELIANCE[/red]")
+                    console.print("[red]Usage: analyze <SYMBOL> [--pdf] [--explain][/red]")
                 else:
                     agent = get_agent()
-                    agent.run_multi_agent_analysis(symbol)
+                    output = agent.run_multi_agent_analysis(symbol)
+                    if wants_pdf or wants_explain:
+                        handle_output_flags(
+                            output or "", f"Analysis {symbol}",
+                            wants_pdf, wants_explain,
+                            llm_provider=agent._provider if wants_explain else None,
+                        )
 
             elif command == "clear":
                 agent = get_agent()
@@ -941,9 +965,11 @@ def run_repl(broker: BrokerAPI) -> None:
                 print_profile()
 
             elif command == "deep-analyze":
-                symbol = args[0].upper() if args else ""
+                from engine.output import parse_output_flags, handle_output_flags
+                clean_args, wants_pdf, wants_explain = parse_output_flags(args)
+                symbol = clean_args[0].upper() if clean_args else ""
                 if not symbol:
-                    console.print("[red]Usage: deep-analyze <SYMBOL>   e.g. deep-analyze RELIANCE[/red]")
+                    console.print("[red]Usage: deep-analyze <SYMBOL> [--pdf] [--explain][/red]")
                 else:
                     agent = get_agent()
                     try:
@@ -952,7 +978,13 @@ def run_repl(broker: BrokerAPI) -> None:
                             registry=agent._registry,
                             llm_provider=agent._provider,
                         )
-                        deep.analyze(symbol)
+                        output = deep.analyze(symbol)
+                        if wants_pdf or wants_explain:
+                            handle_output_flags(
+                                output or "", f"Deep Analysis {symbol}",
+                                wants_pdf, wants_explain,
+                                llm_provider=agent._provider if wants_explain else None,
+                            )
                     except Exception as e:
                         console.print(f"[red]Deep analysis failed: {e}[/red]")
                         console.print("[dim]Falling back to standard analysis...[/dim]")
@@ -1016,15 +1048,22 @@ def run_repl(broker: BrokerAPI) -> None:
                 _handle_whatif_command(args)
 
             elif command == "ai":
-                message = " ".join(args).strip()
+                from engine.output import parse_output_flags, handle_output_flags
+                clean_args, wants_pdf, wants_explain = parse_output_flags(args)
+                message = " ".join(clean_args).strip()
                 if not message:
                     console.print(
-                        "[dim]Usage: ai <your message>    "
-                        "e.g. ai What's the market doing today?[/dim]"
+                        "[dim]Usage: ai <your message> [--pdf] [--explain][/dim]"
                     )
                 else:
                     agent = get_agent()
-                    agent.chat(message)
+                    output = agent.chat(message)
+                    if wants_pdf or wants_explain:
+                        handle_output_flags(
+                            output or "", f"AI Chat",
+                            wants_pdf, wants_explain,
+                            llm_provider=agent._provider if wants_explain else None,
+                        )
 
             elif command == "provider":
                 if args:
