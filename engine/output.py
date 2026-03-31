@@ -207,18 +207,19 @@ def _rule_based_explain(content: str) -> str:
 
 # ── Flag Parser ──────────────────────────────────────────────
 
-def parse_output_flags(args: list[str]) -> tuple[list[str], bool, bool]:
+def parse_output_flags(args: list[str]) -> tuple[list[str], bool, bool, bool]:
     """
-    Extract --pdf and --explain flags from command args.
+    Extract --pdf, --explain, and --explain-save flags from command args.
 
     Returns:
-        (clean_args, wants_pdf, wants_explain)
+        (clean_args, wants_pdf, wants_explain, wants_explain_save)
     """
-    wants_pdf = "--pdf" in args
-    wants_explain = "--explain" in args
+    wants_explain_save = "--explain-save" in args
+    wants_pdf = "--pdf" in args or wants_explain_save
+    wants_explain = "--explain" in args or wants_explain_save
 
-    clean = [a for a in args if a not in ("--pdf", "--explain")]
-    return clean, wants_pdf, wants_explain
+    clean = [a for a in args if a not in ("--pdf", "--explain", "--explain-save")]
+    return clean, wants_pdf, wants_explain, wants_explain_save
 
 
 def handle_output_flags(
@@ -250,8 +251,7 @@ def handle_output_flags(
         console.rule(style="green")
 
         # Append explanation to output for PDF
-        if wants_pdf:
-            output = output + "\n\n" + _strip_rich_markup(explanation)
+        output = output + "\n\n--- SIMPLE EXPLANATION ---\n\n" + _strip_rich_markup(explanation)
 
     if wants_pdf:
         filepath = export_to_pdf(output, title=title)

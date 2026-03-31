@@ -489,7 +489,7 @@ def _handle_backtest_command(args: list[str]) -> None:
     """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain]"""
     from engine.output import parse_output_flags, handle_output_flags
 
-    clean_args, wants_pdf, wants_explain = parse_output_flags(args)
+    clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
     if not clean_args:
         console.print(
             "[red]Usage: backtest SYMBOL [strategy] [--pdf] [--explain][/red]\n"
@@ -906,7 +906,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "analyze":
                 from engine.output import parse_output_flags, handle_output_flags
-                clean_args, wants_pdf, wants_explain = parse_output_flags(args)
+                clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
                 symbol = clean_args[0].upper() if clean_args else ""
                 if not symbol:
                     console.print("[red]Usage: analyze <SYMBOL> [--pdf] [--explain][/red]")
@@ -984,7 +984,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "deep-analyze":
                 from engine.output import parse_output_flags, handle_output_flags
-                clean_args, wants_pdf, wants_explain = parse_output_flags(args)
+                clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
                 symbol = clean_args[0].upper() if clean_args else ""
                 if not symbol:
                     console.print("[red]Usage: deep-analyze <SYMBOL> [--pdf] [--explain][/red]")
@@ -1141,7 +1141,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "ai":
                 from engine.output import parse_output_flags, handle_output_flags
-                clean_args, wants_pdf, wants_explain = parse_output_flags(args)
+                clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
                 message = " ".join(clean_args).strip()
                 if not message:
                     console.print(
