@@ -499,7 +499,8 @@ class ClaudeCLIProvider(LLMProvider):
             console.print(f"[dim]  {len(collected)} tool results fetched[/dim]")
 
         # ── Fast path: simple data queries skip the LLM ──────────
-        # If the only tools are data-only (quote, snapshot, vix, funds),
+        # If the only tools are data-only (quote, snapshot, vix, funds)
+        # AND the user is asking a simple data question (not seeking advice),
         # format the results directly — no need for a 30s LLM call.
         data_only_tools = {
             "get_quote", "get_market_snapshot", "get_vix",
@@ -507,8 +508,21 @@ class ClaudeCLIProvider(LLMProvider):
             "get_positions", "get_orders", "get_market_breadth",
             "get_fii_dii_data", "list_alerts",
         }
+        # Detect if user wants reasoning (not just data)
+        _reasoning_keywords = {
+            "should", "buy", "sell", "hold", "recommend", "opinion",
+            "think", "suggest", "advise", "compare", "better",
+            "analysis", "analyze", "analyse", "why", "how",
+            "strategy", "invest", "good time", "right time",
+            "worth", "bullish", "bearish", "outlook", "view",
+        }
+        needs_reasoning = any(
+            kw in last_user_msg.lower() for kw in _reasoning_keywords
+        )
         matched_names = {t[0] for t in tool_plan}
-        if collected and matched_names and matched_names.issubset(data_only_tools):
+        if (collected and matched_names and
+                matched_names.issubset(data_only_tools) and
+                not needs_reasoning):
             # Format data directly — no LLM needed
             response = _format_tool_results_directly(collected, last_user_msg)
             console.print(response, highlight=False)
@@ -711,6 +725,15 @@ class ClaudeCLIProvider(LLMProvider):
         "analyze":      ["get_quote", "technical_analyse", "fundamental_analyse"],
         "analyse":      ["get_quote", "technical_analyse", "fundamental_analyse"],
         "analysis":     ["get_quote", "technical_analyse", "fundamental_analyse"],
+        # Advisory — needs analysis tools for proper reasoning
+        "should":       ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "buy":          ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "sell":         ["get_quote", "technical_analyse"],
+        "invest":       ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "recommend":    ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "outlook":      ["get_quote", "technical_analyse", "get_market_snapshot"],
+        "compare":      ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "good time":    ["get_quote", "technical_analyse", "get_market_snapshot"],
         # Options
         "option":       ["get_options_chain"],
         "options":      ["get_options_chain"],
