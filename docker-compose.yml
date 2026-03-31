@@ -1,0 +1,50 @@
+# ── India Trade CLI — Docker Compose ─────────────────────────
+#
+# Usage:
+#   docker compose up cli          # Interactive REPL
+#   docker compose up bot          # Telegram bot
+#   docker compose up web          # Web UI (port 8765)
+#   docker compose up              # All services
+#
+# First time: copy .env.example to .env and fill in your keys
+
+services:
+  # ── Interactive CLI (default) ──────────────────────────────
+  cli:
+    build: .
+    container_name: trade-cli
+    stdin_open: true
+    tty: true
+    env_file: .env
+    volumes:
+      - trade-data:/root/.trading_platform    # persist tokens, memory, alerts
+      - ./output:/output                       # PDF exports
+    environment:
+      - PDF_OUTPUT_DIR=/output
+    command: python -m app.main
+
+  # ── Telegram Bot ───────────────────────────────────────────
+  bot:
+    build: .
+    container_name: trade-bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - trade-data:/root/.trading_platform
+    command: python -m bot.telegram_bot
+
+  # ── Web API ────────────────────────────────────────────────
+  web:
+    build: .
+    container_name: trade-web
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    env_file: .env
+    volumes:
+      - trade-data:/root/.trading_platform
+    command: python -c "from web.api import app; import uvicorn; uvicorn.run(app, host='0.0.0.0', port=8765)"
+
+volumes:
+  trade-data:
+    driver: local
