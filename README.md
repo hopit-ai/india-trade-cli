@@ -315,6 +315,42 @@ Quotes and prices are fetched in this priority order:
 
 ---
 
+## Position Sizing
+
+The Trader Agent calculates position size using this formula:
+
+```
+Max Risk = Capital × Risk% × VIX Adjustment
+Shares   = Max Risk / Stop-Loss Distance (per share)
+```
+
+Example (TCS at ₹2,360, VIX > 20):
+```
+Capital     = ₹200,000 (TOTAL_CAPITAL env var)
+Risk/trade  = 2% (DEFAULT_RISK_PCT env var)
+VIX factor  = 0.5 (VIX > 20 → halve position size for safety)
+Max risk    = ₹200,000 × 2% × 0.5 = ₹2,000
+SL distance = 1.5 × ATR ≈ ₹180/share
+Shares      = ₹2,000 / ₹180 = 11 shares
+Deployed    = 11 × ₹2,360 = ₹25,960 (13% of capital)
+```
+
+VIX adjustment (automatic):
+| VIX Level | Position Size |
+|-----------|--------------|
+| < 15 | 100% (normal) |
+| 15-20 | 85% |
+| 20-25 | 65% |
+| > 25 | 50% (halved) |
+
+To change defaults, set in `.env` or shell:
+```bash
+export TOTAL_CAPITAL=500000    # your actual trading capital in INR
+export DEFAULT_RISK_PCT=2      # max risk per trade (%)
+```
+
+---
+
 ## Environment Variables
 
 ```bash
@@ -324,7 +360,7 @@ ANTHROPIC_API_KEY=sk-ant-...       # only if using anthropic provider
 OPENAI_API_KEY=sk-...              # only if using openai provider
 GEMINI_API_KEY=AIza...             # only if using gemini provider
 
-# Trading
+# Trading Capital & Risk
 TOTAL_CAPITAL=200000               # your trading capital in INR
 DEFAULT_RISK_PCT=2                 # max risk per trade (%)
 TRADING_MODE=PAPER                 # PAPER or LIVE
