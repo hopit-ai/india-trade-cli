@@ -144,9 +144,9 @@ def export_to_pdf(
             pdf.set_font("Helvetica", "", 9)
             pdf.multi_cell(0, 5, "   > " + bullet_text)
 
-        elif stripped.startswith("**") and stripped.endswith("**"):
-            # Bold text (markdown)
-            bold_text = stripped.strip("*").strip()
+        elif stripped.startswith("**"):
+            # Bold text (markdown) — strip ** markers
+            bold_text = stripped.replace("**", "").strip()
             pdf.set_font("Helvetica", "B", 10)
             pdf.multi_cell(0, 6, bold_text)
             pdf.set_font("Helvetica", "", 9)
@@ -156,20 +156,17 @@ def export_to_pdf(
             parts = stripped.split(":", 1)
             key = parts[0].strip()
             val = parts[1].strip()
+            # Render as single line: "Key: Value" with bold key
             pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(55, 5, key + ":")
+            key_w = pdf.get_string_width(key + ": ") + 2
+            pdf.cell(key_w, 5, key + ": ")
             pdf.set_font("Helvetica", "", 9)
-            remaining_w = pdf.w - pdf.get_x() - 20
-            if remaining_w > 20:
-                pdf.multi_cell(remaining_w, 5, val)
-            else:
-                pdf.ln(5)
-                pdf.multi_cell(0, 5, "  " + val)
+            pdf.multi_cell(0, 5, val)
 
         else:
-            # Regular text
+            # Regular text — strip any remaining markdown
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, stripped)
+            pdf.multi_cell(0, 5, stripped.replace("**", ""))
 
     # ── Footer ───────────────────────────────────────────────
     pdf.ln(10)
