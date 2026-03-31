@@ -110,63 +110,34 @@ def export_to_pdf(
     }
 
     for line in clean.split("\n"):
-        stripped = line.strip()
+        stripped = line.strip().replace("**", "")
         if not stripped:
             pdf.ln(3)
             continue
 
         # Detect section headers
-        is_header = False
-        if stripped.startswith("##"):
-            is_header = True
+        is_header = stripped.startswith("##")
+        if is_header:
             stripped = stripped.lstrip("#").strip()
         elif stripped.rstrip(":").upper() in _SECTION_KEYWORDS:
             is_header = True
-        elif (len(stripped) > 3 and len(stripped) < 40
-              and stripped == stripped.upper()
-              and not stripped[0].isdigit()
-              and " " not in stripped.rstrip(":")):
-            # Short all-caps single words (like "BULLISH", not full sentences)
-            is_header = True
 
         if is_header:
-            pdf.ln(4)
-            pdf.set_fill_color(230, 240, 250)
+            pdf.ln(3)
             pdf.set_font("Helvetica", "B", 11)
             pdf.set_text_color(20, 60, 120)
-            pdf.cell(0, 8, "  " + stripped, new_x="LMARGIN", new_y="NEXT", fill=True)
+            pdf.multi_cell(0, 7, stripped)
             pdf.set_text_color(30, 30, 30)
-            pdf.ln(2)
+            pdf.ln(1)
 
-        elif stripped.startswith("- ") or stripped.startswith("* "):
-            # Bullet points with indent
-            bullet_text = stripped.lstrip("-* ").strip()
+        elif stripped.startswith("- ") or stripped.startswith("* ") or stripped.startswith("> "):
+            bullet_text = stripped.lstrip("-*> ").strip()
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, "   > " + bullet_text)
-
-        elif stripped.startswith("**"):
-            # Bold text (markdown) — strip ** markers
-            bold_text = stripped.replace("**", "").strip()
-            pdf.set_font("Helvetica", "B", 10)
-            pdf.multi_cell(0, 6, bold_text)
-            pdf.set_font("Helvetica", "", 9)
-
-        elif (":" in stripped
-              and len(stripped.split(":")[0]) < 18
-              and not stripped.startswith("http")
-              and not any(c in stripped.split(":")[0] for c in ("(", ")", ",", "'"))):
-            # Key-value pairs (e.g. "Entry: Rs.2,360")
-            # Only match clean short keys, not sentences with colons
-            parts = stripped.split(":", 1)
-            key = parts[0].strip()
-            val = parts[1].strip()
-            pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, f"{key}: {val}")
+            pdf.multi_cell(0, 5, "  > " + bullet_text)
 
         else:
-            # Regular text
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, stripped.replace("**", ""))
+            pdf.multi_cell(0, 5, stripped)
 
     # ── Footer ───────────────────────────────────────────────
     pdf.ln(10)
