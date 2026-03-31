@@ -9,7 +9,7 @@ FROM python:3.13-slim
 
 # System deps + Node.js (for claude CLI)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc curl \
+    gcc g++ python3-dev build-essential curl \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
