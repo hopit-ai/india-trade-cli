@@ -157,7 +157,8 @@ def yf_get_quote(symbol: str, exchange: str = "NSE") -> Quote:
 
 def yf_get_quotes(instruments: list[str]) -> dict[str, Quote]:
     """
-    Get quotes for multiple instruments.
+    Get quotes for multiple instruments. Per-symbol isolation:
+    one failing ticker doesn't drop the entire batch.
     instruments: list of "EXCHANGE:SYMBOL" strings.
     """
     result = {}
@@ -167,8 +168,11 @@ def yf_get_quotes(instruments: list[str]) -> dict[str, Quote]:
         else:
             exchange, symbol = "NSE", inst
 
-        quote = yf_get_quote(symbol, exchange)
-        result[inst] = quote
+        try:
+            quote = yf_get_quote(symbol, exchange)
+            result[inst] = quote
+        except Exception:
+            pass  # skip failed symbol, return partial results
 
     return result
 

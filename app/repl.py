@@ -403,6 +403,16 @@ def _cmd_web(port: int = 8765) -> None:
     console.print("[dim]\nWeb server stopped. Back in REPL.[/dim]\n")
 
 
+def _warn_if_mock(broker: BrokerAPI) -> None:
+    """Show a warning if the broker is mock/demo — data is simulated."""
+    try:
+        profile = broker.get_profile()
+        if profile.broker.upper() in ("MOCK", "PAPER", "DEMO"):
+            console.print("[yellow dim]  (Demo mode — data below is simulated. Run 'login' to connect a real broker.)[/yellow dim]")
+    except Exception:
+        pass
+
+
 def cmd_help() -> None:
     from rich.panel import Panel
 
@@ -874,28 +884,33 @@ def run_repl(broker: BrokerAPI) -> None:
 
             # ── Account ───────────────────────────────────────
             elif command == "profile":
+                _warn_if_mock(broker)
                 cmd_profile(broker)
 
             elif command == "funds":
+                _warn_if_mock(broker)
                 try:
                     cmd_funds(broker)
                 except Exception as e:
-                    console.print(f"[red]Error: {e}[/red]\n[dim]Fyers funds API may be slow. Try again during market hours.[/dim]")
+                    console.print(f"[red]Error: {e}[/red]\n[dim]Broker API may be slow. Try again during market hours.[/dim]")
 
             # ── Portfolio (single-broker raw views) ───────────
             elif command == "holdings":
+                _warn_if_mock(broker)
                 try:
                     cmd_holdings(broker)
                 except Exception as e:
                     console.print(f"[red]Error: {e}[/red]")
 
             elif command == "positions":
+                _warn_if_mock(broker)
                 try:
                     cmd_positions(broker)
                 except Exception as e:
                     console.print(f"[red]Error: {e}[/red]")
 
             elif command == "orders":
+                _warn_if_mock(broker)
                 try:
                     cmd_orders(broker)
                 except Exception as e:
