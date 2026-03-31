@@ -1,6 +1,7 @@
 # ── Broker APIs ──────────────────────────────────────────────
 kiteconnect>=4.2.0          # Zerodha Kite Connect
 httpx>=0.27.0               # Groww REST API + general HTTP
+fyers-apiv3>=3.1.0          # Fyers broker (official SDK)
 
 # ── AI Brain ─────────────────────────────────────────────────
 anthropic>=0.40.0           # Claude API
