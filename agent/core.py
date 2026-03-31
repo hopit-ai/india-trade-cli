@@ -822,6 +822,8 @@ class ClaudeCLIProvider(LLMProvider):
             if symbol:
                 if "symbol" in props:
                     args["symbol"] = symbol
+                elif "instruments" in props:
+                    args["instruments"] = [f"NSE:{symbol}"]
                 elif "symbols" in props:
                     args["symbols"] = [f"NSE:{symbol}"]
                 elif "underlying" in props:
