@@ -53,11 +53,23 @@ DEFAULT_SYMBOLS = [
 
 # Map our instrument format to Fyers WebSocket format
 _SYMBOL_MAP = {
-    "NSE:NIFTY 50":   "NSE:NIFTY50-INDEX",
-    "NSE:NIFTY BANK": "NSE:NIFTYBANK-INDEX",
-    "NSE:INDIA VIX":  "NSE:INDIAVIX-INDEX",
-    "BSE:SENSEX":     "BSE:SENSEX-INDEX",
+    "NSE:NIFTY 50":          "NSE:NIFTY50-INDEX",
+    "NSE:NIFTY BANK":        "NSE:NIFTYBANK-INDEX",
+    "NSE:INDIA VIX":         "NSE:INDIAVIX-INDEX",
+    "BSE:SENSEX":            "BSE:SENSEX-INDEX",
+    "NSE:NIFTY FIN SERVICE": "NSE:FINNIFTY-INDEX",
+    "NSE:NIFTY MIDCAP 100":  "NSE:MIDCAP100-INDEX",
+    "NSE:NIFTY IT":          "NSE:NIFTYIT-INDEX",
+    "NSE:NIFTY PHARMA":      "NSE:CNXPHARMA-INDEX",
+    "NSE:NIFTY AUTO":        "NSE:CNXAUTO-INDEX",
+    "NSE:NIFTY FMCG":        "NSE:CNXFMCG-INDEX",
+    "NSE:NIFTY REALTY":      "NSE:CNXREALTY-INDEX",
+    "NSE:NIFTY METAL":       "NSE:CNXMETAL-INDEX",
+    "NSE:NIFTY ENERGY":      "NSE:CNXENERGY-INDEX",
 }
+
+# Known index patterns — anything with "NIFTY" or known index names
+_INDEX_KEYWORDS = {"NIFTY", "SENSEX", "VIX", "MIDCAP", "FINNIFTY", "BANKNIFTY"}
 
 
 def _to_ws_symbol(instrument: str) -> str:
@@ -69,6 +81,12 @@ def _to_ws_symbol(instrument: str) -> str:
         # Already in Fyers format
         if "-" in sym:
             return instrument
+        # Check if it's an index (contains NIFTY, SENSEX, VIX, etc.)
+        sym_upper = sym.upper()
+        if any(kw in sym_upper for kw in _INDEX_KEYWORDS):
+            # Try to form a valid index symbol
+            clean = sym_upper.replace(" ", "")
+            return f"{exch}:{clean}-INDEX"
         return f"{exch}:{sym}-EQ"
     return f"NSE:{instrument}-EQ"
 
