@@ -78,78 +78,27 @@ def export_to_pdf(
     filepath = PDF_OUTPUT_DIR / filename
 
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    pw = pdf.w - 40  # printable width (margins)
+    # ── Title ────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.multi_cell(0, 8, title)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.multi_cell(0, 5, f"Generated: {datetime.now().strftime('%d %b %Y, %I:%M %p IST')}")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(5)
 
-    # ── Header bar ───────────────────────────────────────────
-    pdf.set_fill_color(20, 60, 120)
-    pdf.rect(0, 0, pdf.w, 28, "F")
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_y(6)
-    pdf.cell(0, 10, title, align="C")
-    pdf.ln(8)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(200, 220, 255)
-    pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%d %b %Y, %I:%M %p IST')}",
-             align="C")
-    pdf.ln(16)
-
-    # ── Content ──────────────────────────────────────────────
-    pdf.set_text_color(30, 30, 30)
-
-    # Section header keywords
-    _SECTION_KEYWORDS = {
-        "VERDICT", "TRADE RECOMMENDATION", "RATIONALE", "RISKS", "RISK",
-        "BULL CASE", "BEAR CASE", "FACILITATOR", "SCORECARD",
-        "ANALYST REPORTS", "RESEARCH DEBATE", "SIMPLE EXPLANATION",
-        "TRADE PLAN", "EXIT PLAN", "ENTRY ORDERS", "SIZING",
-        "BACKTEST", "STRATEGY", "CONFIDENCE", "WINNER",
-    }
-
-    for line in clean.split("\n"):
-        stripped = line.strip().replace("**", "")
-        if not stripped:
-            pdf.ln(3)
-            continue
-
-        # Detect section headers
-        is_header = stripped.startswith("##")
-        if is_header:
-            stripped = stripped.lstrip("#").strip()
-        elif stripped.rstrip(":").upper() in _SECTION_KEYWORDS:
-            is_header = True
-
-        if is_header:
-            pdf.ln(3)
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.set_text_color(20, 60, 120)
-            pdf.multi_cell(0, 7, stripped)
-            pdf.set_text_color(30, 30, 30)
-            pdf.ln(1)
-
-        elif stripped.startswith("- ") or stripped.startswith("* ") or stripped.startswith("> "):
-            bullet_text = stripped.lstrip("-*> ").strip()
-            pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, "  > " + bullet_text)
-
-        else:
-            pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, stripped)
+    # ── Content — just write everything as plain text ────────
+    pdf.set_font("Courier", "", 8)
+    pdf.multi_cell(0, 4, clean)
 
     # ── Footer ───────────────────────────────────────────────
-    pdf.ln(10)
-    pdf.set_draw_color(200, 200, 200)
-    pdf.line(20, pdf.get_y(), pdf.w - 20, pdf.get_y())
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "I", 8)
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 5, "India Trade CLI  |  AI-Powered Multi-Agent Stock Analysis",
-             new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.cell(0, 5, "github.com/ArchieIndian/india-trade-cli",
-             new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.multi_cell(0, 4, "India Trade CLI | AI-Powered Multi-Agent Stock Analysis | github.com/ArchieIndian/india-trade-cli")
 
     pdf.output(str(filepath))
     return str(filepath)
