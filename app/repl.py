@@ -63,7 +63,7 @@ COMMANDS = [
     "deep-analyze", "drift",
     "earnings", "events", "flows", "greeks", "macro", "memory",
     "pairs", "patterns", "profile", "provider", "risk-report",
-    "tui", "walkforward", "web", "whatif",
+    "telegram", "tui", "walkforward", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
 ]
@@ -931,6 +931,18 @@ def run_repl(broker: BrokerAPI) -> None:
                         console.print(f"[red]Deep analysis failed: {e}[/red]")
                         console.print("[dim]Falling back to standard analysis...[/dim]")
                         agent.run_multi_agent_analysis(symbol)
+
+            elif command == "telegram":
+                try:
+                    from bot.telegram_bot import run_bot_background
+                    run_bot_background()
+                    console.print(
+                        "[green]Telegram bot started in background.[/green]\n"
+                        "[dim]Send /start to your bot on Telegram to begin.[/dim]\n"
+                        "[dim]Alerts will be pushed automatically.[/dim]"
+                    )
+                except Exception as e:
+                    console.print(f"[red]Telegram bot failed: {e}[/red]")
 
             elif command == "walkforward":
                 if not args:
