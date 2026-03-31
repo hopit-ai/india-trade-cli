@@ -81,24 +81,30 @@ def export_to_pdf(
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
+    w = pdf.w - pdf.l_margin - pdf.r_margin  # printable width
+
     # ── Title ────────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 14)
-    pdf.multi_cell(0, 8, title)
+    pdf.multi_cell(w, 8, title)
+    pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "", 8)
     pdf.set_text_color(120, 120, 120)
-    pdf.multi_cell(0, 5, f"Generated: {datetime.now().strftime('%d %b %Y, %I:%M %p IST')}")
+    pdf.multi_cell(w, 5, f"Generated: {datetime.now().strftime('%d %b %Y, %I:%M %p IST')}")
+    pdf.set_x(pdf.l_margin)
     pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
 
     # ── Content — just write everything as plain text ────────
     pdf.set_font("Courier", "", 8)
-    pdf.multi_cell(0, 4, clean)
+    pdf.set_x(pdf.l_margin)
+    pdf.multi_cell(w, 4, clean)
 
     # ── Footer ───────────────────────────────────────────────
     pdf.ln(5)
+    pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(150, 150, 150)
-    pdf.multi_cell(0, 4, "India Trade CLI | AI-Powered Multi-Agent Stock Analysis | github.com/ArchieIndian/india-trade-cli")
+    pdf.multi_cell(w, 4, "India Trade CLI | AI-Powered Multi-Agent Stock Analysis | github.com/ArchieIndian/india-trade-cli")
 
     pdf.output(str(filepath))
     return str(filepath)
