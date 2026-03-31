@@ -211,14 +211,6 @@ class FyersAPI(BrokerAPI):
             return False
         # Token exists and is < 12 hours old — trust it (no API call)
         return True
-        except Exception:
-            self._access_token = ""
-            self._fyers = None
-            try:
-                TOKEN_FILE.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return False
 
     def logout(self) -> None:
         try:
