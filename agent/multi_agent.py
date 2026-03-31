@@ -118,16 +118,19 @@ DEFAULT_ANALYST_WEIGHTS = {
 
 def compute_scorecard(reports: list[AnalystReport]) -> AnalystScorecard:
     """Compute a weighted scorecard from analyst reports."""
+    # Exclude analysts with no real data (error or UNAVAILABLE)
+    _EXCLUDED_VERDICTS = {"UNKNOWN", "UNAVAILABLE"}
+
     scores = {}
     for r in reports:
-        if not r.error:
+        if not r.error and r.verdict not in _EXCLUDED_VERDICTS:
             scores[r.analyst] = r.score
 
     weights = {}
     for name in scores:
         weights[name] = DEFAULT_ANALYST_WEIGHTS.get(name, 0.1)
 
-    # Normalize weights to sum to 1
+    # Normalize weights to sum to 1 (only across analysts with real data)
     total_weight = sum(weights.values())
     if total_weight > 0:
         weights = {k: v / total_weight for k, v in weights.items()}
@@ -147,8 +150,9 @@ def compute_scorecard(reports: list[AnalystReport]) -> AnalystScorecard:
     else:
         verdict = "HOLD"
 
-    # Agreement: how many analysts agree on direction?
-    verdicts = [r.verdict for r in reports if not r.error and r.verdict != "UNKNOWN"]
+    # Agreement: how many analysts agree on direction? (exclude unavailable)
+    verdicts = [r.verdict for r in reports
+                if not r.error and r.verdict not in _EXCLUDED_VERDICTS]
     if verdicts:
         from collections import Counter
         most_common = Counter(verdicts).most_common(1)[0]
