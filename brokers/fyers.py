@@ -1,7 +1,7 @@
 """
 brokers/fyers.py
 ─────────────────
-Fyers API v3 implementation of BrokerAPI.
+Fyers API v3 implementation of BrokerAPI using the official fyers-apiv3 SDK.
 
 Fyers offers a free developer API with excellent options chain data
 and live market feeds. No monthly subscription fee.
@@ -19,19 +19,18 @@ Login flow:
 
 Session token is saved to ~/.trading_platform/fyers.json and reused.
 
-Docs: https://myapi.fyers.in/docs
+Install: pip install fyers-apiv3
+
+Docs: https://myapi.fyers.in/docsv3
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from datetime import datetime, date
 from pathlib  import Path
 from typing   import Optional
-
-import httpx
 
 from brokers.base import (
     BrokerAPI, UserProfile, Funds, Holding, Position,
@@ -39,16 +38,27 @@ from brokers.base import (
 )
 
 TOKEN_FILE   = Path.home() / ".trading_platform" / "fyers.json"
-FYERS_BASE   = "https://api-t1.fyers.in/api/v3"
-AUTH_BASE    = "https://api-t2.fyers.in/api/v3"
 TOKEN_EXPIRY = 12 * 3600    # Fyers tokens valid ~12 h
+
+
+def _get_sdk():
+    """Lazy import fyers SDK."""
+    try:
+        from fyers_apiv3 import fyersModel
+        return fyersModel
+    except ImportError:
+        raise RuntimeError(
+            "fyers-apiv3 not installed. Run:\n"
+            "  pip install fyers-apiv3"
+        )
 
 
 class FyersAPI(BrokerAPI):
     """
     Fyers API v3 broker — free, excellent options data.
+    Uses the official fyers-apiv3 SDK for all API calls.
 
-    Docs: https://myapi.fyers.in/docs
+    Docs: https://myapi.fyers.in/docsv3
     """
 
     def __init__(
@@ -63,7 +73,21 @@ class FyersAPI(BrokerAPI):
         self._access_token = ""
         self._profile: Optional[UserProfile] = None
         self._token_ts: float = 0.0
+        self._fyers = None   # FyersModel instance
         self._load_token()
+
+    # ── SDK Instance ─────────────────────────────────────────
+
+    def _get_fyers(self):
+        """Get or create the FyersModel SDK instance."""
+        if self._fyers is None and self._access_token:
+            fyersModel = _get_sdk()
+            self._fyers = fyersModel.FyersModel(
+                token=self._access_token,
+                client_id=self._app_id,
+                log_path="",
+            )
+        return self._fyers
 
     # ── Token persistence ──────────────────────────────────────
 
@@ -85,90 +109,41 @@ class FyersAPI(BrokerAPI):
             "timestamp":    time.time(),
         }))
 
-    def _headers(self) -> dict:
-        # Fyers uses "<app_id>:<access_token>" as the Authorization header
-        return {
-            "Authorization": f"{self._app_id}:{self._access_token}",
-            "Content-Type":  "application/json",
-        }
-
-    def _get(self, path: str, **params) -> dict:
-        url  = f"{FYERS_BASE}{path}"
-        resp = httpx.get(url, headers=self._headers(), params=params, timeout=60)
-        resp.raise_for_status()
-        return resp.json()
-
-    def _post(self, path: str, data: dict) -> dict:
-        url  = f"{FYERS_BASE}{path}"
-        resp = httpx.post(url, headers=self._headers(), json=data, timeout=60)
-        resp.raise_for_status()
-        return resp.json()
-
     # ── Auth ──────────────────────────────────────────────────
 
     def get_login_url(self) -> str:
         """Returns the Fyers OAuth2 authorization URL using the official SDK."""
-        try:
-            from fyers_apiv3 import fyersModel
-            session = fyersModel.SessionModel(
-                client_id=self._app_id,
-                secret_key=self._secret_key,
-                redirect_uri=self._redirect_uri,
-                response_type="code",
-                grant_type="authorization_code",
-                state="india_trade_cli",
-            )
-            return session.generate_authcode()
-        except ImportError:
-            # Fallback to manual URL if SDK not installed
-            return (
-                f"https://api-t1.fyers.in/api/v3/generate-authcode?"
-                f"client_id={self._app_id}&"
-                f"redirect_uri={self._redirect_uri}&"
-                f"response_type=code&"
-                f"state=india_trade_cli"
-            )
+        fyersModel = _get_sdk()
+        session = fyersModel.SessionModel(
+            client_id=self._app_id,
+            secret_key=self._secret_key,
+            redirect_uri=self._redirect_uri,
+            response_type="code",
+            grant_type="authorization_code",
+            state="india_trade_cli",
+        )
+        return session.generate_authcode()
 
     def complete_login(self, auth_code: str = "", **kwargs) -> UserProfile:
-        """Exchange the auth code for an access token."""
-        try:
-            from fyers_apiv3 import fyersModel
-            session = fyersModel.SessionModel(
-                client_id=self._app_id,
-                secret_key=self._secret_key,
-                redirect_uri=self._redirect_uri,
-                response_type="code",
-                grant_type="authorization_code",
-                state="india_trade_cli",
-            )
-            session.set_token(auth_code)
-            response = session.generate_token()
-            token = response.get("access_token", "")
-            if not token:
-                raise RuntimeError(f"Fyers login failed: {response}")
-        except ImportError:
-            # Fallback to manual token exchange if SDK not installed
-            app_id_hash = hashlib.sha256(
-                f"{self._app_id}:{self._secret_key}".encode()
-            ).hexdigest()
-            resp = httpx.post(
-                f"{AUTH_BASE}/validate-authcode",
-                json={
-                    "grant_type": "authorization_code",
-                    "appIdHash":  app_id_hash,
-                    "code":       auth_code,
-                },
-                headers={"Content-Type": "application/json"},
-                timeout=20,
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-            token = payload.get("access_token", "")
-            if not token:
-                raise RuntimeError(f"Fyers login failed: {payload}")
+        """Exchange the auth code for an access token using the SDK."""
+        fyersModel = _get_sdk()
+        session = fyersModel.SessionModel(
+            client_id=self._app_id,
+            secret_key=self._secret_key,
+            redirect_uri=self._redirect_uri,
+            response_type="code",
+            grant_type="authorization_code",
+            state="india_trade_cli",
+        )
+        session.set_token(auth_code)
+        response = session.generate_token()
+        token = response.get("access_token", "")
+        if not token:
+            raise RuntimeError(f"Fyers login failed: {response}")
 
         self._access_token = token
         self._token_ts     = time.time()
+        self._fyers        = None  # reset so it gets recreated with new token
         self._save_token(token)
         return self.get_profile()
 
@@ -176,19 +151,23 @@ class FyersAPI(BrokerAPI):
         if not self._access_token:
             return False
         if self._token_ts and time.time() - self._token_ts >= TOKEN_EXPIRY:
-            # Token too old — clear it so we don't try to use it
             self._access_token = ""
+            self._fyers = None
             try:
                 TOKEN_FILE.unlink(missing_ok=True)
             except Exception:
                 pass
             return False
-        # Verify token actually works with a quick API call
+        # Verify token works
         try:
-            self._get("/profile")
-            return True
+            fyers = self._get_fyers()
+            if fyers:
+                result = fyers.get_profile()
+                return result.get("s") == "ok"
+            return False
         except Exception:
             self._access_token = ""
+            self._fyers = None
             try:
                 TOKEN_FILE.unlink(missing_ok=True)
             except Exception:
@@ -196,8 +175,15 @@ class FyersAPI(BrokerAPI):
             return False
 
     def logout(self) -> None:
+        try:
+            fyers = self._get_fyers()
+            if fyers:
+                fyers.logout()
+        except Exception:
+            pass
         self._access_token = ""
         self._profile      = None
+        self._fyers        = None
         try:
             TOKEN_FILE.unlink(missing_ok=True)
         except Exception:
@@ -208,7 +194,8 @@ class FyersAPI(BrokerAPI):
     def get_profile(self) -> UserProfile:
         if self._profile:
             return self._profile
-        data    = self._get("/profile")
+        fyers = self._get_fyers()
+        data = fyers.get_profile()
         payload = data.get("data", {})
         self._profile = UserProfile(
             user_id  = payload.get("fy_id", ""),
@@ -219,7 +206,8 @@ class FyersAPI(BrokerAPI):
         return self._profile
 
     def get_funds(self) -> Funds:
-        data    = self._get("/funds")
+        fyers = self._get_fyers()
+        data = fyers.funds()
         payload = data.get("fund_limit", [])
         # fund_limit is a list of {id, title, equityAmount, commodityAmount}
         cash   = next((float(x.get("equityAmount", 0)) for x in payload
@@ -232,36 +220,38 @@ class FyersAPI(BrokerAPI):
             available_cash = cash,
             used_margin    = margin,
             total_balance  = total,
-            metadata       = {"fund_limit": payload},
         )
 
     # ── Portfolio ─────────────────────────────────────────────
 
     def get_holdings(self) -> list[Holding]:
-        data     = self._get("/holdings")
+        fyers = self._get_fyers()
+        data = fyers.holdings()
         holdings = []
         for item in data.get("holdings", []):
             qty    = int(item.get("quantity", 0))
             avg_px = float(item.get("costPrice", 0))
             ltp    = float(item.get("ltp", avg_px))
             symbol = item.get("symbol", "")
-            # symbol format: "NSE:RELIANCE-EQ" → extract ticker
             ticker = symbol.split(":")[-1].split("-")[0] if ":" in symbol else symbol
+            pnl    = float(item.get("pl", 0))
+            pnl_pct = ((ltp - avg_px) / avg_px * 100) if avg_px else 0.0
             holdings.append(Holding(
                 symbol         = ticker,
+                exchange       = "NSE",
                 quantity       = qty,
                 avg_price      = avg_px,
                 last_price     = ltp,
-                pnl            = float(item.get("pl", 0)),
+                pnl            = pnl,
+                pnl_pct        = round(pnl_pct, 2),
                 day_change     = 0.0,
                 day_change_pct = 0.0,
-                current_value  = ltp * qty,
-                isin           = item.get("isin", ""),
             ))
         return holdings
 
     def get_positions(self) -> list[Position]:
-        data      = self._get("/positions")
+        fyers = self._get_fyers()
+        data = fyers.positions()
         positions = []
         for item in data.get("netPositions", []):
             qty = int(item.get("netQty", 0))
@@ -273,74 +263,118 @@ class FyersAPI(BrokerAPI):
             ticker = symbol.split(":")[-1].split("-")[0] if ":" in symbol else symbol
             positions.append(Position(
                 symbol          = ticker,
+                exchange        = item.get("exchange", "NSE"),
+                product         = item.get("productType", "CNC"),
                 quantity        = qty,
                 avg_price       = avg,
                 last_price      = ltp,
                 pnl             = float(item.get("pl", 0)),
-                day_change      = 0.0,
-                day_change_pct  = 0.0,
-                product         = item.get("productType", "CNC"),
-                exchange        = item.get("exchange", "NSE"),
                 instrument_type = "EQ",
             ))
         return positions
 
     # ── Quotes ────────────────────────────────────────────────
 
-    def get_quote(self, symbols: list[str]) -> dict[str, Quote]:
-        """Get quotes. Symbols are in Fyers format: NSE:RELIANCE-EQ"""
-        fyers_symbols = [f"NSE:{s}-EQ" for s in symbols]
+    def get_quote(self, instruments: list[str]) -> dict[str, Quote]:
+        """
+        Get quotes. Instruments: ["NSE:RELIANCE", "NSE:NIFTY 50"]
+        Fyers format: "NSE:RELIANCE-EQ", "NSE:NIFTY50-INDEX"
+        """
+        fyers = self._get_fyers()
+
+        # Convert to Fyers symbol format
+        fyers_symbols = []
+        key_map = {}   # fyers_symbol → original instrument key
+        for inst in instruments:
+            if ":" in inst:
+                exch, sym = inst.split(":", 1)
+            else:
+                exch, sym = "NSE", inst
+
+            if sym.upper() in ("NIFTY 50", "NIFTY", "NIFTY50"):
+                fyers_sym = "NSE:NIFTY50-INDEX"
+            elif sym.upper() in ("NIFTY BANK", "BANKNIFTY"):
+                fyers_sym = "NSE:NIFTYBANK-INDEX"
+            elif sym.upper() in ("INDIA VIX", "VIX"):
+                fyers_sym = "NSE:INDIAVIX-INDEX"
+            elif sym.upper() in ("SENSEX",):
+                fyers_sym = "BSE:SENSEX-INDEX"
+            else:
+                fyers_sym = f"{exch}:{sym}-EQ"
+
+            fyers_symbols.append(fyers_sym)
+            key_map[fyers_sym] = inst
+
         try:
-            data   = self._get("/quotes", symbols=",".join(fyers_symbols))
+            data = fyers.quotes({"symbols": ",".join(fyers_symbols)})
             result = {}
             for item in data.get("d", []):
-                raw     = item.get("n", "")
-                ticker  = raw.split(":")[-1].split("-")[0] if ":" in raw else raw
-                v       = item.get("v", {})
-                result[ticker] = Quote(
-                    symbol     = ticker,
+                raw    = item.get("n", "")
+                v      = item.get("v", {})
+                # Find the original key
+                orig_key = key_map.get(raw, raw)
+                result[orig_key] = Quote(
+                    symbol     = orig_key.split(":")[-1] if ":" in orig_key else orig_key,
                     last_price = float(v.get("lp", 0)),
                     open       = float(v.get("open_price", 0)),
                     high       = float(v.get("high_price", 0)),
                     low        = float(v.get("low_price", 0)),
                     close      = float(v.get("prev_close_price", 0)),
                     volume     = int(v.get("volume", 0)),
-                    oi         = int(v.get("oi", 0)),
-                    timestamp  = datetime.now(),
+                    change     = float(v.get("ch", 0)),
+                    change_pct = float(v.get("chp", 0)),
                 )
             return result
         except Exception:
-            return {s: Quote(symbol=s, last_price=0, open=0, high=0, low=0, close=0,
-                             volume=0, oi=0, timestamp=datetime.now()) for s in symbols}
+            return {}
 
-    def get_options_chain(self, underlying: str, expiry: date) -> list[OptionsContract]:
-        """Fyers has excellent options chain data via optionchain endpoint."""
-        expiry_str = expiry.strftime("%d-%b-%Y").upper()   # e.g. 25-JAN-2025
+    def get_ltp(self, instrument: str) -> float:
+        quotes = self.get_quote([instrument])
+        q = quotes.get(instrument)
+        return q.last_price if q else 0.0
+
+    def get_options_chain(
+        self,
+        underlying: str,
+        expiry: Optional[str] = None,
+    ) -> list[OptionsContract]:
+        """Fyers options chain via SDK."""
+        fyers = self._get_fyers()
         try:
-            data  = self._get(
-                "/data/optionchain",
-                symbol=f"NSE:{underlying}-INDEX",
-                strikecount=20,
-                timestamp=expiry_str,
-            )
+            # Determine symbol format
+            if underlying.upper() in ("NIFTY", "NIFTY50", "NIFTY 50"):
+                fyers_sym = "NSE:NIFTY50-INDEX"
+            elif underlying.upper() in ("BANKNIFTY", "NIFTY BANK"):
+                fyers_sym = "NSE:NIFTYBANK-INDEX"
+            else:
+                fyers_sym = f"NSE:{underlying}-EQ"
+
+            params = {"symbol": fyers_sym, "strikecount": 20}
+            if expiry:
+                params["timestamp"] = expiry
+
+            data = fyers.optionchain(params)
             chain = []
-            for item in data.get("optionsChain", []):
+            for item in data.get("data", {}).get("optionsChain", []):
                 for opt_type in ["CE", "PE"]:
-                    opt = item.get(opt_type, {})
+                    opt = item.get(opt_type, item) if opt_type in str(item.get("option_type", "")) else None
+                    if not opt and item.get("option_type") == opt_type:
+                        opt = item
                     if not opt:
                         continue
                     chain.append(OptionsContract(
-                        strike      = float(item.get("strikePrice", 0)),
-                        expiry      = expiry,
+                        symbol      = opt.get("symbol", ""),
+                        underlying  = underlying,
+                        expiry      = opt.get("expiry", expiry or ""),
+                        strike      = float(opt.get("strike_price", item.get("strikePrice", 0))),
                         option_type = opt_type,
                         last_price  = float(opt.get("ltp", 0)),
                         oi          = int(opt.get("oi", 0)),
+                        oi_change   = int(opt.get("oiChange", 0)),
                         volume      = int(opt.get("volume", 0)),
-                        iv          = float(opt.get("iv", 0)),
-                        delta       = float(opt.get("delta", 0)),
-                        theta       = float(opt.get("theta", 0)),
-                        vega        = float(opt.get("vega", 0)),
-                        gamma       = float(opt.get("gamma", 0)),
+                        iv          = float(opt.get("iv", 0)) or None,
+                        lot_size    = int(opt.get("lotSize", 50)),
+                        exchange    = "NFO",
                     ))
             return chain
         except Exception:
@@ -349,29 +383,30 @@ class FyersAPI(BrokerAPI):
     # ── Orders ────────────────────────────────────────────────
 
     def place_order(self, req: OrderRequest) -> OrderResponse:
+        fyers = self._get_fyers()
         product_map = {"CNC": "CNC", "MIS": "INTRADAY", "NRML": "MARGIN"}
         payload = {
-            "symbol":          f"NSE:{req.symbol}-EQ",
-            "qty":             req.quantity,
-            "type":            1 if req.order_type == "MARKET" else 2,
-            "side":            1 if req.transaction_type == "BUY" else -1,
-            "productType":     product_map.get(req.product, "CNC"),
-            "limitPrice":      req.price if req.order_type == "LIMIT" else 0,
-            "stopPrice":       req.trigger_price if req.trigger_price else 0,
-            "validity":        "DAY",
-            "disclosedQty":    0,
-            "offlineOrder":    False,
+            "symbol":       f"NSE:{req.symbol}-EQ",
+            "qty":          req.quantity,
+            "type":         1 if req.order_type == "MARKET" else 2,
+            "side":         1 if req.transaction_type == "BUY" else -1,
+            "productType":  product_map.get(req.product, "CNC"),
+            "limitPrice":   req.price if req.order_type == "LIMIT" else 0,
+            "stopPrice":    req.trigger_price if req.trigger_price else 0,
+            "validity":     "DAY",
+            "disclosedQty": 0,
+            "offlineOrder": False,
         }
-        data = self._post("/orders", payload)
+        data = fyers.place_order(payload)
         return OrderResponse(
             order_id = str(data.get("id", "")),
             status   = "OPEN",
             message  = data.get("message", "Order placed"),
-            metadata = data,
         )
 
     def get_orders(self) -> list[Order]:
-        data   = self._get("/orders")
+        fyers = self._get_fyers()
+        data = fyers.orderbook()
         orders = []
         for item in data.get("orderBook", []):
             symbol = item.get("symbol", "")
@@ -379,28 +414,23 @@ class FyersAPI(BrokerAPI):
             orders.append(Order(
                 order_id         = str(item.get("id", "")),
                 symbol           = ticker,
+                exchange         = "NSE",
                 transaction_type = "BUY" if item.get("side", 0) == 1 else "SELL",
-                product          = item.get("productType", "CNC"),
-                order_type       = "MARKET" if item.get("type") == 1 else "LIMIT",
                 quantity         = int(item.get("qty", 0)),
-                price            = float(item.get("limitPrice", 0)),
-                status           = item.get("status", ""),
+                order_type       = "MARKET" if item.get("type") == 1 else "LIMIT",
+                product          = item.get("productType", "CNC"),
+                status           = str(item.get("status", "")),
+                price            = float(item.get("limitPrice", 0)) or None,
+                average_price    = float(item.get("tradedPrice", 0)) or None,
                 filled_quantity  = int(item.get("filledQty", 0)),
-                avg_price        = float(item.get("tradedPrice", 0)),
-                timestamp        = datetime.now(),
             ))
         return orders
 
     def cancel_order(self, order_id: str) -> bool:
+        fyers = self._get_fyers()
         try:
-            resp = httpx.delete(
-                f"{FYERS_BASE}/orders",
-                headers=self._headers(),
-                json={"id": order_id},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            return True
+            data = fyers.cancel_order({"id": order_id})
+            return data.get("s") == "ok"
         except Exception:
             return False
 
@@ -414,43 +444,38 @@ class FyersAPI(BrokerAPI):
         from_date: Optional[datetime] = None,
         to_date:   Optional[datetime] = None,
     ) -> list[dict]:
+        fyers = self._get_fyers()
         resolution_map = {
-            "day":      "D",
-            "minute":   "1",
-            "5minute":  "5",
-            "15minute": "15",
-            "30minute": "30",
-            "60minute": "60",
+            "day": "D", "minute": "1", "5minute": "5",
+            "15minute": "15", "30minute": "30", "60minute": "60",
         }
         resolution = resolution_map.get(interval, "D")
         to_date   = to_date   or datetime.now()
         from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
 
-        # Fyers symbol format: "NSE:RELIANCE-EQ"
         fyers_symbol = f"{exchange}:{symbol}-EQ"
 
         try:
-            data = self._get("/history", **{
-                "symbol":      fyers_symbol,
-                "resolution":  resolution,
-                "date_format":  "1",
-                "range_from":  str(int(from_date.timestamp())),
-                "range_to":    str(int(to_date.timestamp())),
-                "cont_flag":   "1",
+            data = fyers.history({
+                "symbol":     fyers_symbol,
+                "resolution": resolution,
+                "date_format": "1",
+                "range_from": str(int(from_date.timestamp())),
+                "range_to":   str(int(to_date.timestamp())),
+                "cont_flag":  "1",
             })
 
             candles = data.get("candles", [])
-            # Each candle: [epoch, open, high, low, close, volume]
             return [
                 {
-                    "date":   datetime.fromtimestamp(candle[0]),
-                    "open":   candle[1],
-                    "high":   candle[2],
-                    "low":    candle[3],
-                    "close":  candle[4],
-                    "volume": candle[5],
+                    "date":   datetime.fromtimestamp(c[0]),
+                    "open":   c[1],
+                    "high":   c[2],
+                    "low":    c[3],
+                    "close":  c[4],
+                    "volume": c[5],
                 }
-                for candle in candles
+                for c in candles
             ]
         except Exception as e:
             raise RuntimeError(f"Fyers historical data error: {e}") from e
