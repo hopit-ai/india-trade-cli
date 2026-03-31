@@ -990,7 +990,64 @@ class MultiAgentAnalyzer:
         console.rule(style="cyan")
         console.print()
 
-        return synthesis
+        # Build full report for PDF/export (includes everything)
+        full_report_parts = [
+            f"MULTI-AGENT ANALYSIS: {exchange}:{symbol}",
+            f"Date: {time.strftime('%d %b %Y, %I:%M %p')}",
+            "",
+            "=" * 60,
+            "ANALYST REPORTS",
+            "=" * 60,
+        ]
+        for r in reports:
+            if not r.error:
+                full_report_parts.append(r.summary_text())
+                full_report_parts.append("")
+
+        full_report_parts.append(f"\nSCORECARD: {scorecard.summary()}\n")
+
+        full_report_parts.extend([
+            "=" * 60,
+            "BULL/BEAR DEBATE",
+            "=" * 60,
+            "",
+            "--- BULL CASE (Round 1) ---",
+            debate.bull_argument,
+            "",
+            "--- BEAR CASE (Round 1) ---",
+            debate.bear_argument,
+            "",
+        ])
+        if debate.bull_rebuttal:
+            full_report_parts.extend([
+                "--- BULL REBUTTAL (Round 2) ---",
+                debate.bull_rebuttal,
+                "",
+            ])
+        if debate.bear_rebuttal:
+            full_report_parts.extend([
+                "--- BEAR REBUTTAL (Round 2) ---",
+                debate.bear_rebuttal,
+                "",
+            ])
+        if debate.facilitator:
+            full_report_parts.extend([
+                "--- FACILITATOR SUMMARY ---",
+                debate.facilitator,
+                f"Debate Winner: {debate.winner}",
+                "",
+            ])
+
+        full_report_parts.extend([
+            "=" * 60,
+            "FUND MANAGER SYNTHESIS",
+            "=" * 60,
+            "",
+            synthesis,
+        ])
+
+        self.last_full_report = "\n".join(full_report_parts)
+        return self.last_full_report
 
     # ── Phase 1: Analyst Team ────────────────────────────────
 
