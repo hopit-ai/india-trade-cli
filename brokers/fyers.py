@@ -209,13 +209,8 @@ class FyersAPI(BrokerAPI):
             except Exception:
                 pass
             return False
-        # Verify token works
-        try:
-            fyers = self._get_fyers()
-            if fyers:
-                result = fyers.get_profile()
-                return result.get("s") == "ok"
-            return False
+        # Token exists and is < 12 hours old — trust it (no API call)
+        return True
         except Exception:
             self._access_token = ""
             self._fyers = None
