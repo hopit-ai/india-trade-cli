@@ -23,6 +23,10 @@ yfinance>=0.2.40            # Free market data (NSE/BSE) — no broker needed
 feedparser>=6.0.11          # RSS feed parsing
 newsapi-python>=0.2.7       # NewsAPI.org client
 
+# ── Web ──────────────────────────────────────────────────────
+fastapi>=0.110.0            # Web API framework
+uvicorn>=0.29.0             # ASGI server (with --reload for dev)
+
 # ── Output ───────────────────────────────────────────────────
 fpdf2>=2.7.0                # PDF export for --pdf flag
 

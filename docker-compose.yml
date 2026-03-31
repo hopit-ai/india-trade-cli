@@ -19,8 +19,10 @@ services:
     volumes:
       - trade-data:/root/.trading_platform    # persist tokens, memory, alerts
       - ./output:/output                       # PDF exports
+      - .:/app                                 # hot reload: mount source code
     environment:
       - PDF_OUTPUT_DIR=/output
+      - PYTHONDONTWRITEBYTECODE=1
     command: python -m app.main
 
   # ── Telegram Bot ───────────────────────────────────────────
@@ -31,6 +33,9 @@ services:
     env_file: .env
     volumes:
       - trade-data:/root/.trading_platform
+      - .:/app                                 # hot reload
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
     command: python -m bot.telegram_bot
 
   # ── Web API ────────────────────────────────────────────────
@@ -43,7 +48,10 @@ services:
     env_file: .env
     volumes:
       - trade-data:/root/.trading_platform
-    command: python -c "from web.api import app; import uvicorn; uvicorn.run(app, host='0.0.0.0', port=8765)"
+      - .:/app                                 # hot reload
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+    command: uvicorn web.api:app --host 0.0.0.0 --port 8765 --reload
 
 volumes:
   trade-data:
