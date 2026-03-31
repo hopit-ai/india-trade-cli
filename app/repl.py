@@ -959,6 +959,21 @@ def run_repl(broker: BrokerAPI) -> None:
                         agent.run_multi_agent_analysis(symbol)
 
             elif command == "telegram":
+                # Pre-validate before starting background thread
+                try:
+                    import telegram as _tg_check  # noqa: F401
+                except ImportError:
+                    console.print(
+                        "[red]python-telegram-bot not installed.[/red]\n"
+                        "[dim]Run: pip install python-telegram-bot[/dim]"
+                    )
+                    continue
+                try:
+                    from bot.telegram_bot import _get_bot_token
+                    _get_bot_token()
+                except RuntimeError as e:
+                    console.print(f"[red]{e}[/red]")
+                    continue
                 try:
                     from bot.telegram_bot import run_bot_background
                     run_bot_background()
