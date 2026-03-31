@@ -24,10 +24,13 @@ class MockBrokerAPI(BrokerAPI):
     Good for testing the full login → REPL → command flow.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, passthrough_market_data: bool = False) -> None:
         self._authenticated = False
         self._orders: list[Order] = []
         self._order_counter = 1000
+        # When True, market data methods raise so fallback chain
+        # goes to yfinance for real data instead of returning fakes
+        self._passthrough_market_data = passthrough_market_data
 
     # ── Auth ──────────────────────────────────────────────────
 
@@ -119,6 +122,9 @@ class MockBrokerAPI(BrokerAPI):
     # ── Market Data ───────────────────────────────────────────
 
     def get_quote(self, instruments: list[str]) -> dict[str, Quote]:
+        # In passthrough mode, raise so fallback chain goes to yfinance
+        if self._passthrough_market_data:
+            raise NotImplementedError("Mock broker — use yfinance for real quotes")
         fake_prices = {
             "NSE:NIFTY 50":    (22847.00, 22700.00, 22920.00, 22650.00, 22720.00, 2_50_00_000),
             "NSE:NIFTY50":     (22847.00, 22700.00, 22920.00, 22650.00, 22720.00, 2_50_00_000),
@@ -153,6 +159,8 @@ class MockBrokerAPI(BrokerAPI):
         underlying: str,
         expiry: Optional[str] = None,
     ) -> list[OptionsContract]:
+        if self._passthrough_market_data:
+            raise NotImplementedError("Mock broker — use NSE/yfinance for options")
         expiry = expiry or "2024-04-25"
         base   = 22850 if underlying == "NIFTY" else 48000
         step   = 50    if underlying == "NIFTY" else 100
@@ -231,7 +239,7 @@ class MockBrokerAPI(BrokerAPI):
 
     def get_historical_data(
         self,
-        symbol:    str,
+        symbol: str,
         exchange:  str = "NSE",
         interval:  str = "day",
         from_date: Optional[datetime] = None,

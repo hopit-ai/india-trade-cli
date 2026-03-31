@@ -918,6 +918,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
             # ── Portfolio (unified multi-broker view) ─────────
             elif command == "portfolio":
+                _warn_if_mock(broker)
                 try:
                     from engine.portfolio import get_multi_broker_summary
                     _cmd_portfolio(get_multi_broker_summary())

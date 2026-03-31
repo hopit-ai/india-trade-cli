@@ -52,11 +52,19 @@ def main() -> None:
 
     # ── Login ─────────────────────────────────────────────────
     if no_broker:
-        # Skip broker selection UI — auto-login to Demo/Mock broker
-        # This registers it in the session registry so get_broker() works
+        # Register a mock broker with passthrough_market_data=True
+        # so market data methods raise → fallback chain goes to yfinance
+        # Account methods (funds, holdings) still return demo data
         console.print("[dim]  Running without broker (--no-broker). Using yfinance for market data.[/dim]")
         console.print("[dim]  To connect a real broker later, run 'login' in the REPL.[/dim]\n")
-        broker = login("0")  # "0" = Demo/Mock broker
+        from brokers.mock import MockBrokerAPI
+        from brokers.session import _brokers, _primary_key
+        mock = MockBrokerAPI(passthrough_market_data=True)
+        mock.complete_login()
+        import brokers.session as _sess
+        _sess._brokers["mock"] = mock
+        _sess._primary_key = "mock"
+        broker = mock
     else:
         try:
             broker = login()
