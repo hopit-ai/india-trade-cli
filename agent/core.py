@@ -283,16 +283,20 @@ class OpenAIProvider(LLMProvider):
         super().__init__(model, registry, system_prompt)
         try:
             import openai as _sdk
-            self._sdk    = _sdk
-            self._client = _sdk.OpenAI(
-                api_key=get_credential("OPENAI_API_KEY", "OpenAI API Key", secret=True)
-            )
+            self._sdk = _sdk
+            api_key = get_credential("OPENAI_API_KEY", "OpenAI API Key", secret=True)
+            base_url = os.environ.get("OPENAI_BASE_URL", "").strip() or None
+            self._client = _sdk.OpenAI(api_key=api_key, base_url=base_url)
+            self._base_url = base_url
         except ImportError:
             raise RuntimeError("openai not installed. Run: pip install openai")
 
     @property
     def provider_name(self) -> str:
-        return f"OpenAI / {self.model}"
+        label = f"OpenAI / {self.model}"
+        if self._base_url:
+            label += f" (via {self._base_url.split('//')[1].split('/')[0]})"
+        return label
 
     def chat(self, messages: list[dict], stream: bool = True) -> str:
         # OpenAI takes system message inline
