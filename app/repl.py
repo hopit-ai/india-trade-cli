@@ -63,6 +63,7 @@ COMMANDS = [
     "deep-analyze", "drift",
     "earnings", "events", "flows", "greeks", "macro", "memory",
     "pairs", "patterns", "profile", "provider", "risk-report",
+    "save-pdf", "explain", "explain-save",
     "telegram", "tui", "walkforward", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
@@ -459,6 +460,15 @@ def cmd_help() -> None:
     memory outcome <ID> WIN|LOSS [pnl]  Record trade outcome
     patterns                          Show active India market patterns
 
+  [bold]Post-Processing (works on previous command output)[/bold]
+    save-pdf                          Save previous output as PDF
+    explain                           Explain previous output in simple terms
+    explain-save                      Explain + save both as PDF
+
+  [bold]Inline Flags (append to any command)[/bold]
+    --pdf                             e.g. analyze RELIANCE --pdf
+    --explain                         e.g. backtest TCS rsi --explain
+
   [bold]Interface[/bold]
     tui              Launch split-panel Textual TUI
     web [PORT]       Start web UI server (browser-based broker login, default port 8765)
@@ -518,6 +528,18 @@ def _handle_backtest_command(args: list[str]) -> None:
         )
         result.print_summary()
         result.print_trades(10)
+        # Capture for post-processing
+        _bt_summary = (
+            f"Backtest: {result.strategy_name} on {result.symbol}\n"
+            f"Period: {result.start_date} to {result.end_date}\n"
+            f"Return: {result.total_return:+.2f}% vs Buy&Hold: {result.buy_hold_return:+.2f}%\n"
+            f"Sharpe: {result.sharpe_ratio:.2f}, Max DD: {result.max_drawdown:.2f}%\n"
+            f"Trades: {result.total_trades}, Win Rate: {result.win_rate:.1f}%\n"
+            f"Avg Win: {result.avg_win:+.2f}%, Avg Loss: {result.avg_loss:+.2f}%\n"
+            f"Profit Factor: {result.profit_factor:.2f}"
+        )
+        _last_output = _bt_summary
+        _last_command = f"Backtest {symbol} {strategy_name}"
         if wants_pdf or wants_explain:
             # Build text summary for export
             summary = (
@@ -793,6 +815,10 @@ def run_repl(broker: BrokerAPI) -> None:
         )
     console.print()
 
+    # Buffer for post-processing commands (save-pdf, explain, explain-save)
+    _last_output: str = ""
+    _last_command: str = ""
+
     while True:
         try:
             raw = session.prompt("trade ❯ ").strip()
@@ -898,6 +924,8 @@ def run_repl(broker: BrokerAPI) -> None:
                 else:
                     agent = get_agent()
                     output = agent.run_multi_agent_analysis(symbol)
+                    _last_output = output or ""
+                    _last_command = f"Analysis {symbol}"
                     if wants_pdf or wants_explain:
                         handle_output_flags(
                             output or "", f"Analysis {symbol}",
@@ -979,6 +1007,8 @@ def run_repl(broker: BrokerAPI) -> None:
                             llm_provider=agent._provider,
                         )
                         output = deep.analyze(symbol)
+                        _last_output = output or ""
+                        _last_command = f"Deep Analysis {symbol}"
                         if wants_pdf or wants_explain:
                             handle_output_flags(
                                 output or "", f"Deep Analysis {symbol}",
@@ -1016,6 +1046,54 @@ def run_repl(broker: BrokerAPI) -> None:
                     )
                 except Exception as e:
                     console.print(f"[red]Telegram bot failed: {e}[/red]")
+
+            # ── Post-processing commands (operate on previous output) ──
+            elif command == "save-pdf":
+                if not _last_output:
+                    console.print("[dim]No previous output to save. Run a command first.[/dim]")
+                else:
+                    from engine.output import export_to_pdf
+                    filepath = export_to_pdf(_last_output, title=_last_command or "Trade CLI Output")
+                    if filepath:
+                        console.print(f"[green]PDF saved:[/green] {filepath}")
+
+            elif command == "explain":
+                if not _last_output:
+                    console.print("[dim]No previous output to explain. Run a command first.[/dim]")
+                else:
+                    from engine.output import explain_simply
+                    console.print()
+                    console.rule("[bold green]Simple Explanation[/bold green]", style="green")
+                    try:
+                        agent = get_agent()
+                        explanation = explain_simply(_last_output, llm_provider=agent._provider)
+                    except Exception:
+                        explanation = explain_simply(_last_output)
+                        console.print(explanation, highlight=False)
+                    console.rule(style="green")
+                    _last_output = _last_output + "\n\n" + explanation
+
+            elif command == "explain-save":
+                if not _last_output:
+                    console.print("[dim]No previous output. Run a command first.[/dim]")
+                else:
+                    from engine.output import explain_simply, export_to_pdf
+                    # Step 1: Explain
+                    console.print()
+                    console.rule("[bold green]Simple Explanation[/bold green]", style="green")
+                    try:
+                        agent = get_agent()
+                        explanation = explain_simply(_last_output, llm_provider=agent._provider)
+                    except Exception:
+                        explanation = explain_simply(_last_output)
+                        console.print(explanation, highlight=False)
+                    console.rule(style="green")
+                    # Step 2: Combine and save PDF
+                    combined = _last_output + "\n\n--- SIMPLE EXPLANATION ---\n\n" + explanation
+                    filepath = export_to_pdf(combined, title=_last_command or "Trade CLI Report")
+                    if filepath:
+                        console.print(f"\n[green]PDF saved (with explanation):[/green] {filepath}")
+                    _last_output = combined
 
             elif command == "walkforward":
                 if not args:
@@ -1058,6 +1136,8 @@ def run_repl(broker: BrokerAPI) -> None:
                 else:
                     agent = get_agent()
                     output = agent.chat(message)
+                    _last_output = output or ""
+                    _last_command = f"AI: {message[:40]}"
                     if wants_pdf or wants_explain:
                         handle_output_flags(
                             output or "", f"AI Chat",
