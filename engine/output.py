@@ -61,8 +61,13 @@ def export_to_pdf(
         console.print("[red]fpdf2 not installed. Run: pip install fpdf2[/red]")
         return ""
 
-    # Clean terminal formatting codes
+    # Clean terminal formatting codes and non-ASCII characters
     clean = _strip_rich_markup(content)
+    clean = clean.replace("₹", "Rs.").replace("→", "->").replace("←", "<-")
+    clean = clean.replace("━", "-").replace("─", "-").replace("│", "|")
+    clean = clean.replace("╔", "+").replace("╗", "+").replace("╚", "+").replace("╝", "+")
+    # Remove any remaining non-latin1 characters
+    clean = clean.encode("latin-1", errors="replace").decode("latin-1")
 
     # Generate filename
     if not filename:
