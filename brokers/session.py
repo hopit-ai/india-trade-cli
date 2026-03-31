@@ -353,6 +353,18 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
     # Try to resume existing session
     if broker.is_authenticated():
         console.print("[dim]Resuming existing session…[/dim]")
+        # Verify token actually works with a quick profile call
+        try:
+            broker.get_profile()
+        except Exception:
+            console.print("[yellow]Session expired. Logging in again…[/yellow]")
+            # Clear stale token
+            try:
+                broker.logout()
+            except Exception:
+                pass
+            broker = _make_broker(choice)[1]
+            _do_auth(key, broker)
     else:
         _do_auth(key, broker)
 
