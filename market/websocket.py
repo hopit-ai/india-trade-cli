@@ -249,12 +249,13 @@ class WebSocketManager:
         self._connected = True
         logger.info("WebSocket: connected")
 
-    def _on_close(self) -> None:
+    def _on_close(self, *args, **kwargs) -> None:
         self._connected = False
         logger.info("WebSocket: disconnected")
 
-    def _on_error(self, error) -> None:
-        logger.error(f"WebSocket error: {error}")
+    def _on_error(self, *args, **kwargs) -> None:
+        if args:
+            logger.debug(f"WebSocket error: {args[0]}")
 
     def _on_message(self, message) -> None:
         """Process incoming tick data."""
