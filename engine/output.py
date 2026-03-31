@@ -78,48 +78,97 @@ def export_to_pdf(
     filepath = PDF_OUTPUT_DIR / filename
 
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
 
-    # Title
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 12, title, new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(128, 128, 128)
-    pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%d %b %Y, %I:%M %p IST')}",
-             new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.ln(8)
+    pw = pdf.w - 40  # printable width (margins)
 
-    # Content
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Courier", "", 9)
+    # ── Header bar ───────────────────────────────────────────
+    pdf.set_fill_color(20, 60, 120)
+    pdf.rect(0, 0, pdf.w, 28, "F")
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_y(6)
+    pdf.cell(0, 10, title, align="C")
+    pdf.ln(8)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(200, 220, 255)
+    pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%d %b %Y, %I:%M %p IST')}",
+             align="C")
+    pdf.ln(16)
+
+    # ── Content ──────────────────────────────────────────────
+    pdf.set_text_color(30, 30, 30)
+
+    # Section header keywords
+    _SECTION_KEYWORDS = {
+        "VERDICT", "TRADE RECOMMENDATION", "RATIONALE", "RISKS", "RISK",
+        "BULL CASE", "BEAR CASE", "FACILITATOR", "SCORECARD",
+        "ANALYST REPORTS", "RESEARCH DEBATE", "SIMPLE EXPLANATION",
+        "TRADE PLAN", "EXIT PLAN", "ENTRY ORDERS", "SIZING",
+        "BACKTEST", "STRATEGY", "CONFIDENCE", "WINNER",
+    }
 
     for line in clean.split("\n"):
-        # Section headers (lines with only uppercase/symbols)
-        if line.strip() and (line.strip().startswith("##") or line.strip().isupper()
-                             or line.strip().startswith("VERDICT")
-                             or line.strip().startswith("TRADE")
-                             or line.strip().startswith("RATIONALE")):
-            pdf.set_font("Helvetica", "B", 11)
-            pdf.set_text_color(0, 100, 180)
-            pdf.cell(0, 7, line.strip().lstrip("#").strip(),
-                     new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font("Courier", "", 9)
-            pdf.set_text_color(0, 0, 0)
-        elif line.strip().startswith("- ") or line.strip().startswith("* "):
-            # Bullet points
-            pdf.set_font("Courier", "", 9)
-            pdf.multi_cell(0, 5, "  " + line.strip())
-        elif line.strip():
-            pdf.multi_cell(0, 5, line)
-        else:
+        stripped = line.strip()
+        if not stripped:
             pdf.ln(3)
+            continue
 
-    # Footer
+        # Detect section headers
+        is_header = False
+        if stripped.startswith("##"):
+            is_header = True
+            stripped = stripped.lstrip("#").strip()
+        elif stripped.rstrip(":").upper() in _SECTION_KEYWORDS:
+            is_header = True
+        elif len(stripped) > 3 and stripped == stripped.upper() and not stripped[0].isdigit():
+            # All caps lines (but not numbers)
+            is_header = True
+
+        if is_header:
+            pdf.ln(4)
+            pdf.set_fill_color(230, 240, 250)
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.set_text_color(20, 60, 120)
+            pdf.cell(0, 8, "  " + stripped, new_x="LMARGIN", new_y="NEXT", fill=True)
+            pdf.set_text_color(30, 30, 30)
+            pdf.ln(2)
+
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            # Bullet points with indent
+            pdf.set_font("Helvetica", "", 9)
+            bullet_text = stripped.lstrip("-* ").strip()
+            pdf.cell(8)  # indent
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(4, 5, chr(8226))  # bullet char
+            pdf.set_font("Helvetica", "", 9)
+            pdf.multi_cell(pw - 12, 5, " " + bullet_text)
+
+        elif ":" in stripped and len(stripped.split(":")[0]) < 20:
+            # Key-value pairs (e.g. "Entry: Rs.2,360")
+            parts = stripped.split(":", 1)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(8)  # indent
+            pdf.cell(50, 5, parts[0].strip() + ":")
+            pdf.set_font("Helvetica", "", 9)
+            pdf.multi_cell(0, 5, parts[1].strip())
+
+        else:
+            # Regular text
+            pdf.set_font("Helvetica", "", 9)
+            pdf.multi_cell(0, 5, stripped)
+
+    # ── Footer ───────────────────────────────────────────────
     pdf.ln(10)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(20, pdf.get_y(), pdf.w - 20, pdf.get_y())
+    pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 5, "India Trade CLI - AI-Powered Stock Analysis Platform",
+    pdf.cell(0, 5, "India Trade CLI  |  AI-Powered Multi-Agent Stock Analysis",
+             new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.cell(0, 5, "github.com/ArchieIndian/india-trade-cli",
              new_x="LMARGIN", new_y="NEXT", align="C")
 
     pdf.output(str(filepath))
