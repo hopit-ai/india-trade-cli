@@ -110,6 +110,7 @@ class AlertManager:
         alert.message = alert.describe()
         self._alerts.append(alert)
         self._save()
+        self._auto_subscribe(alert)
         return alert
 
     def add_technical_alert(
@@ -207,8 +208,70 @@ class AlertManager:
 
     # ── Polling ───────────────────────────────────────────────
 
+    def start_realtime(self) -> None:
+        """
+        Register with WebSocket for real-time alert evaluation.
+        Fires on every tick — instant alerts instead of 60s polling.
+        Falls back to polling if WebSocket is not connected.
+        """
+        try:
+            from market.websocket import ws_manager
+            if ws_manager.connected:
+                ws_manager.on_tick(self._on_tick)
+                # Subscribe to all alerted symbols
+                symbols = list({
+                    f"{a.exchange}:{a.symbol}" for a in self._alerts if not a.triggered
+                })
+                if symbols:
+                    ws_manager.subscribe(symbols)
+                console.print("[dim]  Alerts: real-time via WebSocket[/dim]")
+                return
+        except Exception:
+            pass
+
+        # Fallback to polling
+        self.start_polling(interval=60)
+
+    def _on_tick(self, tick) -> None:
+        """Called on every WebSocket tick — evaluate price alerts instantly."""
+        if self.active_count() == 0:
+            return
+
+        for alert in self._alerts:
+            if alert.triggered:
+                continue
+            if alert.alert_type != "PRICE":
+                continue
+
+            # Match tick symbol to alert symbol
+            tick_sym = tick.symbol if hasattr(tick, 'symbol') else ""
+            alert_sym_variants = [
+                f"{alert.exchange}:{alert.symbol}-EQ",
+                f"{alert.exchange}:{alert.symbol}",
+            ]
+            if tick_sym not in alert_sym_variants:
+                continue
+
+            ltp = tick.ltp if hasattr(tick, 'ltp') else 0
+            if ltp <= 0:
+                continue
+
+            triggered = False
+            if alert.condition == "ABOVE" and ltp >= alert.threshold:
+                triggered = True
+            elif alert.condition == "BELOW" and ltp <= alert.threshold:
+                triggered = True
+            elif alert.condition == "CROSSES" and ltp >= alert.threshold:
+                triggered = True
+
+            if triggered:
+                alert.triggered = True
+                alert.triggered_at = datetime.now().isoformat(timespec="seconds")
+                self._save()
+                self._notify(alert, ltp=ltp)
+
     def start_polling(self, interval: int = 60) -> None:
-        """Start background alert checking (daemon thread)."""
+        """Start background alert checking (daemon thread). Fallback when no WebSocket."""
         if self._polling:
             return
         self._polling = True
@@ -241,6 +304,15 @@ class AlertManager:
 
     # ── Private ───────────────────────────────────────────────
 
+    def _auto_subscribe(self, alert: Alert) -> None:
+        """Auto-subscribe the alert's symbol to WebSocket for real-time ticks."""
+        try:
+            from market.websocket import ws_manager
+            if ws_manager.connected:
+                ws_manager.subscribe([f"{alert.exchange}:{alert.symbol}"])
+        except Exception:
+            pass
+
     def _poll_loop(self, interval: int) -> None:
         while self._polling:
             if self.active_count() > 0:
@@ -249,15 +321,34 @@ class AlertManager:
                     self._notify(alert)
             time.sleep(interval)
 
-    def _notify(self, alert: Alert) -> None:
+    def _notify(self, alert: Alert, ltp: Optional[float] = None) -> None:
+        """
+        Multi-channel alert notification:
+          1. Terminal (Rich panel + system bell)
+          2. macOS desktop notification
+          3. Telegram push (if bot is configured)
+        """
+        desc = alert.describe()
+        ltp_str = f"  LTP: ₹{ltp:,.2f}" if ltp else ""
+
+        # 1. Terminal
         console.print()
         console.print(Panel(
-            f"[bold white]{alert.describe()}[/bold white]\n"
+            f"[bold white]{desc}[/bold white]{ltp_str}\n"
             f"[dim]Triggered at {alert.triggered_at}[/dim]",
             title="[bold yellow]🔔 ALERT TRIGGERED[/bold yellow]",
             border_style="yellow",
         ))
         print("\a", end="", flush=True)  # system bell
+
+        # 2. macOS desktop notification
+        _desktop_notify(
+            title="Alert Triggered",
+            message=f"{desc}{ltp_str}",
+        )
+
+        # 3. Telegram push
+        _telegram_notify(f"🔔 ALERT TRIGGERED\n\n{desc}{ltp_str}")
 
     def _evaluate(self, alert: Alert) -> bool:
         """Check if an alert's condition is met right now."""
@@ -396,5 +487,48 @@ class AlertManager:
 
 
 # ── Singleton ─────────────────────────────────────────────────
+
+# ── Notification Helpers ──────────────────────────────────────
+
+def _desktop_notify(title: str, message: str) -> None:
+    """
+    Send a macOS desktop notification via osascript.
+    Non-blocking — runs in a background thread.
+    Falls back silently on non-macOS systems.
+    """
+    import subprocess
+    import sys
+
+    if sys.platform != "darwin":
+        return
+
+    def _send():
+        try:
+            # Escape quotes for AppleScript
+            t = title.replace('"', '\\"')
+            m = message.replace('"', '\\"')
+            subprocess.run(
+                ["osascript", "-e",
+                 f'display notification "{m}" with title "{t}" sound name "Glass"'],
+                timeout=5,
+                capture_output=True,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_send, daemon=True).start()
+
+
+def _telegram_notify(message: str) -> None:
+    """
+    Send a Telegram push notification.
+    Non-blocking — runs in background thread.
+    """
+    try:
+        from bot.telegram_bot import send_push
+        send_push(message)
+    except Exception:
+        pass
+
 
 alert_manager = AlertManager()

@@ -764,7 +764,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
     # Start background alert poller (daemon thread, checks every 60s)
     from engine.alerts import alert_manager
-    alert_manager.start_polling(interval=60)
+    alert_manager.start_realtime()  # WebSocket ticks → instant alerts (falls back to 60s polling)
 
     console.print(
         "\n[dim]Type [bold]help[/bold] for commands, "
