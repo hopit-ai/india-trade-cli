@@ -17,10 +17,10 @@ services:
     tty: true
     env_file: .env
     volumes:
-      - trade-data:/root/.trading_platform    # persist tokens, memory, alerts
-      - ./output:/output                       # PDF exports
-      - .:/app                                 # hot reload: mount source code
-      - ~/.claude:/root/.claude                # Claude CLI auth (for claude_subscription)
+      - ~/.trading_platform:/root/.trading_platform    # share tokens, memory, alerts with host
+      - ./output:/output                                # PDF exports
+      - .:/app                                          # hot reload: mount source code
+      - ~/.claude:/root/.claude                         # Claude CLI auth (for claude_subscription)
     environment:
       - PDF_OUTPUT_DIR=/output
       - PYTHONDONTWRITEBYTECODE=1
@@ -33,8 +33,9 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - trade-data:/root/.trading_platform
+      - ~/.trading_platform:/root/.trading_platform
       - .:/app                                 # hot reload
+      - ~/.claude:/root/.claude
     environment:
       - PYTHONDONTWRITEBYTECODE=1
     command: python -m bot.telegram_bot
@@ -48,12 +49,14 @@ services:
       - "8765:8765"
     env_file: .env
     volumes:
-      - trade-data:/root/.trading_platform
+      - ~/.trading_platform:/root/.trading_platform
       - .:/app                                 # hot reload
+      - ~/.claude:/root/.claude
     environment:
       - PYTHONDONTWRITEBYTECODE=1
     command: uvicorn web.api:app --host 0.0.0.0 --port 8765 --reload
 
-volumes:
-  trade-data:
-    driver: local
+# No Docker volumes needed — host directories are mounted directly:
+#   ~/.trading_platform  → tokens, memory, alerts (shared with local CLI)
+#   ~/.claude            → Claude CLI auth
+#   ./output             → PDF exports
