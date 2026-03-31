@@ -62,8 +62,8 @@ COMMANDS = [
     "ai", "alert", "alerts", "audit", "backtest", "clear",
     "deep-analyze", "drift",
     "earnings", "events", "flows", "greeks", "macro", "memory",
-    "pairs", "patterns", "profile", "provider", "risk-report",
-    "save-pdf", "explain", "explain-save",
+    "mtf", "pairs", "patterns", "profile", "provider", "risk-report",
+    "paper-execute", "save-pdf", "explain", "explain-save",
     "telegram", "tui", "walkforward", "web", "whatif",
     "credentials",
     "help", "quit", "exit",
@@ -404,85 +404,83 @@ def _cmd_web(port: int = 8765) -> None:
 
 
 def cmd_help() -> None:
-    console.print("""
-[bold cyan]Available commands:[/bold cyan]
+    from rich.panel import Panel
 
-  [bold]Session[/bold]
-    login            Log in (sets primary broker)
-    connect          Add a second broker (e.g. connect Groww after Zerodha)
-    disconnect       Remove a secondary broker connection
-    brokers          List all connected brokers with fund summary
-    logout           Log out of all brokers
-    profile          Account profile (primary broker)
-    funds            Cash and margin (primary broker)
+    sections = {
+        "Analysis (AI-powered)": [
+            ("analyze <SYM>",         "Multi-agent analysis (7 analysts + debate + trade plan)"),
+            ("deep-analyze <SYM>",    "Full LLM mode (11 calls — every analyst uses AI)"),
+            ("ai <message>",          "Chat with AI (e.g. ai should I buy RELIANCE?)"),
+            ("morning-brief",         "Daily market context + AI narrative"),
+        ],
+        "Market Data": [
+            ("earnings [SYM...]",     "Upcoming quarterly results calendar"),
+            ("flows",                 "FII/DII flow intelligence with signals"),
+            ("events [days]",         "Event-driven strategy recommendations"),
+            ("patterns",              "Active India-specific market patterns"),
+            ("macro [SYM]",           "USD/INR, crude, gold + stock linkages"),
+        ],
+        "Backtest & Simulation": [
+            ("backtest SYM rsi",      "RSI strategy backtest"),
+            ("backtest SYM ma 20 50", "EMA crossover backtest"),
+            ("backtest SYM macd|bb",  "MACD or Bollinger backtest"),
+            ("walkforward SYM rsi",   "Walk-forward test (rolling windows)"),
+            ("whatif nifty -3",       "What if NIFTY drops 3%? (real beta)"),
+            ("whatif SYM -10",        "Single stock scenario"),
+            ("pairs [A B]",           "Pair trading scan or specific pair"),
+        ],
+        "Risk & Portfolio": [
+            ("funds",                 "Cash and margin"),
+            ("holdings",              "Delivery holdings"),
+            ("positions",             "Open intraday / F&O positions"),
+            ("portfolio",             "Combined view: all brokers + risk"),
+            ("greeks",                "Portfolio Greeks (Delta, Theta, Vega)"),
+            ("risk-report",           "VaR/CVaR portfolio risk analysis"),
+            ("orders",                "Today's orders"),
+        ],
+        "Memory & Learning": [
+            ("memory",                "Recent trade analyses"),
+            ("memory stats",          "Performance statistics"),
+            ("memory <SYM>",          "Past analyses for a symbol"),
+            ("memory outcome ID WIN [pnl]", "Record trade outcome"),
+            ("profile",               "Your personal trading style"),
+            ("drift",                 "Model drift detection"),
+            ("audit <ID>",            "Post-mortem on a specific trade"),
+        ],
+        "Alerts": [
+            ("alert SYM above 2800",          "Price alert"),
+            ("alert SYM RSI above 70",        "Technical alert"),
+            ("alert SYM above 2800 AND RSI above 70", "Conditional (AND)"),
+            ("alerts",                         "List active alerts"),
+            ("alert remove <ID>",              "Remove an alert"),
+        ],
+        "Output": [
+            ("save-pdf",              "Save previous output as PDF"),
+            ("explain",               "Explain previous output simply"),
+            ("explain-save",          "Explain + save as PDF"),
+            ("--pdf",                 "Flag: append to any command"),
+            ("--explain",             "Flag: append to any command"),
+        ],
+        "Session": [
+            ("login",                 "Connect to a broker"),
+            ("provider [name]",       "Show/switch AI provider"),
+            ("telegram",              "Start Telegram bot"),
+            ("clear",                 "Reset AI conversation history"),
+            ("credentials",           "Manage API keys"),
+            ("quit / exit",           "Exit"),
+        ],
+    }
 
-  [bold]Portfolio[/bold]
-    holdings         Delivery holdings (primary broker)
-    positions        Open intraday / F&O positions (primary broker)
-    portfolio        [bold green]Combined view: all brokers + Greeks + risk[/bold green]
-    orders           Today's order history (primary broker)
-
-  [bold]Analysis & Trading[/bold]
-    morning-brief    Daily market context and recommended posture
-    analyze <SYM>    Full fundamental + technical + options analysis
-    trade            Guided strategy builder with AI recommendation
-
-  [bold]AI[/bold]
-    ai <message>     Chat directly with the AI agent
-    clear            Clear AI conversation history (start fresh)
-    provider         Show / switch AI provider (anthropic / openai / gemini / …)
-
-  [bold]Alerts[/bold]
-    alert SYMBOL above PRICE          Set a price alert (e.g. alert NIFTY above 22500)
-    alert SYMBOL below PRICE          Set a price alert (e.g. alert RELIANCE below 2600)
-    alert SYMBOL RSI above 70         Set a technical alert
-    alert RELIANCE above 2800 AND RSI above 70   Conditional alert (AND)
-    alert list / alerts               List all active alerts
-    alert remove ID                   Remove an alert by ID
-    greeks                            Portfolio Greeks (net Delta, Theta, Vega)
-
-  [bold]India Intelligence[/bold]
-    earnings [SYM...]                 Upcoming quarterly results calendar
-    flows                             FII/DII flow analysis with signals
-    events [days]                     Event-driven strategy recommendations
-
-  [bold]Backtest & Simulation[/bold]
-    backtest SYMBOL [strategy]        Backtest a strategy (rsi, ma, macd, bb)
-    backtest RELIANCE rsi             RSI overbought/oversold (30/70)
-    backtest RELIANCE ma 20 50        EMA crossover strategy
-    whatif nifty -3                   What if NIFTY drops 3%?
-    whatif RELIANCE -10               What if RELIANCE drops 10%?
-
-  [bold]Memory & Patterns[/bold]
-    memory                            Show recent trade analyses
-    memory stats                      Performance statistics
-    memory <SYMBOL>                   Past analyses for a symbol
-    memory outcome <ID> WIN|LOSS [pnl]  Record trade outcome
-    patterns                          Show active India market patterns
-
-  [bold]Post-Processing (works on previous command output)[/bold]
-    save-pdf                          Save previous output as PDF
-    explain                           Explain previous output in simple terms
-    explain-save                      Explain + save both as PDF
-
-  [bold]Inline Flags (append to any command)[/bold]
-    --pdf                             e.g. analyze RELIANCE --pdf
-    --explain                         e.g. backtest TCS rsi --explain
-
-  [bold]Interface[/bold]
-    tui              Launch split-panel Textual TUI
-    web [PORT]       Start web UI server (browser-based broker login, default port 8765)
-    paper            Show paper-trading mode status
-
-  [bold]Setup[/bold]
-    credentials           List which credentials are stored and their status
-    credentials setup     Interactive wizard to configure all API keys
-    credentials set KEY   Update a single credential
-    credentials delete KEY Remove a key from the OS keychain
-
-  [bold]Other[/bold]
-    quit / exit      Exit the platform
-""")
+    for section, commands in sections.items():
+        lines = []
+        for cmd, desc in commands:
+            lines.append(f"  [cyan]{cmd:34s}[/cyan] {desc}")
+        console.print(Panel(
+            "\n".join(lines),
+            title=f"[bold]{section}[/bold]",
+            border_style="dim",
+            padding=(0, 1),
+        ))
 
 
 # ── Alert command handler ──────────────────────────────────────
@@ -818,6 +816,7 @@ def run_repl(broker: BrokerAPI) -> None:
     # Buffer for post-processing commands (save-pdf, explain, explain-save)
     _last_output: str = ""
     _last_command: str = ""
+    _last_trade_plans: dict = {}  # from analyze → 3 risk persona plans
 
     while True:
         try:
@@ -926,6 +925,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     output = agent.run_multi_agent_analysis(symbol)
                     _last_output = output or ""
                     _last_command = f"Analysis {symbol}"
+                    _last_trade_plans = getattr(agent, '_last_trade_plans', {})
                     if wants_pdf or wants_explain:
                         handle_output_flags(
                             output or "", f"Analysis {symbol}",
@@ -1047,6 +1047,22 @@ def run_repl(broker: BrokerAPI) -> None:
                 except Exception as e:
                     console.print(f"[red]Telegram bot failed: {e}[/red]")
 
+            # ── Paper execution ──────────────────────────────────
+            elif command == "paper-execute":
+                if not _last_trade_plans:
+                    console.print("[dim]No trade plans available. Run 'analyze <SYMBOL>' first.[/dim]")
+                else:
+                    profile_name = args[0].lower() if args else "neutral"
+                    if profile_name not in ("aggressive", "neutral", "conservative"):
+                        console.print("[red]Usage: paper-execute [aggressive|neutral|conservative][/red]")
+                    else:
+                        plan = _last_trade_plans.get(profile_name)
+                        if plan:
+                            from engine.paper_execute import execute_trade_plan
+                            execute_trade_plan(plan, broker)
+                        else:
+                            console.print(f"[dim]No {profile_name} plan available (verdict may be HOLD).[/dim]")
+
             # ── Post-processing commands (operate on previous output) ──
             elif command == "save-pdf":
                 if not _last_output:
@@ -1094,6 +1110,14 @@ def run_repl(broker: BrokerAPI) -> None:
                     if filepath:
                         console.print(f"\n[green]PDF saved (with explanation):[/green] {filepath}")
                     _last_output = combined
+
+            elif command == "mtf":
+                if not args:
+                    console.print("[red]Usage: mtf <SYMBOL>   e.g. mtf RELIANCE[/red]")
+                else:
+                    from analysis.multi_timeframe import multi_timeframe_analysis
+                    result = multi_timeframe_analysis(args[0].upper())
+                    result.print_analysis()
 
             elif command == "walkforward":
                 if not args:
@@ -1190,5 +1214,11 @@ def run_repl(broker: BrokerAPI) -> None:
                     f"(type [bold]help[/bold] for available commands)"
                 )
 
+        except KeyboardInterrupt:
+            console.print("\n[dim]Command interrupted.[/dim]")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
+            import os
+            if os.environ.get("DEBUG"):
+                import traceback
+                console.print(f"[dim]{traceback.format_exc()}[/dim]")

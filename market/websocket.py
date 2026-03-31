@@ -68,25 +68,42 @@ _SYMBOL_MAP = {
     "NSE:NIFTY ENERGY":      "NSE:CNXENERGY-INDEX",
 }
 
-# Known index patterns — anything with "NIFTY" or known index names
-_INDEX_KEYWORDS = {"NIFTY", "SENSEX", "VIX", "MIDCAP", "FINNIFTY", "BANKNIFTY"}
+# Known index patterns — anything with these keywords is an INDEX, not EQ
+_INDEX_KEYWORDS = {
+    "NIFTY", "SENSEX", "VIX", "MIDCAP", "FINNIFTY", "BANKNIFTY",
+    "PHARMA", "AUTO", "FMCG", "REALTY", "METAL", "ENERGY", "IT",
+    "FIN SERVICE", "BANK", "INDEX",
+}
 
 
 def _to_ws_symbol(instrument: str) -> str:
     """Convert our instrument format to Fyers WebSocket format."""
+    # Direct map lookup
     if instrument in _SYMBOL_MAP:
         return _SYMBOL_MAP[instrument]
+
+    # Try uppercase version
+    if instrument.upper() in _SYMBOL_MAP:
+        return _SYMBOL_MAP[instrument.upper()]
+
     if ":" in instrument:
         exch, sym = instrument.split(":", 1)
-        # Already in Fyers format
+        # Already in Fyers format (has -EQ, -INDEX, etc.)
         if "-" in sym:
             return instrument
+
+        sym_upper = sym.upper().strip()
+
+        # Check full map with constructed key
+        map_key = f"{exch.upper()}:{sym_upper}"
+        if map_key in _SYMBOL_MAP:
+            return _SYMBOL_MAP[map_key]
+
         # Check if it's an index (contains NIFTY, SENSEX, VIX, etc.)
-        sym_upper = sym.upper()
         if any(kw in sym_upper for kw in _INDEX_KEYWORDS):
-            # Try to form a valid index symbol
             clean = sym_upper.replace(" ", "")
             return f"{exch}:{clean}-INDEX"
+
         return f"{exch}:{sym}-EQ"
     return f"NSE:{instrument}-EQ"
 

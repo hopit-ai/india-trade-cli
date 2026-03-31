@@ -963,6 +963,7 @@ class MultiAgentAnalyzer:
             pass  # memory storage is non-critical
 
         # ── Phase 5: Risk Management Team — 3 Perspectives ────
+        self.last_trade_plans = {}
         try:
             from engine.trader import TraderAgent
             trader = TraderAgent()
@@ -972,6 +973,7 @@ class MultiAgentAnalyzer:
                 reports=reports,
                 synthesis=synthesis,
             )
+            self.last_trade_plans = all_plans
             if any(p for p in all_plans.values()):
                 TraderAgent.print_all_plans(all_plans)
         except Exception:

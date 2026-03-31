@@ -1713,7 +1713,9 @@ class TradingAgent:
                 parallel=True,
                 verbose=True,
             )
-            return analyzer.analyze(symbol, exchange)
+            result = analyzer.analyze(symbol, exchange)
+            self._last_trade_plans = getattr(analyzer, 'last_trade_plans', {})
+            return result
         except Exception as exc:
             console.print(
                 f"[yellow]Multi-agent pipeline failed: {exc}[/yellow]\n"

@@ -40,6 +40,57 @@ from brokers.base import (
 TOKEN_FILE   = Path.home() / ".trading_platform" / "fyers.json"
 TOKEN_EXPIRY = 12 * 3600    # Fyers tokens valid ~12 h
 
+# ── Symbol mapping (instrument format → Fyers format) ────────
+
+_FYERS_INDEX_MAP = {
+    "NIFTY 50":          "NSE:NIFTY50-INDEX",
+    "NIFTY":             "NSE:NIFTY50-INDEX",
+    "NIFTY50":           "NSE:NIFTY50-INDEX",
+    "NIFTY BANK":        "NSE:NIFTYBANK-INDEX",
+    "BANKNIFTY":         "NSE:NIFTYBANK-INDEX",
+    "INDIA VIX":         "NSE:INDIAVIX-INDEX",
+    "VIX":               "NSE:INDIAVIX-INDEX",
+    "SENSEX":            "BSE:SENSEX-INDEX",
+    "NIFTY IT":          "NSE:NIFTYIT-INDEX",
+    "NIFTY PHARMA":      "NSE:CNXPHARMA-INDEX",
+    "NIFTY AUTO":        "NSE:CNXAUTO-INDEX",
+    "NIFTY FMCG":        "NSE:CNXFMCG-INDEX",
+    "NIFTY REALTY":      "NSE:CNXREALTY-INDEX",
+    "NIFTY METAL":       "NSE:CNXMETAL-INDEX",
+    "NIFTY ENERGY":      "NSE:CNXENERGY-INDEX",
+    "NIFTY FIN SERVICE": "NSE:CNXFIN-INDEX",
+    "NIFTY MIDCAP 100":  "NSE:MIDCAP100-INDEX",
+    "FINNIFTY":          "NSE:FINNIFTY-INDEX",
+}
+
+_INDEX_KEYWORDS = {"NIFTY", "SENSEX", "VIX", "MIDCAP", "FINNIFTY", "BANKNIFTY",
+                   "PHARMA", "AUTO", "FMCG", "REALTY", "METAL", "ENERGY"}
+
+
+def _to_fyers_symbol(instrument: str) -> str:
+    """Convert 'NSE:RELIANCE' or 'NSE:NIFTY 50' to Fyers API format."""
+    if ":" in instrument:
+        exch, sym = instrument.split(":", 1)
+    else:
+        exch, sym = "NSE", instrument
+
+    sym_upper = sym.upper().strip()
+
+    # Check index map
+    if sym_upper in _FYERS_INDEX_MAP:
+        return _FYERS_INDEX_MAP[sym_upper]
+
+    # Already has suffix
+    if "-" in sym:
+        return instrument
+
+    # Check if it's an index by keywords
+    if any(kw in sym_upper for kw in _INDEX_KEYWORDS):
+        clean = sym_upper.replace(" ", "")
+        return f"{exch}:{clean}-INDEX"
+
+    return f"{exch}:{sym}-EQ"
+
 
 def _get_sdk():
     """Lazy import fyers SDK."""
@@ -286,22 +337,7 @@ class FyersAPI(BrokerAPI):
         fyers_symbols = []
         key_map = {}   # fyers_symbol → original instrument key
         for inst in instruments:
-            if ":" in inst:
-                exch, sym = inst.split(":", 1)
-            else:
-                exch, sym = "NSE", inst
-
-            if sym.upper() in ("NIFTY 50", "NIFTY", "NIFTY50"):
-                fyers_sym = "NSE:NIFTY50-INDEX"
-            elif sym.upper() in ("NIFTY BANK", "BANKNIFTY"):
-                fyers_sym = "NSE:NIFTYBANK-INDEX"
-            elif sym.upper() in ("INDIA VIX", "VIX"):
-                fyers_sym = "NSE:INDIAVIX-INDEX"
-            elif sym.upper() in ("SENSEX",):
-                fyers_sym = "BSE:SENSEX-INDEX"
-            else:
-                fyers_sym = f"{exch}:{sym}-EQ"
-
+            fyers_sym = _to_fyers_symbol(inst)
             fyers_symbols.append(fyers_sym)
             key_map[fyers_sym] = inst
 
@@ -453,7 +489,7 @@ class FyersAPI(BrokerAPI):
         to_date   = to_date   or datetime.now()
         from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
 
-        fyers_symbol = f"{exchange}:{symbol}-EQ"
+        fyers_symbol = _to_fyers_symbol(f"{exchange}:{symbol}")
 
         try:
             data = fyers.history({
