@@ -4,8 +4,6 @@ AI-powered multi-agent stock & options analysis platform for Indian markets (NSE
 
 > **Philosophy:** Every trade must be justified. Analyze first, debate second, execute third.
 
-Inspired by [TradingAgents](https://github.com/TauricResearch/TradingAgents) (Tauric Research) but purpose-built for India with real broker integration and execution capability.
-
 ---
 
 ## Architecture
