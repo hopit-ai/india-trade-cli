@@ -122,8 +122,11 @@ def export_to_pdf(
             stripped = stripped.lstrip("#").strip()
         elif stripped.rstrip(":").upper() in _SECTION_KEYWORDS:
             is_header = True
-        elif len(stripped) > 3 and stripped == stripped.upper() and not stripped[0].isdigit():
-            # All caps lines (but not numbers)
+        elif (len(stripped) > 3 and len(stripped) < 40
+              and stripped == stripped.upper()
+              and not stripped[0].isdigit()
+              and " " not in stripped.rstrip(":")):
+            # Short all-caps single words (like "BULLISH", not full sentences)
             is_header = True
 
         if is_header:
@@ -137,22 +140,31 @@ def export_to_pdf(
 
         elif stripped.startswith("- ") or stripped.startswith("* "):
             # Bullet points with indent
-            pdf.set_font("Helvetica", "", 9)
             bullet_text = stripped.lstrip("-* ").strip()
-            pdf.cell(8)  # indent
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(4, 5, chr(8226))  # bullet char
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(pw - 12, 5, " " + bullet_text)
+            pdf.multi_cell(0, 5, "   > " + bullet_text)
 
-        elif ":" in stripped and len(stripped.split(":")[0]) < 20:
+        elif stripped.startswith("**") and stripped.endswith("**"):
+            # Bold text (markdown)
+            bold_text = stripped.strip("*").strip()
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.multi_cell(0, 6, bold_text)
+            pdf.set_font("Helvetica", "", 9)
+
+        elif ":" in stripped and len(stripped.split(":")[0]) < 25 and not stripped.startswith("http"):
             # Key-value pairs (e.g. "Entry: Rs.2,360")
             parts = stripped.split(":", 1)
+            key = parts[0].strip()
+            val = parts[1].strip()
             pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(8)  # indent
-            pdf.cell(50, 5, parts[0].strip() + ":")
+            pdf.cell(55, 5, key + ":")
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, parts[1].strip())
+            remaining_w = pdf.w - pdf.get_x() - 20
+            if remaining_w > 20:
+                pdf.multi_cell(remaining_w, 5, val)
+            else:
+                pdf.ln(5)
+                pdf.multi_cell(0, 5, "  " + val)
 
         else:
             # Regular text
