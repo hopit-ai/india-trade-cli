@@ -324,12 +324,14 @@ class OptionsAnalyst(BaseAnalyst):
         try:
             points = []
             data: dict[str, Any] = {}
+            has_data = False   # track if we got any real options data
 
             # PCR
             pcr_result = self.registry.execute("get_pcr", {"underlying": symbol})
-            if isinstance(pcr_result, dict) and "pcr" in pcr_result:
+            if isinstance(pcr_result, dict) and "error" not in pcr_result and "pcr" in pcr_result:
                 pcr = pcr_result["pcr"]
                 data["pcr"] = pcr
+                has_data = True
                 if pcr is not None:
                     if pcr > 1.2:
                         points.append(f"PCR: {pcr:.2f} (bearish — heavy put writing)")
@@ -340,20 +342,30 @@ class OptionsAnalyst(BaseAnalyst):
 
             # Max Pain
             mp_result = self.registry.execute("get_max_pain", {"underlying": symbol})
-            if isinstance(mp_result, dict) and "max_pain" in mp_result:
+            if isinstance(mp_result, dict) and "error" not in mp_result and "max_pain" in mp_result:
                 data["max_pain"] = mp_result["max_pain"]
+                has_data = True
                 points.append(f"Max Pain: {mp_result['max_pain']}")
 
             # IV Rank
             iv_result = self.registry.execute("get_iv_rank", {"symbol": symbol})
-            if isinstance(iv_result, dict) and "iv_rank" in iv_result:
+            if isinstance(iv_result, dict) and "error" not in iv_result and "iv_rank" in iv_result:
                 iv_rank = iv_result["iv_rank"]
                 data["iv_rank"] = iv_rank
+                has_data = True
                 if iv_rank is not None:
                     if iv_rank > 50:
                         points.append(f"IV Rank: {iv_rank} (elevated — good for selling premium)")
                     else:
                         points.append(f"IV Rank: {iv_rank} (low — good for buying options)")
+
+            # If no options data was available, report clearly
+            if not has_data:
+                return AnalystReport(
+                    analyst=self.name, verdict="UNAVAILABLE", confidence=0,
+                    score=0, key_points=["Options data unavailable for this symbol (no broker or no F&O segment)"],
+                    data={"options_available": False},
+                )
 
             # Derive verdict from PCR
             pcr_val = data.get("pcr")

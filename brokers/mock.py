@@ -239,12 +239,14 @@ class MockBrokerAPI(BrokerAPI):
 
     def get_historical_data(
         self,
-        symbol: str,
+        symbol:    str,
         exchange:  str = "NSE",
         interval:  str = "day",
         from_date: Optional[datetime] = None,
         to_date:   Optional[datetime] = None,
     ) -> list[dict]:
+        if self._passthrough_market_data:
+            raise NotImplementedError("Mock broker — use yfinance for historical data")
         to_date   = to_date   or datetime.now()
         from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
         try:
