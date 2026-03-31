@@ -69,6 +69,10 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
+    except Exception as e:
+        console.print(f"[red]Fatal error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
     finally:
         # Force exit — kill any lingering background threads
         # (WebSocket, alert poller, Telegram bot)
