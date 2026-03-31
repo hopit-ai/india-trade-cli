@@ -151,20 +151,20 @@ def export_to_pdf(
             pdf.multi_cell(0, 6, bold_text)
             pdf.set_font("Helvetica", "", 9)
 
-        elif ":" in stripped and len(stripped.split(":")[0]) < 25 and not stripped.startswith("http"):
+        elif (":" in stripped
+              and len(stripped.split(":")[0]) < 18
+              and not stripped.startswith("http")
+              and not any(c in stripped.split(":")[0] for c in ("(", ")", ",", "'"))):
             # Key-value pairs (e.g. "Entry: Rs.2,360")
+            # Only match clean short keys, not sentences with colons
             parts = stripped.split(":", 1)
             key = parts[0].strip()
             val = parts[1].strip()
-            # Render as single line: "Key: Value" with bold key
-            pdf.set_font("Helvetica", "B", 9)
-            key_w = pdf.get_string_width(key + ": ") + 2
-            pdf.cell(key_w, 5, key + ": ")
             pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, val)
+            pdf.multi_cell(0, 5, f"{key}: {val}")
 
         else:
-            # Regular text — strip any remaining markdown
+            # Regular text
             pdf.set_font("Helvetica", "", 9)
             pdf.multi_cell(0, 5, stripped.replace("**", ""))
 
