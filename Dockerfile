@@ -7,10 +7,15 @@
 
 FROM python:3.13-slim
 
-# System deps
+# System deps + Node.js (for claude CLI)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
+    gcc curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Claude CLI globally
+RUN npm install -g @anthropic-ai/claude-code
 
 # Working directory
 WORKDIR /app
