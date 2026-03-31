@@ -152,11 +152,7 @@ def yf_get_quote(symbol: str, exchange: str = "NSE") -> Quote:
             change_pct=change_pct,
         )
     except Exception as e:
-        # Return a zero-filled quote on error
-        return Quote(
-            symbol=symbol, last_price=0, open=0, high=0,
-            low=0, close=0, volume=0, change=0, change_pct=0,
-        )
+        raise RuntimeError(f"yfinance quote failed for {symbol}: {e}") from e
 
 
 def yf_get_quotes(instruments: list[str]) -> dict[str, Quote]:

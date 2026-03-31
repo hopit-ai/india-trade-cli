@@ -46,15 +46,24 @@ BANNER = """
 def main() -> None:
     console.print(BANNER)
 
-    # ── Check for --tui flag ──────────────────────────────────
+    # ── Check for flags ───────────────────────────────────────
     use_tui = "--tui" in sys.argv
+    no_broker = "--no-broker" in sys.argv
 
     # ── Login ─────────────────────────────────────────────────
-    try:
-        broker = login()
-    except (KeyboardInterrupt, EOFError):
-        console.print("\n[yellow]Login cancelled.[/yellow]")
-        sys.exit(0)
+    if no_broker:
+        # Skip broker login — use yfinance for data, no order placement
+        console.print("[dim]  Running without broker (--no-broker). Using yfinance for market data.[/dim]")
+        console.print("[dim]  To connect a broker later, run 'login' in the REPL.[/dim]\n")
+        from brokers.mock import MockBrokerAPI
+        broker = MockBrokerAPI()
+        broker.complete_login()
+    else:
+        try:
+            broker = login()
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[yellow]Login cancelled.[/yellow]")
+            sys.exit(0)
 
     if use_tui:
         # Launch Textual TUI
@@ -67,13 +76,24 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    exit_code = 0
     try:
         main()
     except Exception as e:
         console.print(f"[red]Fatal error: {e}[/red]")
         import traceback
         traceback.print_exc()
+        exit_code = 1
     finally:
-        # Force exit — kill any lingering background threads
-        # (WebSocket, alert poller, Telegram bot)
-        os._exit(0)
+        # Give daemon threads 2 seconds to finish, then force exit
+        # if they don't (WebSocket SDK can hold non-daemon threads)
+        import threading
+        non_daemon = [t for t in threading.enumerate()
+                      if t.is_alive() and not t.daemon and t != threading.main_thread()]
+        if non_daemon:
+            # Non-daemon threads exist — force kill after brief wait
+            import signal
+            signal.alarm(2) if hasattr(signal, 'alarm') else None
+            os._exit(exit_code)
+        else:
+            sys.exit(exit_code)

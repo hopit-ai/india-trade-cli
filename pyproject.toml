@@ -11,10 +11,14 @@ readme = "README.md"
 
 dependencies = [
     # ── Brokers ──────────────────────────────────────────────────────
-    "kiteconnect>=4.2.0",           # Zerodha Kite Connect
-    "httpx>=0.27.0",                # Groww, Upstox, Fyers (REST client)
+    "kiteconnect>=4.2.0",
+    "httpx>=0.27.0",
+    "fyers-apiv3>=3.1.0",
     # ── AI ───────────────────────────────────────────────────────────
     "anthropic>=0.40.0",
+    "openai>=1.40.0",
+    "google-generativeai>=0.8.0",
+    "google-cloud-aiplatform>=1.60.0",
     # ── Terminal UI ───────────────────────────────────────────────────
     "rich>=13.7.0",
     "textual>=0.80.0",
@@ -23,18 +27,22 @@ dependencies = [
     "pandas>=2.2.0",
     "numpy>=1.26.0",
     "py_vollib>=1.0.1",
+    "yfinance>=0.2.40",
     "feedparser>=6.0.11",
     "newsapi-python>=0.2.7",
-    # ── Auth & Security ───────────────────────────────────────────────
+    # ── Web ──────────────────────────────────────────────────────────
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    # ── Output ───────────────────────────────────────────────────────
+    "fpdf2>=2.7.0",
+    # ── Bot ──────────────────────────────────────────────────────────
+    "python-telegram-bot>=21.0",
+    # ── Auth & Utilities ─────────────────────────────────────────────
     "python-dotenv>=1.0.0",
     "keyring>=25.2.0",
-    "pyotp>=2.9.0",                 # Angel One TOTP auto-login
-    # ── Date / Time ───────────────────────────────────────────────────
+    "pyotp>=2.9.0",
     "python-dateutil>=2.9.0",
     "pytz>=2024.1",
-    # ── Web UI (FastAPI server for browser-based login) ───────────────
-    "fastapi>=0.100.0",
-    "uvicorn[standard]>=0.24.0",
 ]
 
 # ── Optional broker SDKs (install separately if needed) ─────────────
