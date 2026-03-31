@@ -265,7 +265,54 @@ class DeepAnalyzer:
             f"11 LLM calls[/dim]"
         )
         console.rule(style="magenta")
-        return synthesis
+
+        # Build full report for PDF/export
+        full_parts = [
+            f"DEEP ANALYSIS (FULL LLM): {exchange}:{symbol}",
+            f"Date: {time.strftime('%d %b %Y, %I:%M %p')}",
+            f"Mode: 11 LLM calls | {total:.0f}s total",
+            "",
+            "=" * 60,
+            "LLM ANALYST REPORTS",
+            "=" * 60,
+        ]
+        for r in reports:
+            if not r.error:
+                full_parts.append(r.summary_text())
+                full_parts.append("")
+
+        full_parts.append(f"\nSCORECARD: {scorecard.summary()}\n")
+
+        full_parts.extend([
+            "=" * 60,
+            "BULL/BEAR DEBATE",
+            "=" * 60,
+            "",
+            "--- BULL CASE (Round 1) ---",
+            debate.bull_argument,
+            "",
+            "--- BEAR CASE (Round 1) ---",
+            debate.bear_argument,
+            "",
+        ])
+        if debate.bull_rebuttal:
+            full_parts.extend(["--- BULL REBUTTAL (Round 2) ---", debate.bull_rebuttal, ""])
+        if debate.bear_rebuttal:
+            full_parts.extend(["--- BEAR REBUTTAL (Round 2) ---", debate.bear_rebuttal, ""])
+        if debate.facilitator:
+            full_parts.extend(["--- FACILITATOR SUMMARY ---", debate.facilitator,
+                               f"Debate Winner: {debate.winner}", ""])
+
+        full_parts.extend([
+            "=" * 60,
+            "FUND MANAGER SYNTHESIS",
+            "=" * 60,
+            "",
+            synthesis,
+        ])
+
+        self.last_full_report = "\n".join(full_parts)
+        return self.last_full_report
 
     def _run_llm_analysts(self, symbol: str, exchange: str) -> list[AnalystReport]:
         """Run all 5 analysts as LLM calls, feeding them raw tool data."""
