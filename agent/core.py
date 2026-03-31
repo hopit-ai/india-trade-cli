@@ -907,6 +907,11 @@ class ClaudeCLIProvider(LLMProvider):
             "MARGIN", "CAPITAL", "PORTFOLIO", "SCORE", "CONFIDENCE",
             "HIGH", "LOW", "OPEN", "CLOSE", "ABOVE", "BELOW",
             "MARKET", "INDEX", "SECTOR", "IMPORTANT", "DATA",
+            "OPTIONS", "OPTION", "FUTURES", "SPREAD", "STRADDLE",
+            "STRANGLE", "CONDOR", "BUTTERFLY", "PREMIUM", "STRIKE",
+            "EXPIRY", "SENTIMENT", "TECHNICAL", "FUNDAMENTAL",
+            "EARNINGS", "RESULTS", "GROWTH", "REVENUE", "VOLUME",
+            "SUPPORT", "RESISTANCE", "TREND", "SIGNAL", "PATTERN",
         }
         m = re.search(
             r'(?:NSE:|BSE:)?([A-Z][A-Z0-9&]{1,19})'
