@@ -498,6 +498,22 @@ class ClaudeCLIProvider(LLMProvider):
         if collected:
             console.print(f"[dim]  {len(collected)} tool results fetched[/dim]")
 
+        # ── Fast path: simple data queries skip the LLM ──────────
+        # If the only tools are data-only (quote, snapshot, vix, funds),
+        # format the results directly — no need for a 30s LLM call.
+        data_only_tools = {
+            "get_quote", "get_market_snapshot", "get_vix",
+            "get_sector_snapshot", "get_funds", "get_holdings",
+            "get_positions", "get_orders", "get_market_breadth",
+            "get_fii_dii_data", "list_alerts",
+        }
+        matched_names = {t[0] for t in tool_plan}
+        if collected and matched_names and matched_names.issubset(data_only_tools):
+            # Format data directly — no LLM needed
+            response = _format_tool_results_directly(collected, last_user_msg)
+            console.print(response, highlight=False)
+            return response
+
         # ── Phase 3: synthesis — ONE CLI call to write the response ─
         # Build the full prompt with: system context + conversation history
         # + tool results + latest user message.
@@ -1744,6 +1760,73 @@ def _infer_current_name(provider: LLMProvider) -> str:
     if isinstance(provider, OpenAISubscriptionProvider):
         return PROVIDER_OPENAI_SUB
     return ""
+
+
+def _format_tool_results_directly(collected: list[str], user_msg: str) -> str:
+    """
+    Format tool results for direct display without LLM synthesis.
+    Used for simple data queries like "what is RELIANCE trading at?"
+    """
+    import re
+
+    output_parts = []
+    for result_xml in collected:
+        # Extract tool name and JSON data
+        name_match = re.search(r'name="([^"]+)"', result_xml)
+        tool_name = name_match.group(1) if name_match else "data"
+
+        # Extract JSON between tags
+        json_match = re.search(r'>\n(.*?)\n</tool_result>', result_xml, re.DOTALL)
+        if not json_match:
+            continue
+
+        try:
+            data = json.loads(json_match.group(1))
+        except (json.JSONDecodeError, ValueError):
+            continue
+
+        if tool_name == "get_quote" and isinstance(data, dict):
+            for key, quote in data.items():
+                if isinstance(quote, dict):
+                    sym = quote.get("symbol", key)
+                    ltp = quote.get("last_price", 0)
+                    chg = quote.get("change", 0)
+                    chg_pct = quote.get("change_pct", 0)
+                    vol = quote.get("volume", 0)
+                    emoji = "📈" if chg >= 0 else "📉"
+                    output_parts.append(
+                        f"{emoji} {sym}\n"
+                        f"  LTP     : ₹{ltp:,.2f}\n"
+                        f"  Change  : {chg:+.2f} ({chg_pct:+.2f}%)\n"
+                        f"  Open    : ₹{quote.get('open', 0):,.2f}\n"
+                        f"  High    : ₹{quote.get('high', 0):,.2f}\n"
+                        f"  Low     : ₹{quote.get('low', 0):,.2f}\n"
+                        f"  Volume  : {vol:,}"
+                    )
+
+        elif tool_name == "get_market_snapshot" and isinstance(data, dict):
+            nifty = data.get("nifty", {})
+            bnf = data.get("banknifty", {})
+            vix = data.get("vix", {})
+            posture = data.get("posture", "")
+            output_parts.append(
+                f"🇮🇳 Market Snapshot\n"
+                f"  NIFTY     : {nifty.get('ltp', 0):,.0f} ({nifty.get('change_pct', 0):+.2f}%)\n"
+                f"  BANKNIFTY : {bnf.get('ltp', 0):,.0f} ({bnf.get('change_pct', 0):+.2f}%)\n"
+                f"  VIX       : {vix.get('ltp', 0):.1f}\n"
+                f"  Posture   : {posture}\n"
+                f"  {data.get('posture_reason', '')}"
+            )
+
+        elif tool_name == "get_vix" and isinstance(data, dict):
+            vix_val = data.get("vix", 0)
+            output_parts.append(f"⚡ India VIX: {vix_val:.1f}")
+
+        else:
+            # Generic: just pretty-print the JSON
+            output_parts.append(f"[{tool_name}]\n{json.dumps(data, indent=2, default=str)[:500]}")
+
+    return "\n\n".join(output_parts) if output_parts else "No data returned."
 
 
 def _print_tool_call(name: str, args: dict) -> None:
