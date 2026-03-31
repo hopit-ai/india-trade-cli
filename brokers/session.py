@@ -265,6 +265,23 @@ def _do_auth(key: str, broker: BrokerAPI) -> None:
         broker.complete_login(auth_code=code)
 
 
+def _start_websocket(broker: BrokerAPI) -> None:
+    """Start WebSocket for real-time quotes (Fyers only)."""
+    try:
+        from market.websocket import ws_manager
+        # Access Fyers internal token and app_id
+        token = getattr(broker, '_access_token', '')
+        app_id = getattr(broker, '_app_id', '')
+        if token and app_id:
+            ws_manager.start(access_token=token, app_id=app_id)
+            if ws_manager.connected:
+                console.print("[dim]  WebSocket: connected (real-time quotes)[/dim]")
+            else:
+                console.print("[dim]  WebSocket: unavailable (using REST fallback)[/dim]")
+    except Exception as e:
+        console.print(f"[dim]  WebSocket: {e}[/dim]")
+
+
 def _print_welcome(broker: BrokerAPI, role: str = "primary") -> None:
     """Print a styled welcome panel after successful login."""
     profile = broker.get_profile()
@@ -342,6 +359,10 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
     _brokers[key] = broker
     _primary_key  = key
     _print_welcome(broker, role="primary")
+
+    # Auto-start WebSocket for Fyers (real-time quotes)
+    if key == "fyers":
+        _start_websocket(broker)
 
     if len(_brokers) > 1:
         console.print(

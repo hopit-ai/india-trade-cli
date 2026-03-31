@@ -12,6 +12,41 @@ from brokers.base    import Quote
 from brokers.session import get_broker
 
 
+def _ws_quotes(instruments: list[str]) -> dict[str, Quote]:
+    """Try WebSocket cache first (instant, no API call)."""
+    try:
+        from market.websocket import ws_manager
+        if not ws_manager.connected:
+            return {}
+
+        result = {}
+        missing = []
+        for inst in instruments:
+            tick = ws_manager.get_tick(inst)
+            if tick and tick.ltp > 0:
+                result[inst] = Quote(
+                    symbol=tick.symbol.split(":")[-1].split("-")[0] if ":" in tick.symbol else tick.symbol,
+                    last_price=tick.ltp,
+                    open=tick.open,
+                    high=tick.high,
+                    low=tick.low,
+                    close=tick.close,
+                    volume=tick.volume,
+                    change=tick.change,
+                    change_pct=tick.change_pct,
+                )
+            else:
+                missing.append(inst)
+
+        # Subscribe to missing symbols for next time
+        if missing:
+            ws_manager.subscribe(missing)
+
+        return result
+    except Exception:
+        return {}
+
+
 def _yf_fallback_quotes(instruments: list[str]) -> dict[str, Quote]:
     """Try yfinance when broker is unavailable."""
     try:
@@ -27,6 +62,8 @@ def get_quote(instruments: list[str]) -> dict[str, Quote]:
     """
     Live quotes for one or more instruments.
 
+    Priority: WebSocket cache (instant) → Broker REST API → yfinance fallback.
+
     Args:
         instruments: List of "EXCHANGE:SYMBOL" strings.
                      e.g. ["NSE:RELIANCE", "NSE:NIFTY 50", "NFO:NIFTY24APR22900CE"]
@@ -34,10 +71,26 @@ def get_quote(instruments: list[str]) -> dict[str, Quote]:
     Returns:
         Dict keyed by instrument string → Quote dataclass.
     """
+    # 1. Try WebSocket cache (instant)
+    result = _ws_quotes(instruments)
+    missing = [i for i in instruments if i not in result]
+    if not missing:
+        return result
+
+    # 2. Try broker REST API
     try:
-        return get_broker().get_quote(instruments)
+        broker_quotes = get_broker().get_quote(missing)
+        result.update(broker_quotes)
+        missing = [i for i in instruments if i not in result]
     except (RuntimeError, Exception):
-        return _yf_fallback_quotes(instruments)
+        pass
+
+    # 3. yfinance fallback
+    if missing:
+        yf_quotes = _yf_fallback_quotes(missing)
+        result.update(yf_quotes)
+
+    return result
 
 
 def get_ltp(instrument: str) -> float:

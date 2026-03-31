@@ -270,10 +270,23 @@ class AlertManager:
         return False
 
     def _check_price(self, alert: Alert) -> bool:
-        from brokers.session import get_broker
-        broker = get_broker()
         instrument = f"{alert.exchange}:{alert.symbol}"
-        ltp = broker.get_ltp(instrument)
+
+        # Try WebSocket first (instant)
+        try:
+            from market.websocket import ws_manager
+            ws_ltp = ws_manager.get_ltp(instrument)
+            if ws_ltp and ws_ltp > 0:
+                ltp = ws_ltp
+            else:
+                raise ValueError("no ws tick")
+        except Exception:
+            # Fall back to REST
+            try:
+                from market.quotes import get_ltp
+                ltp = get_ltp(instrument)
+            except Exception:
+                return False
 
         if alert.condition == "ABOVE":
             return ltp >= alert.threshold
