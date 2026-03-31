@@ -899,6 +899,14 @@ class ClaudeCLIProvider(LLMProvider):
             "CALL", "BUY", "SELL", "STT", "GST", "RBI", "FII", "DII",
             "NOT", "USE", "THE", "FOR", "AND", "NFO", "CNC", "MIS",
             "NRML", "SL", "AM", "PM", "EMA", "SMA", "ATR",
+            # Debate/analysis terms (not stock symbols)
+            "BULLISH", "BEARISH", "NEUTRAL", "DEBATE", "BULL", "BEAR",
+            "VERDICT", "HOLD", "STRONG", "ANALYSIS", "TRADE", "RISK",
+            "FUND", "MANAGER", "RESEARCHER", "FACILITATOR", "ROUND",
+            "TARGET", "ENTRY", "EXIT", "STOP", "LOSS", "PROFIT",
+            "MARGIN", "CAPITAL", "PORTFOLIO", "SCORE", "CONFIDENCE",
+            "HIGH", "LOW", "OPEN", "CLOSE", "ABOVE", "BELOW",
+            "MARKET", "INDEX", "SECTOR", "IMPORTANT", "DATA",
         }
         m = re.search(
             r'(?:NSE:|BSE:)?([A-Z][A-Z0-9&]{1,19})'
