@@ -90,23 +90,42 @@ def _strip_html(text: str) -> str:
 def get_stock_news(symbol: str, n: int = 10) -> list[NewsItem]:
     """
     Latest news for a stock symbol via NewsAPI.org.
-    Falls back to RSS if API key not set.
+    Falls back to RSS if API key not set or NewsAPI is disabled.
+
+    Toggle: set NEWSAPI_ENABLED=0 in env to disable NewsAPI.
+    Default: enabled if key is available.
 
     Args:
         symbol: NSE symbol e.g. "RELIANCE", "HDFCBANK"
         n:      Number of articles (max 100 per call on free tier)
     """
-    from config.credentials import get_credential
-    api_key = get_credential("NEWSAPI_KEY", "NewsAPI.org Key", secret=True, required=False)
+    # Check if NewsAPI is disabled
+    if os.environ.get("NEWSAPI_ENABLED", "1") == "0":
+        return _rss_fallback(symbol, n)
+
+    # Skip interactive prompts in batch mode (multi-agent pipeline)
+    if os.environ.get("_CLI_BATCH_MODE"):
+        from config.credentials import _kr_get
+        api_key = _kr_get("NEWSAPI_KEY") or os.environ.get("NEWSAPI_KEY", "")
+    else:
+        from config.credentials import get_credential
+        api_key = get_credential("NEWSAPI_KEY", "NewsAPI.org Key", secret=True, required=False)
 
     if api_key:
-        return _newsapi_fetch(
+        result = _newsapi_fetch(
             query   = f"{symbol} stock India NSE",
             api_key = api_key,
             n       = n,
         )
+        if result:
+            return result
 
-    # Fallback: scan ET Markets RSS for symbol mentions
+    # Fallback to RSS
+    return _rss_fallback(symbol, n)
+
+
+def _rss_fallback(symbol: str, n: int = 10) -> list[NewsItem]:
+    """Fallback: scan RSS feeds for symbol mentions."""
     all_items = get_rss_feed(RSS_FEEDS["ET Markets"], "ET Markets", 50)
     matched   = [i for i in all_items if symbol.upper() in i.title.upper()]
     return matched[:n] or all_items[:n]
