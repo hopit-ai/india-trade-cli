@@ -67,4 +67,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        # Force exit — kill any lingering background threads
+        # (WebSocket, alert poller, Telegram bot)
+        os._exit(0)

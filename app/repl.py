@@ -795,6 +795,17 @@ def run_repl(broker: BrokerAPI) -> None:
             # ── Session ───────────────────────────────────────
             if command in ("quit", "exit", "q"):
                 console.print("[dim]Goodbye.[/dim]")
+                # Clean up background threads
+                try:
+                    from market.websocket import ws_manager
+                    ws_manager.stop()
+                except Exception:
+                    pass
+                try:
+                    from engine.alerts import alert_manager
+                    alert_manager.stop_polling()
+                except Exception:
+                    pass
                 break
 
             elif command == "help":
