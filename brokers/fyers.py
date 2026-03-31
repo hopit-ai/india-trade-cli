@@ -176,8 +176,24 @@ class FyersAPI(BrokerAPI):
         if not self._access_token:
             return False
         if self._token_ts and time.time() - self._token_ts >= TOKEN_EXPIRY:
+            # Token too old — clear it so we don't try to use it
+            self._access_token = ""
+            try:
+                TOKEN_FILE.unlink(missing_ok=True)
+            except Exception:
+                pass
             return False
-        return True
+        # Verify token actually works with a quick API call
+        try:
+            self._get("/profile")
+            return True
+        except Exception:
+            self._access_token = ""
+            try:
+                TOKEN_FILE.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return False
 
     def logout(self) -> None:
         self._access_token = ""
