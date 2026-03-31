@@ -101,9 +101,16 @@ Basic implementations exist for these brokers but are not fully tested. Fyers is
 ### No broker needed
 
 The platform works without any broker login:
-- **yfinance** provides free NSE/BSE data (~15 min delayed)
-- All analysis, backtesting, and AI features work
-- Only live quotes and order placement need a broker
+
+```bash
+python -m app.main --no-broker
+```
+
+- **yfinance** provides free real NSE/BSE data (~15 min delayed)
+- All analysis, backtesting, multi-timeframe, and AI features work with real data
+- Account commands (funds, holdings) show demo data with a warning
+- Options data uses NSE public API when available
+- Connect a broker later via `login` command in the REPL
 
 ---
 
@@ -155,10 +162,12 @@ Alerts auto-push to Telegram when triggered.
 
 ### Core Analysis
 ```
-analyze RELIANCE         Full multi-agent analysis (8 LLM calls)
-deep-analyze RELIANCE    Deep mode — every analyst is LLM-powered (11 calls)
-ai <message>             Chat with AI agent (freeform questions)
-morning-brief            Daily market context + AI narrative
+analyze RELIANCE                   Full multi-agent analysis (8 LLM calls)
+analyze RELIANCE --explain-save    Analyze + explain simply + save PDF
+deep-analyze RELIANCE              Deep mode — every analyst is LLM (11 calls)
+ai <message>                       Chat with AI (freeform questions)
+morning-brief                      Daily market context + AI narrative
+mtf RELIANCE                       Multi-timeframe analysis (weekly/daily/hourly)
 ```
 
 ### Market Data
@@ -192,6 +201,13 @@ pairs                    Pair trading opportunities scan
 pairs HDFCBANK ICICIBANK Analyze a specific pair
 ```
 
+### Paper Trading
+```
+paper-execute                      Execute last trade plan (neutral risk)
+paper-execute aggressive           Execute aggressive risk plan
+paper-execute conservative         Execute conservative risk plan
+```
+
 ### Memory & Learning
 ```
 memory                   Recent trade analyses
@@ -219,6 +235,16 @@ holdings                 Long-term delivery holdings
 positions                Open intraday/F&O positions
 orders                   Today's orders and status
 portfolio                Unified view — all brokers
+```
+
+### Output & Export
+```
+save-pdf                           Save previous output as PDF
+explain                            Explain previous output simply
+explain-save                       Explain + save as PDF
+--pdf                              Flag: append to any command
+--explain                          Flag: append to any command
+--explain-save                     Flag: explain + PDF in one shot
 ```
 
 ### Account & Config
@@ -272,7 +298,8 @@ india-trade-cli/
 ├── analysis/                 # Analysis engines
 │   ├── technical.py           # RSI, MACD, EMAs, Bollinger, ATR, pivots
 │   ├── fundamental.py         # PE, ROE, ROCE from Screener.in
-│   └── options.py             # Greeks, payoff, iron condor, butterfly, calendar
+│   ├── options.py             # Greeks, payoff, iron condor, butterfly, calendar
+│   └── multi_timeframe.py     # Weekly/daily/hourly confluence analysis
 ├── engine/                   # Trading logic
 │   ├── trader.py              # Trader Agent + 3 risk personas
 │   ├── backtest.py            # Backtester + walk-forward testing
@@ -285,8 +312,10 @@ india-trade-cli/
 │   ├── pairs.py               # Pair trading / relative value
 │   ├── audit.py               # Decision audit trail
 │   ├── profile.py             # Personal trading style profile
-│   ├── alerts.py              # Price + technical + conditional alerts
+│   ├── alerts.py              # Price + technical + conditional alerts + real-time
 │   ├── paper.py               # Paper trading engine
+│   ├── paper_execute.py       # Execute trade plans in paper mode
+│   ├── output.py              # PDF export + simple explainer (--explain-save)
 │   ├── portfolio.py           # Portfolio tracker + aggregated Greeks
 │   └── strategy.py            # Strategy recommendation engine
 ├── bot/                      # Telegram bot
@@ -377,34 +406,52 @@ TELEGRAM_BOT_TOKEN=...             # from @BotFather
 
 ## Roadmap
 
-### Completed
+### Completed (34/43 issues closed)
 - [x] 5-phase competitive roadmap (all phases shipped)
-- [x] 7 analyst agents + weighted scorecard
-- [x] Multi-round debate with facilitator
-- [x] Trader Agent + 3 risk personas
+- [x] 7 analyst agents + weighted scorecard (excludes UNAVAILABLE analysts)
+- [x] Multi-round debate with facilitator (2 rounds + summary)
+- [x] Trader Agent + 3 risk personas (aggressive/neutral/conservative)
 - [x] Trade memory + India pattern knowledge base
 - [x] Strategy backtesting + walk-forward testing
-- [x] What-if simulator with real beta
+- [x] What-if simulator with real stock beta
 - [x] Earnings agent + surprise prediction
 - [x] FII/DII flow intelligence + divergence detection
 - [x] Event-driven strategies (expiry, RBI, budget, earnings)
 - [x] Advanced options (iron condor, butterfly, calendar, ratio, diagonal)
-- [x] Currency/commodity macro linkages
-- [x] VaR/CVaR portfolio risk + correlation matrix
+- [x] Currency/commodity macro linkages (USD/INR, crude, gold, US 10Y)
+- [x] VaR/CVaR portfolio risk + correlation matrix + HHI
 - [x] Model drift detection + decision audit trail
-- [x] Pair trading with mean reversion signals
+- [x] Pair trading with mean reversion signals (12 Indian pairs)
 - [x] Personal trading style profile
 - [x] Full LLM deep mode (11 calls)
 - [x] Telegram bot (13 commands + alert push)
 - [x] Fyers WebSocket for real-time quotes
 - [x] Fyers broker rewrite using official SDK
+- [x] Multi-timeframe analysis (weekly/daily/hourly confluence)
+- [x] Paper trading execution with auto-alert creation
+- [x] PDF export + simple explainer (--pdf, --explain, --explain-save flags)
+- [x] Post-processing commands (save-pdf, explain, explain-save)
+- [x] Fast path for data queries (skip LLM for simple price lookups)
+- [x] --no-broker mode with yfinance passthrough (real data, no fake prices)
+- [x] Categorized help command (8 Rich panels)
+- [x] Real-time alert evaluation via WebSocket ticks
+- [x] 3-channel alert notifications (terminal + macOS desktop + Telegram)
 
-### Remaining
-- [ ] SEBI compliance layer (margin validation, tax harvesting)
-- [ ] OpenClaw agent integration (WhatsApp bot via OpenClaw)
-- [ ] Web UI (FastAPI backend is stubbed)
-- [ ] Paper trading engine integration with trade plans
-- [ ] Real-time order placement flow with confirmation
+### Open Issues
+- [ ] #18 SEBI compliance layer (margin validation, tax harvesting)
+- [ ] #22 OpenClaw agent integration
+- [ ] #23 Telegram bot token setup + testing
+- [ ] #24 Web UI (FastAPI backend)
+- [ ] #25 Textual TUI (split-panel terminal)
+- [ ] #26 Real-time portfolio dashboard
+- [ ] #27 Broker order placement flow with confirmation
+- [ ] #28 End-to-end test suite
+- [ ] #29 Place F&O orders via broker API
+- [ ] #30 Options strategy execution (multi-leg orders)
+- [ ] #31 Options-specific backtesting
+- [ ] #32 Greeks-based position management (delta-hedge, roll)
+- [ ] #33 Options scanner (high IV, unusual OI)
+- [ ] #34 Expiry day tools (gamma scalping, last-hour strategies)
 
 ---
 
