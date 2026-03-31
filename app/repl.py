@@ -825,22 +825,37 @@ def run_repl(broker: BrokerAPI) -> None:
                 cmd_profile(broker)
 
             elif command == "funds":
-                cmd_funds(broker)
+                try:
+                    cmd_funds(broker)
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]\n[dim]Fyers funds API may be slow. Try again during market hours.[/dim]")
 
             # ── Portfolio (single-broker raw views) ───────────
             elif command == "holdings":
-                cmd_holdings(broker)
+                try:
+                    cmd_holdings(broker)
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]")
 
             elif command == "positions":
-                cmd_positions(broker)
+                try:
+                    cmd_positions(broker)
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]")
 
             elif command == "orders":
-                cmd_orders(broker)
+                try:
+                    cmd_orders(broker)
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]")
 
             # ── Portfolio (unified multi-broker view) ─────────
             elif command == "portfolio":
-                from engine.portfolio import get_multi_broker_summary
-                _cmd_portfolio(get_multi_broker_summary())
+                try:
+                    from engine.portfolio import get_multi_broker_summary
+                    _cmd_portfolio(get_multi_broker_summary())
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]")
 
             # ── AI-powered commands ───────────────────────────
             elif command == "morning-brief":
