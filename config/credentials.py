@@ -67,6 +67,8 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     ("GOOGLE_CLOUD_PROJECT","Google Cloud Project ID",             False),
     # ── Data / News ───────────────────────────────────────────
     ("NEWSAPI_KEY",         "NewsAPI.org Key",                     True),
+    # ── Notifications ─────────────────────────────────────────
+    ("TELEGRAM_BOT_TOKEN",  "Telegram Bot Token",                  True),
 ]
 
 _KNOWN_KEYS = {k for k, _, _ in KNOWN_CREDENTIALS}
@@ -272,6 +274,7 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
     _FYERS_KEYS     = {"FYERS_APP_ID", "FYERS_SECRET_KEY"}
     _AI_KEYS        = {"AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY",
                        "OPENAI_SESSION_TOKEN", "GOOGLE_CLOUD_PROJECT"}
+    _TELEGRAM_KEYS  = {"TELEGRAM_BOT_TOKEN"}
 
     sections: dict[str, list] = {
         "Zerodha (Kite Connect)": [
@@ -295,6 +298,9 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
         "Market Data": [
             (k, l, s) for k, l, s in targets if "NEWSAPI" in k
         ],
+        "Notifications (Telegram)": [
+            (k, l, s) for k, l, s in targets if k in _TELEGRAM_KEYS
+        ],
     }
 
     saved = 0
@@ -307,6 +313,13 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
         # Special interactive flow for the AI Provider section
         if section == "AI Provider" and any(k == "AI_PROVIDER" for k, _, _ in items):
             _wizard_ai_provider(items)
+            saved += sum(1 for k, _, _ in items if _kr_get(k))
+            console.print()
+            continue
+
+        # Special interactive flow for Telegram
+        if section == "Notifications (Telegram)":
+            _wizard_telegram(items)
             saved += sum(1 for k, _, _ in items if _kr_get(k))
             console.print()
             continue
@@ -401,6 +414,56 @@ def _save_cred(key: str, value: str) -> None:
     if _kr_set(key, value):
         os.environ[key] = value
         console.print(f"  [green]✓ AI_PROVIDER → {value}[/green]")
+
+
+def _wizard_telegram(items: list[tuple[str, str, bool]]) -> None:
+    """
+    Guided Telegram bot token setup within the credentials wizard.
+    Collects and validates the token format, saves it, then tells
+    the user to run `telegram setup` in the REPL for end-to-end connection.
+    """
+    console.print(
+        "\n  Push notifications let the bot send you alerts, paper trade\n"
+        "  signals, and strategy triggers directly in Telegram.\n\n"
+        "  [bold]How to get a bot token:[/bold]\n"
+        "    1. Open Telegram → search [bold cyan]@BotFather[/bold cyan]\n"
+        "    2. Send [cyan]/newbot[/cyan]\n"
+        "    3. Choose a name   e.g. [dim]My Trade Bot[/dim]\n"
+        "    4. Choose a username ending in [bold]bot[/bold]   e.g. [dim]mytrade_bot[/dim]\n"
+        "    5. BotFather gives you a token like:\n"
+        "       [dim]123456789:ABCdefGhIJKlmNoPQRsTUVwxYZ[/dim]\n\n"
+        "  (Press Enter to skip)\n"
+    )
+
+    current = _kr_get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    hint    = " [dim](already set — press Enter to keep)[/dim]" if current else ""
+    console.print(f"  Telegram Bot Token{hint}")
+    value = Prompt.ask("  Token", password=True, default="").strip()
+
+    if not value:
+        if current:
+            console.print("  [dim]Kept existing token.[/dim]")
+        else:
+            console.print("  [dim]Skipped. Run [bold]credentials setup[/bold] later to add.[/dim]")
+        return
+
+    # Basic format check: Telegram tokens look like  123456789:ABCdef...
+    if ":" not in value or len(value) < 20:
+        console.print("  [yellow]⚠  Token format looks unexpected. Expected: 123456789:ABCdef...[/yellow]")
+        if not Confirm.ask("  Save anyway?", default=False):
+            return
+
+    if _kr_set("TELEGRAM_BOT_TOKEN", value):
+        os.environ["TELEGRAM_BOT_TOKEN"] = value
+        console.print(
+            "  [green]✓ Token saved to keychain.[/green]\n"
+            "  [dim]Run [bold]telegram setup[/bold] in the REPL to connect and send a test message.[/dim]"
+        )
+    else:
+        console.print(
+            "  [yellow]⚠  Could not reach keychain.[/yellow]\n"
+            "  Add [bold]TELEGRAM_BOT_TOKEN=<your token>[/bold] to your .env file instead."
+        )
 
 
 def _prompt_and_save(key: str, label: str, *, secret: bool) -> None:

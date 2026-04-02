@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software in your work, please cite it as below."
+type: software
+title: "India Trade CLI"
+abstract: "AI-powered multi-agent stock & options analysis platform for Indian markets (NSE/BSE/NFO)."
+authors:
+  - family-names: "Indian"
+    given-names: "Archie"
+    alias: "ArchieIndian"
+repository-code: "https://github.com/ArchieIndian/india-trade-cli"
+license: MIT
+keywords:
+  - trading
+  - stocks
+  - options
+  - NSE
+  - BSE
+  - India
+  - AI
+  - LLM
+  - multi-agent
+  - backtesting

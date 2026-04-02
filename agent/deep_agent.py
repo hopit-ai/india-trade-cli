@@ -380,34 +380,80 @@ class DeepAnalyzer:
         return reports
 
     def _parse_llm_report(self, analyst: str, response: str) -> AnalystReport:
-        """Parse an LLM analyst response into AnalystReport."""
+        """Parse an LLM analyst response into AnalystReport.
+
+        Handles various LLM output formats:
+          VERDICT: BEARISH
+          ### VERDICT: **BEARISH** (with notes)
+          VERDICT    : NEUTRAL (leaning BULLISH)
+          **VERDICT:** BEARISH
+        """
+        import re
+
         verdict = "NEUTRAL"
         confidence = 50
         score = 0.0
         points = []
 
-        for line in response.splitlines():
+        # Strip markdown formatting for cleaner parsing
+        clean = response.replace("**", "").replace("###", "").replace("##", "").replace("#", "")
+
+        for line in clean.splitlines():
             stripped = line.strip()
             upper = stripped.upper()
 
-            if upper.startswith("VERDICT:"):
-                val = stripped.split(":", 1)[1].strip().upper()
+            # Match VERDICT with flexible formatting:
+            # "VERDICT: BEARISH", "VERDICT : NEUTRAL (leaning bullish)", etc.
+            verdict_match = re.match(r'VERDICT\s*:\s*(.+)', upper)
+            if verdict_match:
+                val = verdict_match.group(1)
                 for v in ("BULLISH", "BEARISH", "NEUTRAL"):
                     if v in val:
                         verdict = v
                         break
-            elif upper.startswith("CONFIDENCE:"):
+
+            # Match CONFIDENCE with flexible formatting:
+            # "CONFIDENCE: 62%", "CONFIDENCE : 55%", "CONFIDENCE: 62"
+            conf_match = re.match(r'CONFIDENCE\s*:\s*(\d+)', upper)
+            if conf_match:
                 try:
-                    confidence = int(stripped.split(":", 1)[1].strip().rstrip("%"))
+                    confidence = int(conf_match.group(1))
                 except (ValueError, IndexError):
                     pass
-            elif upper.startswith("SCORE:"):
+
+            # Match SCORE with flexible formatting:
+            # "SCORE: -23", "SCORE : +30", "SCORE: -15"
+            score_match = re.match(r'SCORE\s*:\s*([+\-]?\d+(?:\.\d+)?)', upper)
+            if score_match:
                 try:
-                    score = float(stripped.split(":", 1)[1].strip())
+                    score = float(score_match.group(1))
                 except (ValueError, IndexError):
                     pass
-            elif stripped.startswith("- ") or stripped.startswith("* "):
-                points.append(stripped.lstrip("-* ").strip())
+
+            # Collect key points
+            if stripped.startswith("- ") or stripped.startswith("* "):
+                point = stripped.lstrip("-* ").strip()
+                if point and len(point) > 10:  # skip tiny fragments
+                    points.append(point)
+
+        # Fallback: scan the entire response for verdict keywords if still NEUTRAL/50/0
+        if verdict == "NEUTRAL" and confidence == 50 and score == 0.0:
+            resp_upper = clean.upper()
+            # Look for verdict in the last 30 lines (summary section)
+            last_lines = "\n".join(clean.splitlines()[-30:]).upper()
+            if "BEARISH" in last_lines and "BULLISH" not in last_lines:
+                verdict = "BEARISH"
+            elif "BULLISH" in last_lines and "BEARISH" not in last_lines:
+                verdict = "BULLISH"
+
+            # Try to find confidence/score anywhere in response
+            all_conf = re.findall(r'CONFIDENCE\s*:?\s*(\d+)\s*%?', resp_upper)
+            if all_conf:
+                confidence = int(all_conf[-1])  # take last occurrence
+
+            all_scores = re.findall(r'SCORE\s*:?\s*([+\-]?\d+(?:\.\d+)?)', resp_upper)
+            if all_scores:
+                score = float(all_scores[-1])
 
         return AnalystReport(
             analyst=analyst,
