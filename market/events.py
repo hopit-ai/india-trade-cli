@@ -120,15 +120,6 @@ NSE_CORP_CALENDAR_URL = (
     "https://www.nseindia.com/api/event-calendar"
 )
 
-MOCK_EARNINGS: list[dict] = [
-    {"symbol": "HDFCBANK",  "company": "HDFC Bank",          "date": "", "purpose": "Q4 Results"},
-    {"symbol": "TCS",       "company": "TCS",                 "date": "", "purpose": "Q4 Results"},
-    {"symbol": "INFY",      "company": "Infosys",             "date": "", "purpose": "Q4 Results"},
-    {"symbol": "RELIANCE",  "company": "Reliance Industries", "date": "", "purpose": "Q4 Results"},
-    {"symbol": "ICICIBANK", "company": "ICICI Bank",          "date": "", "purpose": "Q4 Results"},
-]
-
-
 def get_earnings_calendar(
     symbols: Optional[list[str]] = None,
     days:    int = 14,
@@ -175,36 +166,17 @@ def get_earnings_calendar(
         return sorted(events, key=lambda e: e.date)
 
     except Exception:
-        # Return mock upcoming earnings with approximate dates
-        today = date.today()
-        result = []
-        for i, e in enumerate(MOCK_EARNINGS):
-            ev_date = today + timedelta(days=7 + i * 3)
-            if not symbols or e["symbol"] in [s.upper() for s in symbols]:
-                result.append(EarningsEvent(
-                    symbol  = e["symbol"],
-                    company = e["company"],
-                    date    = ev_date.isoformat(),
-                    purpose = e["purpose"],
-                ))
-        return result
+        return []  # No mock data — return empty when NSE API fails
 
 
 # ── RBI Calendar ─────────────────────────────────────────────
 
 RBI_RSS = "https://rbi.org.in/scripts/RSSFeedMonetary.aspx"
 
-MOCK_RBI_EVENTS = [
-    {"date": "2024-04-05", "event": "RBI Monetary Policy Committee — Rate Decision",  "rate": 6.50},
-    {"date": "2024-06-07", "event": "RBI Monetary Policy Committee — Rate Decision",  "rate": None},
-    {"date": "2024-08-08", "event": "RBI Monetary Policy Committee — Rate Decision",  "rate": None},
-]
-
-
 def get_rbi_calendar() -> list[RBIEvent]:
     """
     RBI Monetary Policy Committee upcoming dates.
-    Tries RBI RSS feed; falls back to hardcoded schedule.
+    Fetches from RBI RSS feed. Returns empty list if unavailable.
     """
     try:
         feed  = feedparser.parse(RBI_RSS)
@@ -223,18 +195,7 @@ def get_rbi_calendar() -> list[RBIEvent]:
     except Exception:
         pass
 
-    # Fallback: MPC meets roughly every 2 months
-    today = date.today()
-    events = []
-    for e in MOCK_RBI_EVENTS:
-        rate_date = datetime.strptime(e["date"], "%Y-%m-%d").date()
-        if rate_date >= today:
-            events.append(RBIEvent(
-                date  = e["date"],
-                event = e["event"],
-                rate  = e.get("rate"),
-            ))
-    return events
+    return []  # No mock data — return empty when RBI RSS fails
 
 
 # ── Corporate Actions ─────────────────────────────────────────

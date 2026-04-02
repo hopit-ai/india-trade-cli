@@ -86,8 +86,10 @@ PROVIDER_GEMINI       = "gemini"
 PROVIDER_CLAUDE_CLI   = "claude_subscription"
 PROVIDER_OPENAI_SUB   = "openai_subscription"
 PROVIDER_GEMINI_SUB   = "gemini_subscription"
+PROVIDER_OLLAMA       = "ollama"
 
 GEMINI_DEFAULT_MODEL  = "gemini-2.5-pro"
+OLLAMA_DEFAULT_MODEL  = "llama3.1"
 
 ALL_PROVIDERS = [
     PROVIDER_ANTHROPIC,
@@ -96,6 +98,7 @@ ALL_PROVIDERS = [
     PROVIDER_CLAUDE_CLI,
     PROVIDER_OPENAI_SUB,
     PROVIDER_GEMINI_SUB,
+    PROVIDER_OLLAMA,
 ]
 
 
@@ -268,30 +271,60 @@ class AnthropicProvider(LLMProvider):
 
 class OpenAIProvider(LLMProvider):
     """
-    OpenAI GPT via official `openai` SDK.
+    OpenAI-compatible LLM provider via official `openai` SDK.
 
-    Access modes:
-      - Personal API key (OPENAI_API_KEY) — paid per token
-      - OpenAI Plus / Team / Enterprise users still need a separate API key;
-        the ChatGPT Plus subscription does not include API credits.
-        → For subscription-only users, see OpenAISubscriptionProvider below.
+    Works with:
+      - OpenAI GPT (default) — OPENAI_API_KEY
+      - Ollama (local) — OPENAI_BASE_URL=http://localhost:11434/v1
+      - Groq, Together, Fireworks, OpenRouter — set OPENAI_BASE_URL + key
+      - LM Studio, vLLM, TGI — any OpenAI-compatible endpoint
 
-    Set AI_PROVIDER=openai in .env
+    Config:
+      AI_PROVIDER=openai    (or ollama for convenience)
+      OPENAI_API_KEY=...    (not needed for Ollama)
+      OPENAI_BASE_URL=...   (optional — overrides default OpenAI endpoint)
     """
 
-    def __init__(self, model: str, registry: ToolRegistry, system_prompt: str) -> None:
+    def __init__(
+        self,
+        model:         str,
+        registry:      ToolRegistry,
+        system_prompt: str,
+        base_url:      str | None = None,
+        api_key:       str | None = None,
+    ) -> None:
         super().__init__(model, registry, system_prompt)
         try:
             import openai as _sdk
-            self._sdk    = _sdk
+            self._sdk = _sdk
+
+            # Resolve base_url: explicit arg > env var > None (default OpenAI)
+            resolved_base = base_url or os.environ.get("OPENAI_BASE_URL")
+
+            # Resolve API key: explicit arg > env var > credential store
+            # Ollama and some local servers don't need a real key
+            resolved_key = api_key or os.environ.get("OPENAI_API_KEY")
+            if not resolved_key:
+                if resolved_base:
+                    # Local/custom endpoint — use a dummy key
+                    resolved_key = "not-needed"
+                else:
+                    resolved_key = get_credential("OPENAI_API_KEY", "OpenAI API Key", secret=True)
+
             self._client = _sdk.OpenAI(
-                api_key=get_credential("OPENAI_API_KEY", "OpenAI API Key", secret=True)
+                api_key=resolved_key,
+                base_url=resolved_base,
             )
+            self._base_url = resolved_base
         except ImportError:
             raise RuntimeError("openai not installed. Run: pip install openai")
 
     @property
     def provider_name(self) -> str:
+        if self._base_url:
+            # Show the endpoint for custom providers
+            host = self._base_url.replace("https://", "").replace("http://", "").split("/")[0]
+            return f"{host} / {self.model}"
         return f"OpenAI / {self.model}"
 
     def chat(self, messages: list[dict], stream: bool = True) -> str:
@@ -1389,21 +1422,27 @@ def get_provider(
         PROVIDER_CLAUDE_CLI: ClaudeCLIProvider,
         PROVIDER_OPENAI_SUB: OpenAISubscriptionProvider,
         PROVIDER_GEMINI_SUB: GeminiVertexProvider,
+        PROVIDER_OLLAMA:     None,  # handled specially below
     }
 
     cls = dispatch.get(chosen, AnthropicProvider)
 
+    def _build_provider(prov_name, model, registry, sys_prompt):
+        """Construct a provider, with special handling for Ollama."""
+        if prov_name == PROVIDER_OLLAMA:
+            base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            mdl = model or os.environ.get("OLLAMA_MODEL", OLLAMA_DEFAULT_MODEL)
+            return OpenAIProvider(mdl, registry, sys_prompt,
+                                 base_url=base, api_key="ollama")
+        prov_cls = dispatch.get(prov_name, AnthropicProvider)
+        return prov_cls(model, registry, sys_prompt)
+
     try:
-        return cls(chosen_model, reg, system)
+        return _build_provider(chosen, chosen_model, reg, system)
     except RuntimeError as exc:
-        # If the caller explicitly named a provider, propagate the error —
-        # they asked for something specific and should see why it failed.
         if explicit_provider:
             raise
 
-        # The provider came from a saved keychain value or auto-detect.
-        # It's broken (missing package, missing key, etc.).  Clear it so we
-        # don't hit the same error next time, then offer re-configuration.
         first_line = str(exc).splitlines()[0]
         console.print(
             f"\n[yellow]⚠  Saved AI provider [bold]{chosen!r}[/bold] is unavailable:[/yellow]"
@@ -1419,8 +1458,7 @@ def get_provider(
                 "Run [bold]credentials setup[/bold] → AI Provider to set one up."
             ) from exc
 
-        cls2 = dispatch.get(chosen, AnthropicProvider)
-        return cls2(_default_model(chosen), reg, system)
+        return _build_provider(chosen, _default_model(chosen), reg, system)
 
 
 def _has_anthropic_key() -> bool:
@@ -1594,6 +1632,10 @@ def _auto_detect_provider() -> str:
     if env.get("GEMINI_API_KEY") or env.get("GOOGLE_API_KEY"):
         return PROVIDER_GEMINI
 
+    # Ollama: check if OLLAMA_BASE_URL is set or if ollama is running locally
+    if env.get("OLLAMA_BASE_URL") or env.get("OLLAMA_MODEL"):
+        return PROVIDER_OLLAMA
+
     # claude CLI binary — most reliable signal of subscription intent
     import shutil
     if shutil.which("claude") or shutil.which("claude-code"):
@@ -1616,6 +1658,8 @@ def _default_model(provider: str) -> str:
         return OPENAI_DEFAULT_MODEL
     if provider in (PROVIDER_GEMINI, PROVIDER_GEMINI_SUB):
         return GEMINI_DEFAULT_MODEL
+    if provider == PROVIDER_OLLAMA:
+        return os.environ.get("OLLAMA_MODEL", OLLAMA_DEFAULT_MODEL)
     return ANTHROPIC_DEFAULT_MODEL
 
 
@@ -1788,6 +1832,8 @@ def _infer_current_name(provider: LLMProvider) -> str:
     if isinstance(provider, AnthropicProvider):
         return PROVIDER_ANTHROPIC
     if isinstance(provider, OpenAIProvider):
+        if provider._base_url and "11434" in provider._base_url:
+            return PROVIDER_OLLAMA
         return PROVIDER_OPENAI
     if isinstance(provider, GeminiProvider):
         return PROVIDER_GEMINI

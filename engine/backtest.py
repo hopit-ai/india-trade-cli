@@ -160,8 +160,11 @@ class Strategy(ABC):
 
     name: str = "Base"
 
+    # Override this for multi-symbol strategies (e.g., pairs trading)
+    symbols: list[str] = []
+
     @abstractmethod
-    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series | pd.DataFrame:
         """
         Generate trading signals from OHLCV data.
 
@@ -170,7 +173,11 @@ class Strategy(ABC):
                 (indexed by date)
 
         Returns:
-            Series of signals: 1 = BUY, -1 = SELL, 0 = HOLD
+            - pd.Series of signals: 1 = BUY, -1 = SELL, 0 = HOLD
+              (single-symbol mode)
+            - pd.DataFrame with one column per symbol, each containing
+              1 (LONG), -1 (SHORT), 0 (FLAT)
+              (multi-symbol / pairs mode)
         """
 
 
@@ -326,10 +333,25 @@ class Backtester:
         self._df = df
         return df
 
-    def run(self, strategy: Strategy) -> BacktestResult:
-        """Execute the backtest and return results."""
+    def run(self, strategy: Strategy) -> BacktestResult | MultiBacktestResult:
+        """Execute the backtest and return results.
+
+        If the strategy returns a DataFrame of signals (multi-symbol),
+        automatically delegates to MultiBacktester.
+        """
         df = self._load_data()
         signals = strategy.generate_signals(df)
+
+        # Auto-detect multi-symbol strategies
+        if isinstance(signals, pd.DataFrame) and len(signals.columns) > 1:
+            symbols = list(signals.columns)
+            multi = MultiBacktester(
+                symbols=symbols,
+                exchange=self.exchange,
+                period=self.period,
+                capital=self.initial_capital,
+            )
+            return multi.run(strategy)
 
         trades: list[Trade] = []
         position = 0        # 0 = flat, 1 = long
@@ -463,6 +485,396 @@ class Backtester:
         )
 
 
+# ── Multi-Symbol (Pairs) Backtester ──────────────────────────
+
+@dataclass
+class TradeLeg:
+    """One leg of a multi-symbol trade."""
+    symbol:      str
+    direction:   str      # "LONG" or "SHORT"
+    entry_price: float
+    exit_price:  float
+    quantity:    int
+    pnl:         float
+    pnl_pct:     float
+
+
+@dataclass
+class PairTrade:
+    """A complete multi-symbol trade (entry + exit on all legs)."""
+    entry_date:      str
+    exit_date:       str
+    legs:            list[TradeLeg]
+    combined_pnl:    float
+    combined_pnl_pct: float
+    hold_days:       int
+
+
+@dataclass
+class MultiBacktestResult:
+    """Backtest result for multi-symbol strategies (pairs, hedged, etc.)."""
+    symbols:        list[str]
+    strategy_name:  str
+    period:         str
+    start_date:     str
+    end_date:       str
+
+    # Performance
+    total_return:   float       # %
+    cagr:           float       # %
+    sharpe_ratio:   float
+    max_drawdown:   float       # %
+
+    # Trade stats
+    total_trades:   int = 0
+    winning_trades: int = 0
+    losing_trades:  int = 0
+    win_rate:       float = 0.0
+    avg_win:        float = 0.0
+    avg_loss:       float = 0.0
+    profit_factor:  float = 0.0
+    avg_hold_days:  float = 0.0
+
+    trades:         list[PairTrade] = field(default_factory=list)
+    equity_curve:   list[float] = field(default_factory=list)
+
+    def print_summary(self) -> None:
+        """Display multi-symbol backtest results."""
+        ret_style = "green" if self.total_return >= 0 else "red"
+
+        lines = [
+            f"  Strategy       : [bold]{self.strategy_name}[/bold]",
+            f"  Symbols        : {', '.join(self.symbols)}",
+            f"  Period         : {self.start_date} → {self.end_date}",
+            "",
+            f"  [bold]Returns[/bold]",
+            f"  Total Return   : [{ret_style}]{self.total_return:+.2f}%[/{ret_style}]",
+            f"  CAGR           : [{ret_style}]{self.cagr:+.2f}%[/{ret_style}]",
+            "",
+            f"  [bold]Risk[/bold]",
+            f"  Sharpe Ratio   : {self.sharpe_ratio:.2f}",
+            f"  Max Drawdown   : [red]{self.max_drawdown:.2f}%[/red]",
+            "",
+            f"  [bold]Trades[/bold]",
+            f"  Total          : {self.total_trades}",
+            f"  Win Rate       : {self.win_rate:.1f}%",
+            f"  Avg Win        : [green]{self.avg_win:+.2f}%[/green]",
+            f"  Avg Loss       : [red]{self.avg_loss:+.2f}%[/red]",
+            f"  Profit Factor  : {self.profit_factor:.2f}",
+            f"  Avg Hold       : {self.avg_hold_days:.1f} days",
+        ]
+
+        console.print(Panel(
+            "\n".join(lines),
+            title=f"[bold cyan]Pairs Backtest: {self.strategy_name}[/bold cyan]",
+            border_style="cyan",
+        ))
+
+    def print_trades(self, n: int = 20) -> None:
+        """Show pair trades with all legs."""
+        trades = self.trades[-n:]
+        if not trades:
+            console.print("[dim]No trades executed.[/dim]")
+            return
+
+        for i, t in enumerate(trades, 1):
+            pnl_style = "green" if t.combined_pnl_pct >= 0 else "red"
+            console.print(
+                f"\n  [bold]Trade #{i}[/bold]: {t.entry_date} → {t.exit_date} "
+                f"({t.hold_days}d)  "
+                f"Combined P&L: [{pnl_style}]{t.combined_pnl_pct:+.2f}%[/{pnl_style}]"
+            )
+            for leg in t.legs:
+                leg_style = "green" if leg.pnl_pct >= 0 else "red"
+                dir_color = "green" if leg.direction == "LONG" else "red"
+                console.print(
+                    f"    [{dir_color}]{leg.direction:5s}[/{dir_color}] "
+                    f"{leg.symbol:12s}  "
+                    f"₹{leg.entry_price:>10,.1f} → ₹{leg.exit_price:>10,.1f}  "
+                    f"[{leg_style}]{leg.pnl_pct:+.2f}%[/{leg_style}]"
+                )
+        console.print()
+
+
+class MultiBacktester:
+    """
+    Backtest multi-symbol strategies (pairs, hedged, spread).
+
+    Loads OHLCV data for all symbols, aligns to common dates,
+    and tracks positions + P&L on all legs simultaneously.
+    """
+
+    def __init__(
+        self,
+        symbols: list[str],
+        exchange: str = "NSE",
+        period: str = "1y",
+        capital: float = 100000,
+    ) -> None:
+        self.symbols = [s.upper() for s in symbols]
+        self.exchange = exchange.upper()
+        self.period = period
+        self.initial_capital = capital
+        self._data: dict[str, pd.DataFrame] = {}
+
+    def _load_data(self) -> dict[str, pd.DataFrame]:
+        """Fetch and align OHLCV data for all symbols."""
+        if self._data:
+            return self._data
+
+        from market.history import get_ohlcv
+
+        period_days = {
+            "1mo": 30, "3mo": 90, "6mo": 180,
+            "1y": 365, "2y": 730, "3y": 1095, "5y": 1825,
+        }
+        days = period_days.get(self.period, 365)
+
+        raw = {}
+        for sym in self.symbols:
+            df = get_ohlcv(symbol=sym, exchange=self.exchange, interval="day", days=days)
+            if df.empty:
+                raise RuntimeError(f"No historical data for {sym}")
+            df = df.dropna(subset=["close"])
+            raw[sym] = df
+
+        # Align to common dates
+        common_idx = raw[self.symbols[0]].index
+        for sym in self.symbols[1:]:
+            common_idx = common_idx.intersection(raw[sym].index)
+
+        if len(common_idx) < 20:
+            raise RuntimeError(
+                f"Only {len(common_idx)} common trading days across {self.symbols}. "
+                "Need at least 20 for a meaningful backtest."
+            )
+
+        for sym in self.symbols:
+            raw[sym] = raw[sym].loc[common_idx]
+
+        self._data = raw
+        return raw
+
+    def run(self, strategy: Strategy) -> MultiBacktestResult:
+        """Execute the multi-symbol backtest."""
+        data = self._load_data()
+
+        # Build a combined DataFrame with multi-level columns for the strategy
+        # The strategy's generate_signals receives the primary symbol's df
+        # but can access other symbols' data internally.
+        # We pass the first symbol's df as the main input.
+        primary_df = data[self.symbols[0]]
+        signals = strategy.generate_signals(primary_df)
+
+        # Handle both Series and DataFrame returns
+        if isinstance(signals, pd.Series):
+            # Single-symbol signal applied to first symbol only
+            sig_df = pd.DataFrame({self.symbols[0]: signals})
+            # Fill missing symbols with 0
+            for sym in self.symbols[1:]:
+                sig_df[sym] = 0
+        elif isinstance(signals, pd.DataFrame):
+            sig_df = signals
+        else:
+            raise TypeError(f"generate_signals must return Series or DataFrame, got {type(signals)}")
+
+        # Align signals to common index
+        common_idx = primary_df.index
+        sig_df = sig_df.reindex(common_idx, fill_value=0)
+
+        # Simulation: track positions per symbol
+        positions: dict[str, int] = {s: 0 for s in self.symbols}  # 0=flat, 1=long, -1=short
+        entry_prices: dict[str, float] = {s: 0.0 for s in self.symbols}
+        entry_date = ""
+
+        capital = self.initial_capital
+        capital_per_leg = capital / max(len(self.symbols), 1)
+        equity = [capital]
+        trades: list[PairTrade] = []
+
+        for i in range(1, len(common_idx)):
+            date_str = str(common_idx[i])[:10]
+            prices = {sym: float(data[sym].iloc[i]["close"]) for sym in self.symbols}
+
+            # Read signals for this bar
+            bar_signals = {}
+            for sym in self.symbols:
+                if sym in sig_df.columns:
+                    bar_signals[sym] = int(sig_df[sym].iloc[i]) if i < len(sig_df) else 0
+                else:
+                    bar_signals[sym] = 0
+
+            # Check for entry: all symbols go from flat to non-zero
+            all_flat = all(positions[s] == 0 for s in self.symbols)
+            any_signal = any(bar_signals[s] != 0 for s in self.symbols)
+
+            if all_flat and any_signal:
+                # Enter positions
+                for sym in self.symbols:
+                    sig = bar_signals[sym]
+                    if sig != 0:
+                        positions[sym] = sig
+                        entry_prices[sym] = prices[sym]
+                entry_date = date_str
+
+            # Check for exit: any symbol signals to close (goes to 0 or flips)
+            any_position = any(positions[s] != 0 for s in self.symbols)
+            if any_position:
+                # Exit if any active symbol's signal returns to 0 or flips
+                should_exit = False
+                for sym in self.symbols:
+                    if positions[sym] != 0:
+                        new_sig = bar_signals[sym]
+                        if new_sig == 0 or (new_sig != 0 and new_sig != positions[sym]):
+                            should_exit = True
+                            break
+
+                if should_exit:
+                    # Close all positions
+                    legs = []
+                    total_pnl = 0.0
+                    for sym in self.symbols:
+                        if positions[sym] != 0:
+                            ep = entry_prices[sym]
+                            xp = prices[sym]
+                            direction = "LONG" if positions[sym] == 1 else "SHORT"
+
+                            if positions[sym] == 1:
+                                pnl_pct = (xp - ep) / ep * 100
+                            else:
+                                pnl_pct = (ep - xp) / ep * 100
+
+                            pnl = capital_per_leg * pnl_pct / 100
+                            total_pnl += pnl
+
+                            legs.append(TradeLeg(
+                                symbol=sym,
+                                direction=direction,
+                                entry_price=round(ep, 2),
+                                exit_price=round(xp, 2),
+                                quantity=max(1, int(capital_per_leg / ep)) if ep > 0 else 0,
+                                pnl=round(pnl, 2),
+                                pnl_pct=round(pnl_pct, 2),
+                            ))
+
+                    capital += total_pnl
+                    combined_pct = total_pnl / (capital_per_leg * len([l for l in legs])) * 100 if legs else 0
+
+                    try:
+                        entry_dt = pd.Timestamp(entry_date)
+                        exit_dt = pd.Timestamp(common_idx[i])
+                        if hasattr(entry_dt, 'tz') and entry_dt.tz:
+                            entry_dt = entry_dt.tz_localize(None)
+                        if hasattr(exit_dt, 'tz') and exit_dt.tz:
+                            exit_dt = exit_dt.tz_localize(None)
+                        hold_days = (exit_dt - entry_dt).days
+                    except Exception:
+                        hold_days = 0
+
+                    trades.append(PairTrade(
+                        entry_date=entry_date,
+                        exit_date=date_str,
+                        legs=legs,
+                        combined_pnl=round(total_pnl, 2),
+                        combined_pnl_pct=round(combined_pct, 2),
+                        hold_days=hold_days,
+                    ))
+
+                    # Reset
+                    for sym in self.symbols:
+                        positions[sym] = 0
+                        entry_prices[sym] = 0.0
+
+                    # Update capital per leg
+                    capital_per_leg = capital / max(len(self.symbols), 1)
+
+            # Update equity: mark-to-market open positions
+            unrealized = 0.0
+            for sym in self.symbols:
+                if positions[sym] != 0:
+                    ep = entry_prices[sym]
+                    cp = prices[sym]
+                    if positions[sym] == 1:
+                        unrealized += capital_per_leg * (cp - ep) / ep
+                    else:
+                        unrealized += capital_per_leg * (ep - cp) / ep
+            equity.append(capital + unrealized)
+
+        # Close any open positions at last bar
+        if any(positions[s] != 0 for s in self.symbols):
+            last_prices = {sym: float(data[sym].iloc[-1]["close"]) for sym in self.symbols}
+            legs = []
+            total_pnl = 0.0
+            for sym in self.symbols:
+                if positions[sym] != 0:
+                    ep = entry_prices[sym]
+                    xp = last_prices[sym]
+                    direction = "LONG" if positions[sym] == 1 else "SHORT"
+                    pnl_pct = ((xp - ep) / ep * 100) if positions[sym] == 1 else ((ep - xp) / ep * 100)
+                    pnl = capital_per_leg * pnl_pct / 100
+                    total_pnl += pnl
+                    legs.append(TradeLeg(sym, direction, round(ep, 2), round(xp, 2), 0, round(pnl, 2), round(pnl_pct, 2)))
+
+            capital += total_pnl
+            combined_pct = total_pnl / (capital_per_leg * len(legs)) * 100 if legs else 0
+            trades.append(PairTrade(
+                entry_date=entry_date,
+                exit_date=str(common_idx[-1])[:10],
+                legs=legs,
+                combined_pnl=round(total_pnl, 2),
+                combined_pnl_pct=round(combined_pct, 2),
+                hold_days=0,
+            ))
+
+        # ── Metrics ──────────────────────────────────────────
+        total_return = (capital - self.initial_capital) / self.initial_capital * 100
+        days_total = (common_idx[-1] - common_idx[0]).days
+        years = days_total / 365.25 if days_total > 0 else 1
+        cagr = ((capital / self.initial_capital) ** (1 / years) - 1) * 100 if years > 0 else 0
+
+        eq = pd.Series(equity)
+        daily_ret = eq.pct_change(fill_method=None).dropna()
+        sharpe = 0.0
+        if len(daily_ret) > 1 and daily_ret.std() > 0:
+            sharpe = (daily_ret.mean() / daily_ret.std()) * math.sqrt(252)
+
+        peak = eq.expanding().max()
+        dd = (eq - peak) / peak * 100
+        max_dd = float(dd.min())
+
+        winners = [t for t in trades if t.combined_pnl > 0]
+        losers = [t for t in trades if t.combined_pnl < 0]
+        win_rate = len(winners) / len(trades) * 100 if trades else 0
+        avg_win = sum(t.combined_pnl_pct for t in winners) / len(winners) if winners else 0
+        avg_loss = sum(t.combined_pnl_pct for t in losers) / len(losers) if losers else 0
+        gross_profit = sum(t.combined_pnl for t in winners)
+        gross_loss = abs(sum(t.combined_pnl for t in losers))
+        pf = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+        avg_hold = sum(t.hold_days for t in trades) / len(trades) if trades else 0
+
+        return MultiBacktestResult(
+            symbols=self.symbols,
+            strategy_name=strategy.name,
+            period=self.period,
+            start_date=str(common_idx[0])[:10],
+            end_date=str(common_idx[-1])[:10],
+            total_return=round(total_return, 2),
+            cagr=round(cagr, 2),
+            sharpe_ratio=round(sharpe, 2),
+            max_drawdown=round(max_dd, 2),
+            total_trades=len(trades),
+            winning_trades=len(winners),
+            losing_trades=len(losers),
+            win_rate=round(win_rate, 1),
+            avg_win=round(avg_win, 2),
+            avg_loss=round(avg_loss, 2),
+            profit_factor=round(pf, 2),
+            avg_hold_days=round(avg_hold, 1),
+            trades=trades,
+            equity_curve=equity,
+        )
+
+
 def run_backtest(
     symbol: str,
     strategy_name: str = "rsi",
@@ -470,9 +882,30 @@ def run_backtest(
     period: str = "1y",
     capital: float = 100000,
 ) -> BacktestResult:
-    """Convenience function for running a named strategy."""
+    """Convenience function for running a named strategy.
+
+    If strategy_name starts with "user:", loads a user-saved strategy
+    from ~/.trading_platform/strategies/ via StrategyStore.
+    """
+    # User-saved strategies: "user:my_strategy"
+    if strategy_name.startswith("user:"):
+        from engine.strategy_builder import strategy_store
+        user_name = strategy_name[5:]
+        strategy = strategy_store.load_strategy(user_name)
+        bt = Backtester(symbol=symbol, period=period, capital=capital)
+        return bt.run(strategy)
+
     factory = STRATEGIES.get(strategy_name.lower())
     if not factory:
+        # Also check user strategies as fallback
+        try:
+            from engine.strategy_builder import strategy_store
+            strategy = strategy_store.load_strategy(strategy_name)
+            bt = Backtester(symbol=symbol, period=period, capital=capital)
+            return bt.run(strategy)
+        except Exception:
+            pass
+
         raise ValueError(
             f"Unknown strategy: {strategy_name}. "
             f"Available: {', '.join(STRATEGIES.keys())}"

@@ -24,6 +24,8 @@ class MockBrokerAPI(BrokerAPI):
     Good for testing the full login → REPL → command flow.
     """
 
+    _is_mock = True  # Used by market/history.py to skip mock broker for market data
+
     def __init__(self, passthrough_market_data: bool = False) -> None:
         self._authenticated = False
         self._orders: list[Order] = []

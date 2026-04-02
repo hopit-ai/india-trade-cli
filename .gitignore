@@ -1,10 +1,20 @@
 # ── Secrets ──────────────────────────────────────────────────
 .env
 *.env
+!.env.example
+*.key
+*.pem
+*.secret
 
 # ── Broker tokens (stored locally) ───────────────────────────
 ~/.trading_platform/
 *.json.token
+*_token.json
+*_credentials.json
+
+# ── Telegram bot data ────────────────────────────────────────
+telegram_chat_id.txt
+*.chat_id
 
 # ── Python ───────────────────────────────────────────────────
 __pycache__/
