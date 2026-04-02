@@ -237,7 +237,14 @@ def compute_iv_rank_from_history(symbol: str, period: str = "1y") -> Optional[fl
         import yfinance as yf
         import numpy as np
 
-        ticker = yf.Ticker(f"{symbol.upper()}.NS")
+        # Use proper symbol mapping (handles NIFTY → ^NSEI etc.)
+        try:
+            from market.yfinance_provider import _to_yf_symbol
+            yf_sym = _to_yf_symbol(symbol)
+        except ImportError:
+            yf_sym = f"{symbol.upper()}.NS"
+
+        ticker = yf.Ticker(yf_sym)
         hist = ticker.history(period=period)
         if hist.empty or len(hist) < 60:
             return None

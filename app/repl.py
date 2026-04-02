@@ -62,7 +62,8 @@ COMMANDS = [
     "portfolio", "paper",
     "ai", "alert", "alerts", "audit", "backtest", "clear",
     "deep-analyze", "drift",
-    "earnings", "events", "exports", "flows", "greeks", "macro", "memory",
+    "delta-hedge", "earnings", "events", "exports", "flows", "greeks", "macro", "memory",
+    "roll-options",
     "strategy",
     "mtf", "pairs", "patterns", "profile", "provider", "risk-report",
     "paper-execute", "save-pdf", "explain", "explain-save",
@@ -450,7 +451,9 @@ def cmd_help() -> None:
             ("holdings",              "Delivery holdings"),
             ("positions",             "Open intraday / F&O positions"),
             ("portfolio",             "Combined view: all brokers + risk"),
-            ("greeks",                "Portfolio Greeks (Delta, Theta, Vega)"),
+            ("greeks",                "Portfolio Greeks with warnings + actions"),
+            ("delta-hedge",           "Suggest trades to neutralize delta"),
+            ("roll-options",          "Find expiring positions, suggest rolls"),
             ("risk-report",           "VaR/CVaR portfolio risk analysis"),
             ("orders",                "Today's orders"),
         ],
@@ -1002,8 +1005,37 @@ def run_repl(broker: BrokerAPI) -> None:
                 print_flow_report()
 
             elif command == "greeks":
-                from engine.portfolio import print_portfolio_greeks
+                from engine.portfolio import print_portfolio_greeks, get_position_greeks
+                from engine.greeks_manager import build_dashboard, print_dashboard
                 print_portfolio_greeks()
+                # Enhanced dashboard with warnings
+                pg = get_position_greeks()
+                dash = build_dashboard(pg.net_delta, pg.net_theta, pg.net_vega, pg.net_gamma)
+                if dash.warnings:
+                    print_dashboard(dash)
+
+            elif command == "delta-hedge":
+                from engine.portfolio import get_position_greeks
+                from engine.greeks_manager import compute_delta_hedge, print_delta_hedge
+                pg = get_position_greeks()
+                target = float(args[0]) if args and args[0].replace("-", "").replace("+", "").isdigit() else 0.0
+                suggestion = compute_delta_hedge(pg.net_delta, target_delta=target)
+                print_delta_hedge(suggestion)
+
+            elif command == "roll-options":
+                from engine.portfolio import get_position_greeks
+                from engine.greeks_manager import compute_roll_suggestions, print_roll_suggestions
+                pg = get_position_greeks()
+                dte = 3
+                if "--dte" in args:
+                    idx = args.index("--dte")
+                    if idx + 1 < len(args):
+                        try:
+                            dte = int(args[idx + 1])
+                        except ValueError:
+                            pass
+                suggestions = compute_roll_suggestions(pg.positions_with_greeks, dte_threshold=dte)
+                print_roll_suggestions(suggestions)
 
             elif command == "macro":
                 from market.macro import print_macro_snapshot
