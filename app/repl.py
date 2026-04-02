@@ -62,7 +62,7 @@ COMMANDS = [
     "portfolio", "paper",
     "ai", "alert", "alerts", "audit", "backtest", "clear",
     "deep-analyze", "drift",
-    "active", "bulk-deals", "deals", "delta-hedge",
+    "active", "bulk-deals", "dcf", "deals", "delta-hedge",
     "earnings", "events", "exports", "flows", "gex", "greeks",
     "iv-smile", "macro", "memory", "most-active",
     "oi", "oi-profile", "scan", "smile",
@@ -1008,31 +1008,14 @@ def run_repl(broker: BrokerAPI) -> None:
                 by = "value" if "--value" in args else "volume"
                 print_most_active(by=by)
 
-            elif command in ("bulk-deals", "block-deals", "deals"):
-                from market.bulk_deals import print_deals
-                sym = args[0].upper() if args and not args[0].startswith("-") else None
-                print_deals(symbol=sym)
+    "active", "bulk-deals", "dcf", "deals", "delta-hedge",
+    "earnings", "events", "exports", "flows", "gex", "greeks",
+    "iv-smile", "macro", "memory", "most-active",
+    "oi", "oi-profile", "scan", "smile",
 
-            elif command in ("oi-profile", "oi"):
-                from market.oi_profile import print_oi_profile
-                sym = args[0].upper() if args else "NIFTY"
-                print_oi_profile(sym)
 
-            elif command in ("iv-smile", "smile"):
-                from analysis.volatility_surface import print_iv_smile
-                sym = args[0].upper() if args else "NIFTY"
-                print_iv_smile(sym)
 
-            elif command == "gex":
-                from analysis.gex import print_gex
-                sym = args[0].upper() if args else "NIFTY"
-                print_gex(sym)
 
-            elif command == "scan":
-                from market.options_scanner import print_scan_results
-                quick = "--quick" in args
-                syms = [a.upper() for a in args if not a.startswith("-")] or None
-                print_scan_results(symbols=syms, quick=quick)
 
             elif command == "flows":
                 from market.flow_intel import print_flow_report

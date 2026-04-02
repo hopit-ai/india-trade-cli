@@ -157,6 +157,40 @@ KEY_POINTS:
 - [point 2]
 - [point 3]"""
 
+DEEP_DCF_PROMPT = """You are a VALUATION ANALYST at an Indian trading firm.
+Compute a DCF (Discounted Cash Flow) valuation for {symbol} ({exchange}).
+
+{tool_data}
+
+The DCF tool has been called with auto-detected parameters. Your job:
+
+1. **Review the assumptions**: Is the growth rate reasonable for this company and sector?
+   - Compare with historical growth, analyst estimates, sector trends
+   - If growth seems too high or low, state what you'd use and why
+
+2. **Interpret the result**:
+   - Intrinsic value vs current price — margin of safety
+   - Is the stock undervalued, fairly valued, or overvalued?
+   - Which scenarios in the sensitivity table are most realistic?
+
+3. **Key risks to the DCF**:
+   - What could make FCF drop? (margin compression, capex surge, competition)
+   - What could change the growth trajectory? (new products, regulation, macro)
+   - Is the terminal growth assumption appropriate?
+
+4. **Comparison with market valuation**:
+   - How does DCF value compare to PE-implied value?
+   - Do analyst targets align with your DCF?
+
+Respond with:
+VERDICT: [BULLISH / BEARISH / NEUTRAL]
+CONFIDENCE: [0-100]%
+SCORE: [-100 to +100]
+KEY_POINTS:
+- [point 1]
+- [point 2]
+- [point 3]"""
+
 
 # ── Deep Analyzer ────────────────────────────────────────────
 
@@ -322,6 +356,7 @@ class DeepAnalyzer:
         analysts = [
             ("Technical",  DEEP_TECHNICAL_PROMPT,  ["technical_analyse", "get_quote"]),
             ("Fundamental", DEEP_FUNDAMENTAL_PROMPT, ["fundamental_analyse"]),
+            ("DCF Valuation", DEEP_DCF_PROMPT,     ["compute_dcf"]),
             ("Options",    DEEP_OPTIONS_PROMPT,     ["get_pcr", "get_max_pain", "get_iv_rank"]),
             ("Sentiment",  DEEP_SENTIMENT_PROMPT,   ["get_stock_news", "get_fii_dii_data", "get_market_breadth"]),
             ("Risk",       DEEP_RISK_PROMPT,        ["get_vix", "get_quote", "get_upcoming_events"]),
