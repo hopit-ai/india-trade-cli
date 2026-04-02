@@ -78,16 +78,50 @@ class FundamentalSnapshot:
     target_price_low:    Optional[float] = None
     target_upside_pct:   Optional[float] = None   # % upside to mean target
 
+    # Sector & Industry (59a)
+    sector:          Optional[str] = None    # e.g. "Consumer Cyclical"
+    industry:        Optional[str] = None    # e.g. "Luxury Goods"
+
+    # Forward estimates (59f)
+    forward_pe:          Optional[float] = None
+    next_earnings_date:  Optional[str]   = None    # "YYYY-MM-DD"
+    earnings_estimate:   Optional[float] = None    # consensus EPS
+
+    # Governance risk (59e) — ISS scores 1-10 (10 = highest risk)
+    overall_risk:    Optional[int] = None
+    audit_risk:      Optional[int] = None
+    board_risk:      Optional[int] = None
+
+    # Margins (59h)
+    operating_margin:  Optional[float] = None   # %
+    gross_margin:      Optional[float] = None   # %
+    ebitda_margin:     Optional[float] = None   # %
+
+    # Cash & debt (59i)
+    total_cash_cr:   Optional[float] = None
+    total_debt_cr:   Optional[float] = None
+
+    # Valuation multiples (59k)
+    price_to_sales:  Optional[float] = None
+    ev_to_revenue:   Optional[float] = None
+
+    # Dividend (59j)
+    payout_ratio:           Optional[float] = None
+    five_yr_avg_div_yield:  Optional[float] = None
+
+    # Insider transactions (59g)
+    insider_transactions:  list = field(default_factory=list)  # [{"date", "insider", "transaction", "shares", "value"}]
+
     # Quarterly trend (last 4 quarters, most recent first)
-    quarterly_revenue:   list = field(default_factory=list)  # [{"quarter": "Dec-25", "revenue_cr": 1034, "profit_cr": 42}]
+    quarterly_revenue:   list = field(default_factory=list)
 
     # Recent corporate announcements
-    announcements:       list = field(default_factory=list)  # [{"date": "...", "desc": "..."}]
+    announcements:       list = field(default_factory=list)
 
     # Score and verdict
     flags:   list[FundamentalFlag] = field(default_factory=list)
-    score:   int  = 0                 # 0–100
-    verdict: str  = "NEUTRAL"         # STRONG | GOOD | NEUTRAL | WEAK | AVOID
+    score:   int  = 0
+    verdict: str  = "NEUTRAL"
     summary: str  = ""
 
 
@@ -257,6 +291,50 @@ def _score(parsed: dict) -> tuple[int, list[FundamentalFlag]]:
             flags.append(FundamentalFlag("Pledged %", f"{pledged:.1f}%", "WARN",
                                          "Some promoter shares pledged"))
             score -= 5
+
+    # ── Governance risk (59e) ────────────────────────────────
+    overall_risk = parsed.get("overall_risk")
+    if overall_risk is not None:
+        if overall_risk >= 8:
+            score -= 5
+            flags.append(FundamentalFlag("Governance Risk", f"{overall_risk}/10", "WARN",
+                                         f"High governance risk (audit={parsed.get('audit_risk')}, board={parsed.get('board_risk')})"))
+        elif overall_risk <= 3:
+            score += 3
+            flags.append(FundamentalFlag("Governance Risk", f"{overall_risk}/10", "GOOD",
+                                         "Low governance risk — strong corporate governance"))
+
+    # ── Earnings proximity (59f) ──────────────────────────────
+    next_earnings = parsed.get("next_earnings_date")
+    if next_earnings:
+        try:
+            from datetime import date as _date
+            earn_dt = _date.fromisoformat(str(next_earnings)[:10])
+            days_to_earnings = (earn_dt - _date.today()).days
+            if 0 <= days_to_earnings <= 7:
+                flags.append(FundamentalFlag("Earnings Soon", f"{days_to_earnings}d away",
+                                             "WARN" if days_to_earnings <= 3 else "GOOD",
+                                             f"Earnings on {next_earnings} — expect volatility"))
+        except (ValueError, TypeError):
+            pass
+
+    # ── Payout ratio (59j) ────────────────────────────────────
+    payout = parsed.get("payout_ratio")
+    if payout is not None:
+        if payout > 0.80:
+            score -= 3
+            flags.append(FundamentalFlag("Payout Ratio", f"{payout*100:.0f}%", "WARN",
+                                         "Payout > 80% — may be unsustainable"))
+        elif 0 < payout < 0.30:
+            flags.append(FundamentalFlag("Payout Ratio", f"{payout*100:.0f}%", "GOOD",
+                                         "Conservative payout — retains earnings for growth"))
+
+    # ── Insider activity (59g) ────────────────────────────────
+    insider_net = parsed.get("insider_net_shares", 0)
+    if insider_net and insider_net < -100000:
+        score -= 3
+        flags.append(FundamentalFlag("Insider Activity", f"Net sell {abs(insider_net):,.0f} shares", "WARN",
+                                     parsed.get("insider_summary", "Recent insider selling detected")))
 
     return max(0, min(100, score)), flags
 
@@ -434,12 +512,73 @@ def _fetch_yfinance(symbol: str) -> dict:
             "target_price_high": target_high,
             "target_price_low": target_low,
             "target_upside_pct": target_upside,
+            # 59a: Sector/Industry
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            # 59f: Forward estimates
+            "forward_pe": info.get("forwardPE"),
+            "next_earnings_date": _extract_earnings_date(ticker),
+            "earnings_estimate": info.get("earningsAverage") if hasattr(info, 'get') else None,
+            # 59e: Governance risk (ISS scores 1-10)
+            "overall_risk": info.get("overallRisk"),
+            "audit_risk": info.get("auditRisk"),
+            "board_risk": info.get("boardRisk"),
+            # 59h: Margins
+            "operating_margin": round(info["operatingMargins"] * 100, 1) if info.get("operatingMargins") else None,
+            "gross_margin": round(info["grossMargins"] * 100, 1) if info.get("grossMargins") else None,
+            "ebitda_margin": round(info["ebitdaMargins"] * 100, 1) if info.get("ebitdaMargins") else None,
+            # 59i: Cash & debt
+            "total_cash_cr": round(info["totalCash"] / 1e7, 0) if info.get("totalCash") else None,
+            "total_debt_cr": round(info["totalDebt"] / 1e7, 0) if info.get("totalDebt") else None,
+            # 59k: Valuation multiples
+            "price_to_sales": info.get("priceToSalesTrailing12Months"),
+            "ev_to_revenue": info.get("enterpriseToRevenue"),
+            # 59j: Dividend
+            "payout_ratio": info.get("payoutRatio"),
+            "five_yr_avg_div_yield": info.get("fiveYearAvgDividendYield"),
+            # 59g: Insider transactions
+            "insider_transactions": _extract_insider_txns(ticker),
             # Quarterly trend
             "quarterly_revenue": quarterly,
             "_data_source": "yfinance",
         }
     except Exception:
         return {}
+
+
+def _extract_earnings_date(ticker) -> Optional[str]:
+    """Extract next earnings date from yfinance ticker."""
+    try:
+        cal = ticker.calendar
+        if cal and "Earnings Date" in cal:
+            dates = cal["Earnings Date"]
+            if isinstance(dates, list) and dates:
+                return str(dates[0])
+            return str(dates) if dates else None
+    except Exception:
+        pass
+    return None
+
+
+def _extract_insider_txns(ticker, limit: int = 5) -> list[dict]:
+    """Extract recent insider transactions from yfinance."""
+    try:
+        ins = ticker.insider_transactions
+        if ins is None or ins.empty:
+            return []
+        results = []
+        for _, row in ins.head(limit).iterrows():
+            results.append({
+                "insider": str(row.get("Insider", "")),
+                "position": str(row.get("Position", "")),
+                "transaction": str(row.get("Transaction", "")),
+                "shares": int(row.get("Shares", 0)),
+                "value": float(row.get("Value", 0)),
+                "date": str(row.get("Start Date", ""))[:10],
+            })
+        return results
+    except Exception:
+        return []
 
 
 def _is_nan(val) -> bool:
@@ -556,7 +695,7 @@ def analyse(symbol: str, **_kwargs) -> FundamentalSnapshot:
             flags.append(FundamentalFlag("Free Cash Flow", f"₹{fcf:.0f} Cr", "WARN",
                                          "Negative FCF — burning cash despite reported profits"))
 
-    score = max(0, min(100, score))
+    # Note: governance, earnings, payout, insider scoring is now in _score()
 
     # ── Fetch announcements (best-effort, non-blocking) ──────
     announcements = _fetch_nse_announcements(symbol)
@@ -608,6 +747,32 @@ def analyse(symbol: str, **_kwargs) -> FundamentalSnapshot:
         target_price_high    = parsed.get("target_price_high"),
         target_price_low     = parsed.get("target_price_low"),
         target_upside_pct    = target_upside,
+        # 59a: Sector/Industry
+        sector               = parsed.get("sector"),
+        industry             = parsed.get("industry"),
+        # 59f: Forward estimates
+        forward_pe           = parsed.get("forward_pe"),
+        next_earnings_date   = parsed.get("next_earnings_date"),
+        earnings_estimate    = parsed.get("earnings_estimate"),
+        # 59e: Governance
+        overall_risk         = parsed.get("overall_risk"),
+        audit_risk           = parsed.get("audit_risk"),
+        board_risk           = parsed.get("board_risk"),
+        # 59h: Margins
+        operating_margin     = parsed.get("operating_margin"),
+        gross_margin         = parsed.get("gross_margin"),
+        ebitda_margin        = parsed.get("ebitda_margin"),
+        # 59i: Cash/Debt
+        total_cash_cr        = parsed.get("total_cash_cr"),
+        total_debt_cr        = parsed.get("total_debt_cr"),
+        # 59k: Valuation multiples
+        price_to_sales       = parsed.get("price_to_sales"),
+        ev_to_revenue        = parsed.get("ev_to_revenue"),
+        # 59j: Dividend
+        payout_ratio         = parsed.get("payout_ratio"),
+        five_yr_avg_div_yield= parsed.get("five_yr_avg_div_yield"),
+        # 59g: Insider transactions
+        insider_transactions = parsed.get("insider_transactions", []),
         # Quarterly + announcements
         quarterly_revenue    = parsed.get("quarterly_revenue", []),
         announcements        = announcements,

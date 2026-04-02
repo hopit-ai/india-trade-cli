@@ -62,7 +62,8 @@ COMMANDS = [
     "portfolio", "paper",
     "ai", "alert", "alerts", "audit", "backtest", "clear",
     "deep-analyze", "drift",
-    "delta-hedge", "earnings", "events", "exports", "flows", "greeks", "macro", "memory",
+    "active", "delta-hedge", "earnings", "events", "exports", "flows", "greeks", "macro", "memory",
+    "most-active",
     "roll-options",
     "strategy",
     "mtf", "pairs", "patterns", "profile", "provider", "risk-report",
@@ -999,6 +1000,11 @@ def run_repl(broker: BrokerAPI) -> None:
                 from market.earnings import print_earnings_calendar
                 syms = [a.upper() for a in args] if args else None
                 print_earnings_calendar(syms)
+
+            elif command in ("most-active", "active"):
+                from market.active_stocks import print_most_active
+                by = "value" if "--value" in args else "volume"
+                print_most_active(by=by)
 
             elif command == "flows":
                 from market.flow_intel import print_flow_report
