@@ -906,6 +906,14 @@ def run_backtest(
         except Exception:
             pass
 
+        # Check options strategies
+        try:
+            from engine.options_backtest import OPTIONS_STRATEGIES, run_options_backtest
+            if strategy_name.lower() in OPTIONS_STRATEGIES:
+                return run_options_backtest(symbol, strategy_name, strategy_args, period, capital)
+        except ImportError:
+            pass
+
         raise ValueError(
             f"Unknown strategy: {strategy_name}. "
             f"Available: {', '.join(STRATEGIES.keys())}"

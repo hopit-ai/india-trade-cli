@@ -438,6 +438,8 @@ def cmd_help() -> None:
             ("backtest SYM rsi",      "RSI strategy backtest"),
             ("backtest SYM ma 20 50", "EMA crossover backtest"),
             ("backtest SYM macd|bb",  "MACD or Bollinger backtest"),
+            ("backtest NIFTY straddle",    "Options: ATM straddle before expiry"),
+            ("backtest NIFTY iron-condor", "Options: sell iron condor"),
             ("walkforward SYM rsi",   "Walk-forward test (rolling windows)"),
             ("whatif nifty -3",       "What if NIFTY drops 3%? (real beta)"),
             ("whatif SYM -10",        "Single stock scenario"),
@@ -524,13 +526,22 @@ def _handle_backtest_command(args: list[str]) -> None:
     strategy_name = clean_args[1].lower() if len(clean_args) > 1 else "rsi"
     strategy_args = clean_args[2:] if len(clean_args) > 2 else []
 
-    # Check for --period flag
+    # Check for --period and --trades flags
     period = "1y"
+    num_trades = 10
     if "--period" in clean_args:
         idx = clean_args.index("--period")
         if idx + 1 < len(clean_args):
             period = clean_args[idx + 1]
             strategy_args = [a for a in strategy_args if a not in ("--period", period)]
+    if "--trades" in clean_args:
+        idx = clean_args.index("--trades")
+        if idx + 1 < len(clean_args):
+            try:
+                num_trades = int(clean_args[idx + 1])
+            except ValueError:
+                pass
+            strategy_args = [a for a in strategy_args if a not in ("--trades", clean_args[idx + 1])]
 
     console.print(f"\n[dim]Running backtest: {symbol} / {strategy_name} / {period}...[/dim]")
 
@@ -542,31 +553,30 @@ def _handle_backtest_command(args: list[str]) -> None:
             period=period,
         )
         result.print_summary()
-        result.print_trades(10)
-        # Capture for post-processing
-        _bt_summary = (
-            f"Backtest: {result.strategy_name} on {result.symbol}\n"
-            f"Period: {result.start_date} to {result.end_date}\n"
-            f"Return: {result.total_return:+.2f}% vs Buy&Hold: {result.buy_hold_return:+.2f}%\n"
-            f"Sharpe: {result.sharpe_ratio:.2f}, Max DD: {result.max_drawdown:.2f}%\n"
-            f"Trades: {result.total_trades}, Win Rate: {result.win_rate:.1f}%\n"
-            f"Avg Win: {result.avg_win:+.2f}%, Avg Loss: {result.avg_loss:+.2f}%\n"
-            f"Profit Factor: {result.profit_factor:.2f}"
-        )
+        result.print_trades(num_trades)
+        # Capture for post-processing — handle both equity and options results
+        result_symbol = getattr(result, 'symbol', None) or getattr(result, 'underlying', symbol)
+        buy_hold = getattr(result, 'buy_hold_return', None)
+        profit_factor = getattr(result, 'profit_factor', None)
+        total_pnl = getattr(result, 'total_pnl', None)
+
+        lines = [f"Backtest: {result.strategy_name} on {result_symbol}"]
+        lines.append(f"Period: {result.start_date} to {result.end_date}")
+        lines.append(f"Return: {result.total_return:+.2f}%")
+        if buy_hold is not None:
+            lines.append(f"Buy & Hold: {buy_hold:+.2f}%")
+        if total_pnl is not None:
+            lines.append(f"Total P&L: Rs.{total_pnl:,.0f}")
+        lines.append(f"Sharpe: {result.sharpe_ratio:.2f}, Max DD: {result.max_drawdown:.2f}%")
+        lines.append(f"Trades: {result.total_trades}, Win Rate: {result.win_rate:.1f}%")
+        if profit_factor is not None:
+            lines.append(f"Profit Factor: {profit_factor:.2f}")
+
+        _bt_summary = "\n".join(lines)
         _last_output = _bt_summary
         _last_command = f"Backtest {symbol} {strategy_name}"
         if wants_pdf or wants_explain:
-            # Build text summary for export
-            summary = (
-                f"Backtest: {result.strategy_name} on {result.symbol}\n"
-                f"Period: {result.start_date} to {result.end_date}\n"
-                f"Return: {result.total_return:+.2f}% vs Buy&Hold: {result.buy_hold_return:+.2f}%\n"
-                f"Sharpe: {result.sharpe_ratio:.2f}, Max DD: {result.max_drawdown:.2f}%\n"
-                f"Trades: {result.total_trades}, Win Rate: {result.win_rate:.1f}%\n"
-                f"Avg Win: {result.avg_win:+.2f}%, Avg Loss: {result.avg_loss:+.2f}%\n"
-                f"Profit Factor: {result.profit_factor:.2f}"
-            )
-            handle_output_flags(summary, f"Backtest {symbol} {strategy_name}",
+            handle_output_flags(_bt_summary, f"Backtest {symbol} {strategy_name}",
                                 wants_pdf, wants_explain)
     except Exception as e:
         console.print(f"[red]Backtest failed: {e}[/red]")

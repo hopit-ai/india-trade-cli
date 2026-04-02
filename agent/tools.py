@@ -773,4 +773,41 @@ def build_registry() -> ToolRegistry:
         fn=_list_user_strategies,
     )
 
+    # ── Options Backtesting ────────────────────────────────────
+
+    def _backtest_options(underlying: str, strategy: str = "straddle", period: str = "1y") -> dict:
+        from engine.options_backtest import run_options_backtest
+        result = run_options_backtest(underlying, strategy, period=period)
+        return {
+            "underlying": result.underlying,
+            "strategy": result.strategy_name,
+            "period": result.period,
+            "total_pnl": result.total_pnl,
+            "total_return": result.total_return,
+            "total_trades": result.total_trades,
+            "win_rate": result.win_rate,
+            "avg_win": result.avg_win,
+            "avg_loss": result.avg_loss,
+            "max_drawdown": result.max_drawdown,
+            "sharpe": result.sharpe_ratio,
+        }
+
+    reg.register(
+        name="backtest_options",
+        description=(
+            "Backtest an options strategy (straddle, iron-condor, covered-call, protective-put) "
+            "on a given underlying and period. Uses Black-Scholes synthetic pricing."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "underlying": {"type": "string", "description": "Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE)"},
+                "strategy":   {"type": "string", "description": "Options strategy: straddle, iron-condor, covered-call, protective-put"},
+                "period":     {"type": "string", "description": "Backtest period: 1y, 2y, 3y (default: 1y)"},
+            },
+            "required": ["underlying", "strategy"],
+        },
+        fn=_backtest_options,
+    )
+
     return reg
