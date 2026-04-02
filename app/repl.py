@@ -62,7 +62,7 @@ COMMANDS = [
     "portfolio", "paper",
     "ai", "alert", "alerts", "audit", "backtest", "clear",
     "deep-analyze", "drift",
-    "active", "delta-hedge", "earnings", "events", "exports", "flows", "greeks", "macro", "memory",
+    "active", "dcf", "delta-hedge", "earnings", "events", "exports", "flows", "greeks", "macro", "memory",
     "most-active",
     "roll-options",
     "strategy",
@@ -1005,6 +1005,26 @@ def run_repl(broker: BrokerAPI) -> None:
                 from market.active_stocks import print_most_active
                 by = "value" if "--value" in args else "volume"
                 print_most_active(by=by)
+
+            elif command == "dcf":
+                if not args:
+                    console.print("[red]Usage: dcf SYMBOL [--growth 15] [--wacc 12][/red]")
+                else:
+                    from analysis.dcf import print_dcf
+                    sym = args[0].upper()
+                    growth = None
+                    wacc_val = None
+                    if "--growth" in args:
+                        idx = args.index("--growth")
+                        if idx + 1 < len(args):
+                            try: growth = float(args[idx + 1])
+                            except ValueError: pass
+                    if "--wacc" in args:
+                        idx = args.index("--wacc")
+                        if idx + 1 < len(args):
+                            try: wacc_val = float(args[idx + 1])
+                            except ValueError: pass
+                    print_dcf(sym, growth_rate=growth, wacc=wacc_val)
 
             elif command == "flows":
                 from market.flow_intel import print_flow_report

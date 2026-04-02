@@ -828,6 +828,13 @@ class ClaudeCLIProvider(LLMProvider):
         "hedge":        ["suggest_delta_hedge"],
         "theta":        ["get_greeks_dashboard"],
         "gamma":        ["get_greeks_dashboard"],
+        # DCF / Valuation
+        "dcf":          ["compute_dcf"],
+        "valuation":    ["compute_dcf", "fundamental_analyse"],
+        "intrinsic":    ["compute_dcf"],
+        "fair value":   ["compute_dcf"],
+        "undervalued":  ["compute_dcf", "fundamental_analyse"],
+        "overvalued":   ["compute_dcf", "fundamental_analyse"],
     }
 
     # Common stock name → NSE symbol (case-insensitive lookup)

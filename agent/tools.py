@@ -898,4 +898,26 @@ def build_registry() -> ToolRegistry:
         fn=_get_most_active,
     )
 
+    # ── DCF Valuation ────────────────────────────────────────
+
+    reg.register(
+        name="compute_dcf",
+        description=(
+            "Compute DCF (Discounted Cash Flow) valuation for a stock. "
+            "Returns intrinsic value per share, margin of safety vs current price, "
+            "WACC, growth assumptions, and sensitivity table (growth × WACC grid). "
+            "Auto-detects FCF, growth rate, beta from financial data."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock symbol (e.g., RELIANCE, TCS)"},
+                "growth_rate": {"type": "number", "description": "Override growth rate % (optional, auto-detected if omitted)"},
+                "wacc": {"type": "number", "description": "Override WACC % (optional, auto-computed if omitted)"},
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol, growth_rate=None, wacc=None: __import__("analysis.dcf", fromlist=["dcf_for_symbol"]).dcf_for_symbol(symbol, growth_rate, wacc),
+    )
+
     return reg
