@@ -133,58 +133,7 @@ def _get_instrument_token(symbol: str, exchange: str) -> int:
     raise ValueError(f"Instrument not found: {exchange}:{symbol}")
 
 
-def _mock_ohlcv(
-    symbol: str,
-    from_date: datetime,
-    to_date: datetime,
-) -> list[dict]:
-    """
-    Generate synthetic OHLCV data for mock/paper broker.
-    Produces a realistic-looking price series using random walk.
-    """
-    import random
-    import math
 
-    base_prices = {
-        "RELIANCE": 2650, "HDFCBANK": 1580, "INFY": 1720,
-        "TCS": 3800, "ICICIBANK": 1087, "SBIN": 778,
-        "NIFTY 50": 22000, "BANKNIFTY": 47000, "INDIA VIX": 14,
-    }
-    price = base_prices.get(symbol.upper(), 1000)
-
-    rows = []
-    current = from_date
-    random.seed(hash(symbol) % 10000)
-
-    while current <= to_date:
-        # Skip weekends
-        if current.weekday() < 5:
-            change_pct = random.gauss(0.0003, 0.012)    # ~1.2% daily vol
-            open_  = price
-            close  = round(price * (1 + change_pct), 2)
-            high   = round(max(open_, close) * (1 + abs(random.gauss(0, 0.004))), 2)
-            low    = round(min(open_, close) * (1 - abs(random.gauss(0, 0.004))), 2)
-            volume = int(random.gauss(5_000_000, 1_500_000))
-            rows.append({
-                "date":   current,
-                "open":   open_,
-                "high":   high,
-                "low":    low,
-                "close":  close,
-                "volume": max(volume, 100_000),
-            })
-            price = close
-        current += timedelta(days=1)
-
-    return rows
-
-
-def get_ohlcv_mock(symbol: str, days: int = 365) -> pd.DataFrame:
-    """Convenience: always returns mock data regardless of broker."""
-    to_date   = datetime.now()
-    from_date = to_date - timedelta(days=days)
-    raw = _mock_ohlcv(symbol, from_date, to_date)
-    df = pd.DataFrame(raw)
-    df["date"] = pd.to_datetime(df["date"])
-    df.set_index("date", inplace=True)
-    return df[["open", "high", "low", "close", "volume"]].astype(float)
+# NOTE: _mock_ohlcv and get_ohlcv_mock were removed.
+# All market data now comes from real sources (broker API or yfinance).
+# No synthetic/random data is ever served to users.
