@@ -544,10 +544,11 @@ class ClaudeCLIProvider(LLMProvider):
         # Detect if user wants reasoning (not just data)
         _reasoning_keywords = {
             "should", "buy", "sell", "hold", "recommend", "opinion",
-            "think", "suggest", "advise", "compare", "better",
-            "analysis", "analyze", "analyse", "why", "how",
+            "think", "suggest", "advise", "compare", "better", "best", "worst",
+            "analysis", "analyze", "analyse", "why", "how", "which",
             "strategy", "invest", "good time", "right time",
             "worth", "bullish", "bearish", "outlook", "view",
+            "performing", "performance", "top", "bottom", "rank",
         }
         needs_reasoning = any(
             kw in last_user_msg.lower() for kw in _reasoning_keywords
@@ -808,6 +809,25 @@ class ClaudeCLIProvider(LLMProvider):
         "morning":      ["get_market_snapshot", "get_market_news",
                          "get_fii_dii_data", "get_market_breadth",
                          "get_upcoming_events"],
+        # Shareholding & institutional
+        "shareholding": ["get_shareholding_pattern", "fundamental_analyse"],
+        "holding":      ["get_shareholding_pattern", "fundamental_analyse"],
+        "promoter":     ["get_shareholding_pattern", "fundamental_analyse"],
+        "fii":          ["get_shareholding_pattern", "get_fii_dii_data"],
+        "dii":          ["get_shareholding_pattern", "get_fii_dii_data"],
+        "institutional":["get_shareholding_pattern"],
+        "pledge":       ["get_shareholding_pattern"],
+        # Most active stocks
+        "active":       ["get_most_active_stocks"],
+        "most active":  ["get_most_active_stocks"],
+        "trending":     ["get_most_active_stocks"],
+        "volume":       ["get_most_active_stocks"],
+        # Greeks & hedging
+        "greeks":       ["get_portfolio_greeks", "get_greeks_dashboard"],
+        "delta":        ["get_greeks_dashboard", "suggest_delta_hedge"],
+        "hedge":        ["suggest_delta_hedge"],
+        "theta":        ["get_greeks_dashboard"],
+        "gamma":        ["get_greeks_dashboard"],
     }
 
     # Common stock name → NSE symbol (case-insensitive lookup)
