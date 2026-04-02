@@ -270,9 +270,23 @@ def _fetch_yfinance(symbol: str) -> dict:
     yfinance provides real PE, PB, D/E, margins, growth, dividend yield
     for any NSE-listed stock via Yahoo Finance.
     """
+    # Indices don't have fundamentals (no P/E, ROE, etc.)
+    _INDEX_KEYWORDS = {"NIFTY", "BANKNIFTY", "SENSEX", "VIX", "FINNIFTY",
+                       "MIDCAP", "NIFTY BANK", "NIFTY 50", "INDIA VIX"}
+    if symbol.upper() in _INDEX_KEYWORDS:
+        return {}
+
     try:
         import yfinance as yf
-        ticker = yf.Ticker(f"{symbol.upper()}.NS")
+
+        # Use yfinance_provider's symbol mapping if available
+        try:
+            from market.yfinance_provider import _to_yf_symbol
+            yf_sym = _to_yf_symbol(symbol)
+        except ImportError:
+            yf_sym = f"{symbol.upper()}.NS"
+
+        ticker = yf.Ticker(yf_sym)
         info = ticker.info
 
         if not info or info.get("regularMarketPrice") is None:

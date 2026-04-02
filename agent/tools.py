@@ -810,4 +810,49 @@ def build_registry() -> ToolRegistry:
         fn=_backtest_options,
     )
 
+    # ── Greeks Management ────────────────────────────────────
+
+    def _suggest_delta_hedge(target_delta: float = 0.0) -> dict:
+        from engine.portfolio import get_position_greeks
+        from engine.greeks_manager import compute_delta_hedge
+        pg = get_position_greeks()
+        s = compute_delta_hedge(pg.net_delta, target_delta)
+        return {
+            "current_delta": s.current_delta,
+            "target_delta": s.target_delta,
+            "gap": s.gap,
+            "suggestions": s.suggestions,
+        }
+
+    reg.register(
+        name="suggest_delta_hedge",
+        description="Suggest trades to neutralize or adjust portfolio delta. Returns concrete hedge suggestions with lot counts.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "target_delta": {"type": "number", "description": "Target delta (default 0 = delta-neutral)"},
+            },
+        },
+        fn=_suggest_delta_hedge,
+    )
+
+    def _get_greeks_dashboard() -> dict:
+        from engine.portfolio import get_position_greeks
+        from engine.greeks_manager import build_dashboard
+        pg = get_position_greeks()
+        d = build_dashboard(pg.net_delta, pg.net_theta, pg.net_vega, pg.net_gamma)
+        return {
+            "net_delta": d.net_delta, "net_theta": d.net_theta,
+            "net_vega": d.net_vega, "net_gamma": d.net_gamma,
+            "risk_level": d.risk_level,
+            "warnings": d.warnings, "actions": d.actions,
+        }
+
+    reg.register(
+        name="get_greeks_dashboard",
+        description="Get enhanced portfolio Greeks dashboard with risk warnings, action items, and risk level classification.",
+        parameters={"type": "object", "properties": {}},
+        fn=_get_greeks_dashboard,
+    )
+
     return reg
