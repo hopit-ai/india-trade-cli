@@ -1008,14 +1008,51 @@ def run_repl(broker: BrokerAPI) -> None:
                 by = "value" if "--value" in args else "volume"
                 print_most_active(by=by)
 
-    "active", "bulk-deals", "dcf", "deals", "delta-hedge",
-    "earnings", "events", "exports", "flows", "gex", "greeks",
-    "iv-smile", "macro", "memory", "most-active",
-    "oi", "oi-profile", "scan", "smile",
+            elif command in ("bulk-deals", "block-deals", "deals"):
+                from market.bulk_deals import print_deals
+                sym = args[0].upper() if args and not args[0].startswith("-") else None
+                print_deals(symbol=sym)
 
+            elif command in ("oi-profile", "oi"):
+                from market.oi_profile import print_oi_profile
+                sym = args[0].upper() if args else "NIFTY"
+                print_oi_profile(sym)
 
+            elif command in ("iv-smile", "smile"):
+                from analysis.volatility_surface import print_iv_smile
+                sym = args[0].upper() if args else "NIFTY"
+                print_iv_smile(sym)
 
+            elif command == "gex":
+                from analysis.gex import print_gex
+                sym = args[0].upper() if args else "NIFTY"
+                print_gex(sym)
 
+            elif command == "scan":
+                from market.options_scanner import print_scan_results
+                quick = "--quick" in args
+                syms = [a.upper() for a in args if not a.startswith("-")] or None
+                print_scan_results(symbols=syms, quick=quick)
+
+            elif command == "dcf":
+                if not args:
+                    console.print("[red]Usage: dcf SYMBOL [--growth 15] [--wacc 12][/red]")
+                else:
+                    from analysis.dcf import print_dcf
+                    sym = args[0].upper()
+                    growth = None
+                    wacc_val = None
+                    if "--growth" in args:
+                        idx = args.index("--growth")
+                        if idx + 1 < len(args):
+                            try: growth = float(args[idx + 1])
+                            except ValueError: pass
+                    if "--wacc" in args:
+                        idx = args.index("--wacc")
+                        if idx + 1 < len(args):
+                            try: wacc_val = float(args[idx + 1])
+                            except ValueError: pass
+                    print_dcf(sym, growth_rate=growth, wacc=wacc_val)
 
             elif command == "flows":
                 from market.flow_intel import print_flow_report
