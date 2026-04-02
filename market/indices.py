@@ -170,20 +170,80 @@ def get_vix() -> float:
 
 
 def get_sector_snapshot() -> list[IndexSnapshot]:
-    """Return snapshots for all sector indices in one batched call."""
+    """Return snapshots for all sector indices.
+
+    Primary: broker/NSE quotes. Fallback: yfinance sector indices
+    when primary returns zeros (common with NSE API).
+    """
     sector_keys = ["IT", "PHARMA", "AUTO", "FMCG", "REALTY", "METAL", "ENERGY"]
     instruments = [INDEX_INSTRUMENTS[k] for k in sector_keys]
     from market.quotes import get_quote
     quotes = get_quote(instruments)
 
     snaps = []
+    zero_sectors = []
     for key in sector_keys:
         inst = INDEX_INSTRUMENTS[key]
         q    = quotes.get(inst)
-        if q:
+        if q and q.last_price > 0:
             snaps.append(IndexSnapshot(
                 name=key, instrument=inst,
                 ltp=q.last_price, change=q.change, change_pct=q.change_pct,
                 open=q.open, high=q.high, low=q.low,
             ))
+        else:
+            zero_sectors.append(key)
+
+    # Fallback to yfinance for sectors that returned zero
+    if zero_sectors:
+        snaps.extend(_yf_sector_fallback(zero_sectors))
+
     return snaps
+
+
+# yfinance tickers for sector indices
+_YF_SECTOR_MAP = {
+    "IT": "^CNXIT",
+    "PHARMA": "^CNXPHARMA",
+    "AUTO": "^CNXAUTO",
+    "FMCG": "^CNXFMCG",
+    "REALTY": "^CNXREALTY",
+    "METAL": "^CNXMETAL",
+    "ENERGY": "^CNXENERGY",
+    "BANK": "^NSEBANK",
+}
+
+
+def _yf_sector_fallback(sector_keys: list[str]) -> list[IndexSnapshot]:
+    """Fetch sector data from yfinance when NSE returns zeros."""
+    try:
+        import yfinance as yf
+        snaps = []
+        for key in sector_keys:
+            yf_ticker = _YF_SECTOR_MAP.get(key)
+            if not yf_ticker:
+                continue
+            try:
+                t = yf.Ticker(yf_ticker)
+                hist = t.history(period="2d")
+                if hist.empty or len(hist) < 2:
+                    continue
+                curr = float(hist["Close"].iloc[-1])
+                prev = float(hist["Close"].iloc[-2])
+                change = curr - prev
+                change_pct = (change / prev) * 100 if prev else 0
+                snaps.append(IndexSnapshot(
+                    name=key,
+                    instrument=f"YF:{yf_ticker}",
+                    ltp=round(curr, 2),
+                    change=round(change, 2),
+                    change_pct=round(change_pct, 2),
+                    open=float(hist["Open"].iloc[-1]),
+                    high=float(hist["High"].iloc[-1]),
+                    low=float(hist["Low"].iloc[-1]),
+                ))
+            except Exception:
+                continue
+        return snaps
+    except ImportError:
+        return []

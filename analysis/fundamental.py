@@ -590,6 +590,86 @@ def _is_nan(val) -> bool:
         return False
 
 
+def _parse_shareholding_xbrl(xbrl_text: str, quarter: str = "") -> dict:
+    """Parse NSE XBRL shareholding XML into a clean dict."""
+    import xml.etree.ElementTree as ET
+
+    context_map = {
+        "ShareholdingOfPromoterAndPromoterGroup_ContextI": "promoter_pct",
+        "InstitutionsForeign_ContextI": "fii_pct",
+        "InstitutionsDomestic_ContextI": "dii_pct",
+        "NonInstitutions_ContextI": "retail_pct",
+        "MutualFundsOrUTI_ContextI": "mutual_funds_pct",
+        "InsuranceCompanies_ContextI": "insurance_pct",
+        "PublicShareholding_ContextI": "public_pct",
+    }
+
+    result = {"quarter": quarter}
+    root = ET.fromstring(xbrl_text)
+
+    for elem in root.iter():
+        tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+        ctx = elem.get("contextRef", "")
+
+        if tag == "ShareholdingAsAPercentageOfTotalNumberOfShares" and ctx in context_map:
+            try:
+                result[context_map[ctx]] = round(float(elem.text) * 100, 2)
+            except (ValueError, TypeError):
+                pass
+
+        if tag == "WhetherAnySharesHeldByPromotersAreEncumberedUnderPledged" and ctx == "MainI":
+            result["pledged"] = elem.text.lower() == "true" if elem.text else False
+
+    result.setdefault("pledged", False)
+    return result
+
+
+def _fetch_nse_shareholding(symbol: str) -> dict:
+    """
+    Fetch quarterly shareholding pattern from NSE XBRL filings.
+
+    Returns dict with: promoter_pct, fii_pct, dii_pct, retail_pct,
+    pledged (bool), mutual_funds_pct, insurance_pct, quarter.
+    Empty dict on failure.
+    """
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "*/*",
+            "Referer": "https://www.nseindia.com",
+        }
+        session = httpx.Client(follow_redirects=True)
+        session.get("https://www.nseindia.com", headers=headers, timeout=5)
+
+        # Get XBRL URL from master list
+        r = session.get(
+            f"https://www.nseindia.com/api/corporate-share-holdings-master?index=equities&symbol={symbol.upper()}",
+            headers=headers, timeout=8,
+        )
+        if r.status_code != 200:
+            return {}
+
+        master = r.json()
+        if not isinstance(master, list) or not master:
+            return {}
+
+        latest = master[0]
+        xbrl_url = latest.get("xbrl", "")
+        quarter = latest.get("date", "")
+        if not xbrl_url:
+            return {}
+
+        # Fetch and parse XBRL
+        r2 = session.get(xbrl_url, headers=headers, timeout=10)
+        if r2.status_code != 200:
+            return {}
+
+        return _parse_shareholding_xbrl(r2.text, quarter)
+
+    except Exception:
+        return {}
+
+
 def _fetch_nse_announcements(symbol: str, limit: int = 5) -> list[dict]:
     """Fetch recent corporate announcements from NSE."""
     try:
@@ -696,6 +776,24 @@ def analyse(symbol: str, **_kwargs) -> FundamentalSnapshot:
                                          "Negative FCF — burning cash despite reported profits"))
 
     # Note: governance, earnings, payout, insider scoring is now in _score()
+
+    # ── Fetch NSE shareholding (supplements yfinance promoter/FII data) ──
+    shareholding = _fetch_nse_shareholding(symbol)
+    if shareholding:
+        # NSE data is more detailed — override yfinance values
+        if shareholding.get("promoter_pct"):
+            parsed["promoter_holding"] = shareholding["promoter_pct"]
+        if shareholding.get("fii_pct"):
+            parsed["fii_holding"] = shareholding["fii_pct"]
+        if shareholding.get("dii_pct"):
+            parsed["dii_holding"] = shareholding["dii_pct"]
+        if shareholding.get("mutual_funds_pct"):
+            parsed["mutual_funds_holding"] = shareholding["mutual_funds_pct"]
+        if shareholding.get("retail_pct"):
+            parsed["retail_holding"] = shareholding["retail_pct"]
+        if shareholding.get("pledged") is not None:
+            parsed["pledged_pct"] = 0.0 if not shareholding["pledged"] else parsed.get("pledged_pct")
+        parsed["shareholding_quarter"] = shareholding.get("quarter", "")
 
     # ── Fetch announcements (best-effort, non-blocking) ──────
     announcements = _fetch_nse_announcements(symbol)

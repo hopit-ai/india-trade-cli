@@ -272,8 +272,10 @@ def build_registry() -> ToolRegistry:
     reg.register(
         name="fundamental_analyse",
         description=(
-            "Fundamental analysis from Screener.in: PE, PB, ROE, ROCE, revenue & profit growth, "
-            "debt/equity, promoter holding, pledged %. Returns a score 0–100 and verdict."
+            "Full fundamental analysis: PE, PB, ROE, ROCE, margins, growth, D/E, FCF, "
+            "promoter/FII/DII holding (from NSE quarterly filings), pledge status, "
+            "analyst consensus (target price, rating), governance risk, insider transactions, "
+            "forward PE, earnings date, sector/industry. Score 0-100 and verdict."
         ),
         parameters={
             "type": "object",
@@ -853,6 +855,47 @@ def build_registry() -> ToolRegistry:
         description="Get enhanced portfolio Greeks dashboard with risk warnings, action items, and risk level classification.",
         parameters={"type": "object", "properties": {}},
         fn=_get_greeks_dashboard,
+    )
+
+    # ── Shareholding & Active Stocks ─────────────────────────
+
+    def _get_shareholding(symbol: str) -> dict:
+        from analysis.fundamental import _fetch_nse_shareholding
+        return _fetch_nse_shareholding(symbol) or {"error": "Shareholding data unavailable for this symbol"}
+
+    reg.register(
+        name="get_shareholding_pattern",
+        description=(
+            "Get quarterly shareholding pattern from NSE for a stock. "
+            "Returns promoter %, FII %, DII %, mutual funds %, insurance %, retail %, "
+            "pledge status, and the quarter of the filing."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Stock symbol (e.g., RELIANCE, HDFCBANK)"},
+            },
+            "required": ["symbol"],
+        },
+        fn=_get_shareholding,
+    )
+
+    def _get_most_active(by: str = "volume") -> list:
+        from market.active_stocks import get_most_active
+        stocks = get_most_active(by=by, limit=10)
+        return [{"symbol": s.symbol, "volume": s.volume, "value_cr": s.value_cr,
+                 "ltp": s.ltp, "change_pct": s.change_pct} for s in stocks]
+
+    reg.register(
+        name="get_most_active_stocks",
+        description="Get the most active stocks on NSE by volume or traded value. Shows unusual activity and retail interest.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "by": {"type": "string", "description": "'volume' or 'value' (default: volume)"},
+            },
+        },
+        fn=_get_most_active,
     )
 
     return reg
