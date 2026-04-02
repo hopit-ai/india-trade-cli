@@ -162,34 +162,44 @@ Compute a DCF (Discounted Cash Flow) valuation for {symbol} ({exchange}).
 
 {tool_data}
 
-The DCF tool has been called with auto-detected parameters. Your job:
+The data above includes:
+- **Base DCF** with auto-detected growth rate
+- **Reverse DCF**: what growth the market implies at the current price
+- **FCF quality**: whether free cash flow is sustainable
+- **Bull/Base/Bear scenarios** with different growth assumptions
+- **If this is a bank**: a P/BV model instead of (or alongside) DCF
 
-1. **Review the assumptions**: Is the growth rate reasonable for this company and sector?
-   - Compare with historical growth, analyst estimates, sector trends
-   - If growth seems too high or low, state what you'd use and why
+Your job as a valuation analyst:
 
-2. **Interpret the result**:
-   - Intrinsic value vs current price — margin of safety
-   - Is the stock undervalued, fairly valued, or overvalued?
-   - Which scenarios in the sensitivity table are most realistic?
+1. **PICK YOUR OWN GROWTH RATE** with reasoning:
+   - Look at: revenue growth, analyst consensus, sector trends, competitive position
+   - State: "I'm using X% because..." (don't just accept the auto-detected rate)
+   - If you disagree with the auto rate, explain why
 
-3. **Key risks to the DCF**:
-   - What could make FCF drop? (margin compression, capex surge, competition)
-   - What could change the growth trajectory? (new products, regulation, macro)
-   - Is the terminal growth assumption appropriate?
+2. **Interpret the reverse DCF**:
+   - "Market implies X% growth. This is [realistic/aggressive/conservative] because..."
+   - This is the most important insight — tells you what the market is pricing in
 
-4. **Comparison with market valuation**:
-   - How does DCF value compare to PE-implied value?
-   - Do analyst targets align with your DCF?
+3. **Assess FCF quality**:
+   - Is FCF sustainable? Any red flags (capex cuts, working capital swings)?
+   - If quality is LOW, discount the DCF result
+
+4. **Pick the most realistic scenario**:
+   - Bull/Base/Bear — which one matches your view?
+   - What would need to happen for bull case? For bear case?
+
+5. **For banks**: Use the P/BV model primarily. DCF doesn't work well for banks.
+   - Justified P/BV = ROE / Cost of Equity
+   - Is the stock trading above or below justified book?
 
 Respond with:
 VERDICT: [BULLISH / BEARISH / NEUTRAL]
 CONFIDENCE: [0-100]%
 SCORE: [-100 to +100]
 KEY_POINTS:
-- [point 1]
-- [point 2]
-- [point 3]"""
+- [point 1 — must include your chosen growth rate and intrinsic value]
+- [point 2 — must reference reverse DCF / market-implied growth]
+- [point 3 — risk or quality concern]"""
 
 
 # ── Deep Analyzer ────────────────────────────────────────────
