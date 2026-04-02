@@ -359,6 +359,94 @@ class ProtectivePutStrategy(OptionsStrategy):
         return False
 
 
+class ShortStraddleStrategy(OptionsStrategy):
+    """
+    Sell ATM Straddle — sell CE + sell PE at same strike.
+
+    Entry: on expiry day (DTE = entry_dte, default 0).
+    Adjustment: if spot moves >= adjust_points from entry, re-center.
+    Exit: on expiry, stop-loss, or profit target.
+    """
+    name = "Short Straddle"
+
+    def __init__(
+        self,
+        entry_dte: int = 0,
+        adjust_points: int = 50,
+        max_loss_pct: float = 100.0,
+        profit_target_pct: float = 50.0,
+    ):
+        self.entry_dte = entry_dte
+        self.adjust_points = adjust_points
+        self.max_loss_pct = max_loss_pct
+        self.profit_target_pct = profit_target_pct
+
+    def should_enter(self, dt, spot, iv, dte, vix):
+        if dte <= self.entry_dte:
+            return [
+                {"type": "CE", "transaction": "SELL", "strike_offset": 0},
+                {"type": "PE", "transaction": "SELL", "strike_offset": 0},
+            ]
+        return None
+
+    def should_exit(self, dt, spot, iv, dte, entry_spot, days_held, unrealised_pnl):
+        if dte <= 0 and days_held > 0:
+            return True
+        if unrealised_pnl <= -self.max_loss_pct:
+            return True
+        if unrealised_pnl >= self.profit_target_pct:
+            return True
+        return False
+
+    def should_adjust(self, spot: float, entry_spot: float, adjust_points: int) -> bool:
+        """Check if spot has moved enough to warrant re-centering the straddle."""
+        return abs(spot - entry_spot) >= adjust_points
+
+
+class ShortStrangleStrategy(OptionsStrategy):
+    """
+    Sell OTM Strangle — sell OTM CE + sell OTM PE.
+
+    Entry: on expiry day (DTE = entry_dte).
+    Wider breakevens than straddle, lower premium collected.
+    """
+    name = "Short Strangle"
+
+    def __init__(
+        self,
+        otm_offset: int = 100,
+        entry_dte: int = 0,
+        adjust_points: int = 75,
+        max_loss_pct: float = 100.0,
+        profit_target_pct: float = 50.0,
+    ):
+        self.otm_offset = otm_offset
+        self.entry_dte = entry_dte
+        self.adjust_points = adjust_points
+        self.max_loss_pct = max_loss_pct
+        self.profit_target_pct = profit_target_pct
+
+    def should_enter(self, dt, spot, iv, dte, vix):
+        if dte <= self.entry_dte:
+            return [
+                {"type": "CE", "transaction": "SELL", "strike_offset": self.otm_offset},
+                {"type": "PE", "transaction": "SELL", "strike_offset": -self.otm_offset},
+            ]
+        return None
+
+    def should_exit(self, dt, spot, iv, dte, entry_spot, days_held, unrealised_pnl):
+        if dte <= 0 and days_held > 0:
+            return True
+        if unrealised_pnl <= -self.max_loss_pct:
+            return True
+        if unrealised_pnl >= self.profit_target_pct:
+            return True
+        return False
+
+    def should_adjust(self, spot: float, entry_spot: float, adjust_points: int) -> bool:
+        return abs(spot - entry_spot) >= adjust_points
+
+
 # ── Expiry Calendar ──────────────────────────────────────────
 
 def _get_weekly_expiries(start: date, end: date) -> list[date]:
@@ -623,6 +711,14 @@ class OptionsBacktester:
 OPTIONS_STRATEGIES = {
     "straddle": lambda args: StraddleStrategy(
         entry_dte=int(args[0]) if args else 3,
+    ),
+    "short-straddle": lambda args: ShortStraddleStrategy(
+        entry_dte=int(args[0]) if args else 0,
+        adjust_points=int(args[1]) if len(args) > 1 else 50,
+    ),
+    "short-strangle": lambda args: ShortStrangleStrategy(
+        otm_offset=int(args[0]) if args else 100,
+        entry_dte=int(args[1]) if len(args) > 1 else 0,
     ),
     "iron-condor": lambda args: IronCondorStrategy(
         short_offset=int(args[0]) if args else 200,
