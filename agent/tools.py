@@ -898,4 +898,37 @@ def build_registry() -> ToolRegistry:
         fn=_get_most_active,
     )
 
+    # ── Options Analytics (#33, #47, #48, #49, #58) ──────────
+
+    reg.register(
+        name="get_oi_profile",
+        description="Get OI profile for an underlying — per-strike OI, max call/put OI (resistance/support), PCR.",
+        parameters={"type": "object", "properties": {"underlying": {"type": "string"}}, "required": ["underlying"]},
+        fn=lambda underlying: __import__("market.oi_profile", fromlist=["get_oi_profile"]).get_oi_profile(underlying),
+    )
+
+    reg.register(
+        name="get_gex_analysis",
+        description="Gamma Exposure (GEX) analysis — dealer gamma positioning, flip point, regime (POSITIVE=pinning, NEGATIVE=breakout).",
+        parameters={"type": "object", "properties": {"underlying": {"type": "string"}}, "required": ["underlying"]},
+        fn=lambda underlying: __import__("analysis.gex", fromlist=["get_gex_analysis"]).get_gex_analysis(underlying),
+    )
+
+    reg.register(
+        name="scan_options",
+        description="Scan F&O stocks for: high IV rank (sell premium), unusual OI buildup, heavy put writing. Returns actionable setups.",
+        parameters={"type": "object", "properties": {"quick": {"type": "boolean", "description": "Quick scan (NIFTY+BANKNIFTY only)"}}},
+        fn=lambda quick=True: __import__("market.options_scanner", fromlist=["scan_options"]).scan_options(quick=quick),
+    )
+
+    reg.register(
+        name="get_bulk_block_deals",
+        description="Get recent bulk and block deals from NSE — large institutional/promoter buy/sell transactions.",
+        parameters={"type": "object", "properties": {"symbol": {"type": "string", "description": "Filter by symbol (optional)"}}},
+        fn=lambda symbol=None: {
+            "block": [d.__dict__ for d in __import__("market.bulk_deals", fromlist=["get_block_deals"]).get_block_deals()],
+            "bulk": [d.__dict__ for d in __import__("market.bulk_deals", fromlist=["get_bulk_deals"]).get_bulk_deals(symbol=symbol)],
+        },
+    )
+
     return reg

@@ -827,7 +827,21 @@ class ClaudeCLIProvider(LLMProvider):
         "delta":        ["get_greeks_dashboard", "suggest_delta_hedge"],
         "hedge":        ["suggest_delta_hedge"],
         "theta":        ["get_greeks_dashboard"],
-        "gamma":        ["get_greeks_dashboard"],
+        "gamma":        ["get_gex_analysis"],
+        # Options analytics
+        "oi":           ["get_oi_profile"],
+        "open interest":["get_oi_profile"],
+        "resistance":   ["get_oi_profile"],
+        "support":      ["get_oi_profile"],
+        "gex":          ["get_gex_analysis"],
+        "gamma exposure":["get_gex_analysis"],
+        "scan":         ["scan_options"],
+        "scanner":      ["scan_options"],
+        "high iv":      ["scan_options"],
+        "unusual oi":   ["scan_options"],
+        "skew":         ["get_options_chain"],
+        "bulk deal":    ["get_bulk_block_deals"],
+        "block deal":   ["get_bulk_block_deals"],
     }
 
     # Common stock name → NSE symbol (case-insensitive lookup)
