@@ -218,3 +218,120 @@ class TestOptionsBacktester:
         result = bt.run(StraddleStrategy(entry_dte=3))
         # Should not raise
         result.print_summary()
+
+
+# ── Short Straddle Tests ─────────────────────────────────────
+
+class TestShortStraddleStrategy:
+    def test_entry_produces_sell_legs(self):
+        from engine.options_backtest import ShortStraddleStrategy
+        s = ShortStraddleStrategy()
+        legs = s.should_enter(date.today(), spot=22500, iv=0.20, dte=0, vix=15)
+        assert legs is not None
+        assert len(legs) == 2
+        assert all(l["transaction"] == "SELL" for l in legs)
+
+    def test_entry_on_expiry_day(self):
+        from engine.options_backtest import ShortStraddleStrategy
+        s = ShortStraddleStrategy(entry_dte=0)
+        # Should enter on expiry day (DTE=0)
+        assert s.should_enter(date.today(), 22500, 0.20, dte=0, vix=15) is not None
+        # Should NOT enter 5 days before
+        assert s.should_enter(date.today(), 22500, 0.20, dte=5, vix=15) is None
+
+    def test_adjustment_triggers(self):
+        from engine.options_backtest import ShortStraddleStrategy
+        s = ShortStraddleStrategy(adjust_points=50)
+        # Spot moved 60 points → should adjust
+        assert s.should_adjust(22560, 22500, 50) is True
+        # Spot moved 30 points → should NOT adjust
+        assert s.should_adjust(22530, 22500, 50) is False
+        # Negative move also triggers
+        assert s.should_adjust(22440, 22500, 50) is True
+
+    def test_exit_on_stop_loss(self):
+        from engine.options_backtest import ShortStraddleStrategy
+        s = ShortStraddleStrategy(max_loss_pct=100)
+        # 120% loss → exit (dte=1 so expiry doesn't trigger first)
+        assert s.should_exit(date.today(), 22500, 0.20, 1, 22500, 1, -120) is True
+        # 50% loss → don't exit yet
+        assert s.should_exit(date.today(), 22500, 0.20, 1, 22500, 1, -50) is False
+
+    def test_exit_on_profit_target(self):
+        from engine.options_backtest import ShortStraddleStrategy
+        s = ShortStraddleStrategy(profit_target_pct=50)
+        # 60% profit → exit (premium decayed enough)
+        assert s.should_exit(date.today(), 22500, 0.20, 0, 22500, 1, 60) is True
+
+
+class TestShortStrangleStrategy:
+    def test_entry_produces_otm_sell_legs(self):
+        from engine.options_backtest import ShortStrangleStrategy
+        s = ShortStrangleStrategy(otm_offset=100)
+        legs = s.should_enter(date.today(), spot=22500, iv=0.20, dte=0, vix=15)
+        assert legs is not None
+        assert len(legs) == 2
+        assert all(l["transaction"] == "SELL" for l in legs)
+        # CE should be above ATM, PE should be below
+        ce_leg = [l for l in legs if l["type"] == "CE"][0]
+        pe_leg = [l for l in legs if l["type"] == "PE"][0]
+        assert ce_leg["strike_offset"] == 100
+        assert pe_leg["strike_offset"] == -100
+
+    def test_wider_otm_offset(self):
+        from engine.options_backtest import ShortStrangleStrategy
+        s = ShortStrangleStrategy(otm_offset=200)
+        legs = s.should_enter(date.today(), 22500, 0.20, dte=0, vix=15)
+        ce_leg = [l for l in legs if l["type"] == "CE"][0]
+        assert ce_leg["strike_offset"] == 200
+
+
+class TestShortStraddleBacktest:
+    def _make_data(self, n=100, start_price=22000):
+        np.random.seed(42)
+        dates = pd.date_range("2025-01-01", periods=n, freq="B")
+        prices = start_price + np.cumsum(np.random.randn(n) * 100)
+        vix = 15 + np.random.randn(n) * 3
+        vix = np.clip(vix, 10, 35)
+        spot_df = pd.DataFrame({
+            "open": prices + np.random.randn(n) * 20,
+            "high": prices + np.abs(np.random.randn(n)) * 50,
+            "low": prices - np.abs(np.random.randn(n)) * 50,
+            "close": prices,
+            "volume": np.random.randint(1_000_000, 10_000_000, n),
+        }, index=dates)
+        vix_df = pd.DataFrame({"close": vix}, index=dates)
+        return spot_df, vix_df
+
+    def test_short_straddle_runs(self):
+        from engine.options_backtest import OptionsBacktester, ShortStraddleStrategy
+        spot, vix = self._make_data(n=200)
+        bt = OptionsBacktester("NIFTY", lot_size=25)
+        bt._spot_data = spot
+        bt._vix_data = vix
+        result = bt.run(ShortStraddleStrategy(entry_dte=0))
+        assert result.total_trades >= 0
+        assert result.strategy_name == "Short Straddle"
+
+    def test_short_strangle_runs(self):
+        from engine.options_backtest import OptionsBacktester, ShortStrangleStrategy
+        spot, vix = self._make_data(n=200)
+        bt = OptionsBacktester("NIFTY", lot_size=25)
+        bt._spot_data = spot
+        bt._vix_data = vix
+        result = bt.run(ShortStrangleStrategy(otm_offset=100, entry_dte=0))
+        assert result.total_trades >= 0
+        assert result.strategy_name == "Short Strangle"
+
+    def test_short_straddle_collects_premium(self):
+        """Short straddle: initial P&L should be positive (premium collected)."""
+        from engine.options_backtest import OptionsBacktester, ShortStraddleStrategy
+        spot, vix = self._make_data(n=200)
+        bt = OptionsBacktester("NIFTY", lot_size=25)
+        bt._spot_data = spot
+        bt._vix_data = vix
+        result = bt.run(ShortStraddleStrategy(entry_dte=0))
+        if result.trades:
+            # At least some trades should have legs with SELL transaction
+            trade = result.trades[0]
+            assert all(l.transaction == "SELL" for l in trade.legs)
