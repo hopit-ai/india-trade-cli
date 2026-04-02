@@ -18,7 +18,7 @@ from typing      import Optional
 import numpy  as np
 import pandas as pd
 
-from market.history import get_ohlcv_mock, get_ohlcv
+from market.history import get_ohlcv
 
 
 # ── Result dataclass ─────────────────────────────────────────
@@ -162,7 +162,7 @@ def analyse(
     try:
         df = get_ohlcv(symbol=symbol, exchange=exchange, days=days)
     except Exception:
-        df = get_ohlcv_mock(symbol=symbol, days=days)
+        df = pd.DataFrame()
 
     if df.empty or len(df) < 30:
         return TechnicalSnapshot(symbol=symbol, ltp=0.0, verdict="INSUFFICIENT DATA")

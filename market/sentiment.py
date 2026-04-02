@@ -39,7 +39,9 @@ NSE_FIIDII_URL = "https://www.nseindia.com/api/fiidiiTradeReact"
 def get_fii_dii_data(days: int = 5) -> list[FIIDIIData]:
     """
     FII / DII buy-sell activity from NSE (last N trading days).
-    Falls back to mock data if NSE API is unavailable.
+
+    NSE API returns a flat list with separate entries for FII and DII
+    per date. We group them into one record per date.
     """
     try:
         headers = {
@@ -53,53 +55,53 @@ def get_fii_dii_data(days: int = 5) -> list[FIIDIIData]:
         r.raise_for_status()
         data = r.json()
 
+        if not isinstance(data, list):
+            return []
+
+        # Group by date — API returns separate FII and DII entries
+        by_date: dict[str, dict] = {}
+        for item in data:
+            dt = item.get("date", "")
+            category = item.get("category", "").upper()
+            buy_val = float(item.get("buyValue", 0))
+            sell_val = float(item.get("sellValue", 0))
+            net_val = float(item.get("netValue", 0))
+
+            if dt not in by_date:
+                by_date[dt] = {"fii_buy": 0, "fii_sell": 0, "fii_net": 0,
+                               "dii_buy": 0, "dii_sell": 0, "dii_net": 0}
+
+            if "FII" in category or "FPI" in category:
+                by_date[dt]["fii_buy"] = buy_val
+                by_date[dt]["fii_sell"] = sell_val
+                by_date[dt]["fii_net"] = net_val
+            elif "DII" in category:
+                by_date[dt]["dii_buy"] = buy_val
+                by_date[dt]["dii_sell"] = sell_val
+                by_date[dt]["dii_net"] = net_val
+
         result = []
-        for item in data[:days]:
-            fii_net = float(item.get("fiiNetBuySell", 0))
-            dii_net = float(item.get("diiNetBuySell", 0))
+        for dt, vals in list(by_date.items())[:days]:
+            fii_net = vals["fii_net"]
             verdict = (
                 "FII_BUYING"  if fii_net > 500 else
                 "FII_SELLING" if fii_net < -500 else
                 "NEUTRAL"
             )
             result.append(FIIDIIData(
-                date     = item.get("tradeDate", ""),
-                fii_buy  = float(item.get("fiiBuyValue",  0)),
-                fii_sell = float(item.get("fiiSellValue", 0)),
+                date     = dt,
+                fii_buy  = vals["fii_buy"],
+                fii_sell = vals["fii_sell"],
                 fii_net  = fii_net,
-                dii_buy  = float(item.get("diiBuyValue",  0)),
-                dii_sell = float(item.get("diiSellValue", 0)),
-                dii_net  = dii_net,
+                dii_buy  = vals["dii_buy"],
+                dii_sell = vals["dii_sell"],
+                dii_net  = vals["dii_net"],
                 verdict  = verdict,
             ))
         return result
 
     except Exception:
-        return _mock_fii_dii(days)
-
-
-def _mock_fii_dii(days: int = 5) -> list[FIIDIIData]:
-    """Synthetic FII/DII data for demo mode."""
-    import random
-    random.seed(42)
-    today    = date.today()
-    results  = []
-    from datetime import timedelta
-    for i in range(days):
-        day     = today - timedelta(days=i + 1)
-        fii_net = round(random.gauss(500, 2000), 2)
-        dii_net = round(random.gauss(-200, 1000), 2)
-        results.append(FIIDIIData(
-            date     = day.isoformat(),
-            fii_buy  = round(abs(fii_net) + random.uniform(5000, 15000), 2),
-            fii_sell = round(abs(fii_net) + random.uniform(4000, 14000), 2),
-            fii_net  = fii_net,
-            dii_buy  = round(abs(dii_net) + random.uniform(3000, 10000), 2),
-            dii_sell = round(abs(dii_net) + random.uniform(3000, 10000), 2),
-            dii_net  = dii_net,
-            verdict  = "FII_BUYING" if fii_net > 500 else "FII_SELLING" if fii_net < -500 else "NEUTRAL",
-        ))
-    return results
+        return []  # No fake data — return empty list when NSE API fails
 
 
 # ── News Sentiment ────────────────────────────────────────────
@@ -215,13 +217,8 @@ def get_market_breadth() -> MarketBreadth:
     except Exception:
         pass
 
-    # Mock: slightly bullish market
-    import random
-    random.seed(1)
-    adv  = random.randint(280, 380)
-    dec  = random.randint(120, 220)
-    unch = 500 - adv - dec
-    return _build_breadth(adv, dec, unch)
+    # No mock data — return zeros so consumers know data is unavailable
+    return MarketBreadth(advances=0, declines=0, unchanged=0, ad_ratio=0.0, verdict="UNAVAILABLE")
 
 
 def _build_breadth(adv: int, dec: int, unch: int) -> MarketBreadth:

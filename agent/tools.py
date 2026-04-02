@@ -248,7 +248,7 @@ def build_registry() -> ToolRegistry:
     from analysis.fundamental  import analyse as fund_analyse
     from analysis.options      import (
         compute_greeks, payoff as calc_payoff,
-        PayoffLeg, mock_iv_rank,
+        PayoffLeg,
     )
 
     reg.register(
@@ -310,8 +310,8 @@ def build_registry() -> ToolRegistry:
     reg.register(
         name="get_iv_rank",
         description=(
-            "Get the IV Rank for a symbol (0–100). "
-            ">50 = IV elevated (good for selling premium). <30 = IV low (good for buying)."
+            "Get the IV Rank for a symbol (0–100), computed from 52-week historical realized volatility. "
+            ">50 = volatility elevated (good for selling premium). <30 = volatility low (good for buying options)."
         ),
         parameters={
             "type": "object",
@@ -320,7 +320,10 @@ def build_registry() -> ToolRegistry:
             },
             "required": ["symbol"],
         },
-        fn=lambda symbol: {"iv_rank": mock_iv_rank(symbol)},
+        fn=lambda symbol: {
+            "iv_rank": __import__("analysis.options", fromlist=["compute_iv_rank_from_history"]).compute_iv_rank_from_history(symbol),
+            "method": "30-day rolling realized volatility ranked over 52 weeks",
+        },
     )
 
     reg.register(
@@ -705,6 +708,69 @@ def build_registry() -> ToolRegistry:
             "required": ["symbol", "change_pct"],
         },
         fn=lambda symbol, change_pct: Simulator().scenario_stock_move(symbol, change_pct).__dict__,
+    )
+
+    # ── Strategy Builder Tools ─────────────────────────────────
+
+    def _find_similar(description: str) -> list:
+        from engine.strategy_builder import find_similar_strategies
+        return find_similar_strategies(description)
+
+    reg.register(
+        name="find_similar_strategies",
+        description="Find existing strategies similar to a plain-English description. Returns matching built-in and user-saved strategies.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "Plain-English description of the strategy idea"},
+            },
+            "required": ["description"],
+        },
+        fn=_find_similar,
+    )
+
+    def _backtest_user_strategy(name: str, symbol: str = "", period: str = "1y") -> dict:
+        from engine.strategy_builder import strategy_store
+        from engine.backtest import Backtester
+        strategy = strategy_store.load_strategy(name)
+        meta = strategy_store.get_metadata(name)
+        sym = symbol or (meta.get("default_symbol", "RELIANCE") if meta else "RELIANCE")
+        bt = Backtester(symbol=sym, period=period)
+        result = bt.run(strategy)
+        return {
+            "symbol": sym, "period": period, "strategy": name,
+            "total_return": round(result.total_return, 2),
+            "sharpe": round(result.sharpe_ratio, 2),
+            "win_rate": round(result.win_rate, 1),
+            "max_drawdown": round(result.max_drawdown, 2),
+            "total_trades": result.total_trades,
+            "buy_hold_return": round(result.buy_hold_return, 2),
+        }
+
+    reg.register(
+        name="backtest_user_strategy",
+        description="Backtest a user-saved custom strategy on a given symbol and period.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name":   {"type": "string", "description": "Name of the saved strategy"},
+                "symbol": {"type": "string", "description": "Stock symbol (default: strategy's default)"},
+                "period": {"type": "string", "description": "Backtest period: 1y, 2y, 3y, 5y (default: 1y)"},
+            },
+            "required": ["name"],
+        },
+        fn=_backtest_user_strategy,
+    )
+
+    def _list_user_strategies() -> list:
+        from engine.strategy_builder import strategy_store
+        return strategy_store.list_strategies()
+
+    reg.register(
+        name="list_user_strategies",
+        description="List all user-saved custom strategies with their metadata and last backtest results.",
+        parameters={"type": "object", "properties": {}},
+        fn=_list_user_strategies,
     )
 
     return reg

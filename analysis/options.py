@@ -224,10 +224,40 @@ def iv_rank(
     return round((current_iv - iv_low) / (iv_high - iv_low) * 100, 1)
 
 
-def mock_iv_rank(symbol: str) -> float:
-    """Return a plausible IV rank for demo purposes."""
-    seeds = {"NIFTY": 34, "BANKNIFTY": 41, "RELIANCE": 28, "INFY": 52, "TCS": 22}
-    return seeds.get(symbol.upper(), 38.0)
+def compute_iv_rank_from_history(symbol: str, period: str = "1y") -> Optional[float]:
+    """
+    Compute IV rank from historical realized volatility.
+
+    Uses 30-day rolling annualized volatility as an IV proxy:
+      IV Rank = (current_RV - 52w_low_RV) / (52w_high_RV - 52w_low_RV) * 100
+
+    Returns 0-100 or None if data unavailable.
+    """
+    try:
+        import yfinance as yf
+        import numpy as np
+
+        ticker = yf.Ticker(f"{symbol.upper()}.NS")
+        hist = ticker.history(period=period)
+        if hist.empty or len(hist) < 60:
+            return None
+
+        returns = np.log(hist['Close'] / hist['Close'].shift(1)).dropna()
+        rolling_vol = (returns.rolling(30).std() * np.sqrt(252) * 100).dropna()
+
+        if rolling_vol.empty or len(rolling_vol) < 30:
+            return None
+
+        current = rolling_vol.iloc[-1]
+        lo = rolling_vol.min()
+        hi = rolling_vol.max()
+
+        if hi == lo:
+            return 50.0
+
+        return round((current - lo) / (hi - lo) * 100, 1)
+    except Exception:
+        return None
 
 
 # ── Payoff calculator ─────────────────────────────────────────

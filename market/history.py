@@ -62,27 +62,28 @@ def get_ohlcv(
     # Normalize interval alias
     kite_interval = INTERVAL_MAP.get(interval, interval)
 
-    # Use the unified broker interface; fall back to yfinance (real data)
-    # if the broker doesn't support historical data or isn't logged in,
-    # then mock as last resort.
+    # Data cascade: broker API → yfinance. No mock/synthetic data.
     raw = None
     try:
         from brokers.session import get_broker
         broker = get_broker()
-        raw = broker.get_historical_data(
-            symbol    = symbol,
-            exchange  = exchange,
-            interval  = kite_interval,
-            from_date = from_date,
-            to_date   = to_date,
-        )
+        # Only use broker for real data — skip if it's the mock broker
+        if not getattr(broker, '_is_mock', False):
+            raw = broker.get_historical_data(
+                symbol    = symbol,
+                exchange  = exchange,
+                interval  = kite_interval,
+                from_date = from_date,
+                to_date   = to_date,
+            )
+        else:
+            # Mock broker: still use yfinance for real market data
+            raw = _yfinance_fallback(symbol, exchange, kite_interval, from_date, to_date)
     except Exception:
         pass
 
     if not raw:
         raw = _yfinance_fallback(symbol, exchange, kite_interval, from_date, to_date)
-    if not raw:
-        raw = _mock_ohlcv(symbol, from_date, to_date)
 
     if not raw:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])

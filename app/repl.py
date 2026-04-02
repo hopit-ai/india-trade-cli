@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from prompt_toolkit              import PromptSession
 from prompt_toolkit.completion   import WordCompleter
+from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history      import FileHistory
 from prompt_toolkit.styles       import Style
 from rich.console                import Console
@@ -61,7 +62,8 @@ COMMANDS = [
     "portfolio", "paper",
     "ai", "alert", "alerts", "audit", "backtest", "clear",
     "deep-analyze", "drift",
-    "earnings", "events", "flows", "greeks", "macro", "memory",
+    "earnings", "events", "exports", "flows", "greeks", "macro", "memory",
+    "strategy",
     "mtf", "pairs", "patterns", "profile", "provider", "risk-report",
     "paper-execute", "save-pdf", "explain", "explain-save",
     "telegram", "tui", "walkforward", "web", "whatif",
@@ -420,7 +422,9 @@ def cmd_help() -> None:
         "Analysis (AI-powered)": [
             ("analyze <SYM>",         "Multi-agent analysis (7 analysts + debate + trade plan)"),
             ("deep-analyze <SYM>",    "Full LLM mode (11 calls — every analyst uses AI)"),
-            ("ai <message>",          "Chat with AI (e.g. ai should I buy RELIANCE?)"),
+            ("ai <message>",          "Chat with AI — follow-ups keep context"),
+            ("strategy new [--simple]", "Build a strategy from plain English"),
+            ("strategy list",         "List saved strategies"),
             ("morning-brief",         "Daily market context + AI narrative"),
         ],
         "Market Data": [
@@ -464,18 +468,21 @@ def cmd_help() -> None:
             ("alerts",                         "List active alerts"),
             ("alert remove <ID>",              "Remove an alert"),
         ],
-        "Output": [
+        "Output & Exports": [
             ("save-pdf",              "Save previous output as PDF"),
             ("explain",               "Explain previous output simply"),
             ("explain-save",          "Explain + save as PDF"),
             ("--pdf",                 "Flag: append to any command"),
             ("--explain",             "Flag: append to any command"),
+            ("exports",               "List all saved PDF exports"),
+            ("exports open <file>",   "Open a saved export"),
+            ("exports clear --older-than 30d", "Delete old exports"),
         ],
         "Session": [
             ("login",                 "Connect to a broker"),
             ("provider [name]",       "Show/switch AI provider"),
-            ("telegram",              "Start Telegram bot"),
-            ("clear",                 "Reset AI conversation history"),
+            ("telegram [setup]",      "Start bot / run guided setup wizard"),
+            ("clear",                 "Start fresh AI conversation (reset context)"),
             ("credentials",           "Manage API keys"),
             ("quit / exit",           "Exit"),
         ],
@@ -828,9 +835,20 @@ def run_repl(broker: BrokerAPI) -> None:
     _last_command: str = ""
     _last_trade_plans: dict = {}  # from analyze → 3 risk persona plans
 
+    def _build_prompt():
+        """Dynamic prompt — shows 📩 badge when Telegram commands are in-flight."""
+        try:
+            from bot.status import get_badge
+            badge = get_badge()
+        except Exception:
+            badge = ""
+        if badge:
+            return HTML(f'<b>trade</b><style fg="orange">{badge}</style> ❯ ')
+        return "trade ❯ "
+
     while True:
         try:
-            raw = session.prompt("trade ❯ ").strip()
+            raw = session.prompt(_build_prompt, refresh_interval=1.0).strip()
         except (KeyboardInterrupt, EOFError):
             console.print("\n[yellow]Use 'quit' to exit.[/yellow]")
             continue
@@ -842,22 +860,24 @@ def run_repl(broker: BrokerAPI) -> None:
         command = parts[0].lower()
         args    = parts[1:]
 
+        # ── Global --pdf / --save-pdf flag ─────────────────────
+        # Strip the flag before any command sees it, so every
+        # command gets PDF support automatically.
+        _global_pdf = "--pdf" in args or "--save-pdf" in args
+        if _global_pdf:
+            args = [a for a in args if a not in ("--pdf", "--save-pdf")]
+            _pre_pdf_output = _last_output  # snapshot before command
+
         try:
             # ── Session ───────────────────────────────────────
             if command in ("quit", "exit", "q"):
                 console.print("[dim]Goodbye.[/dim]")
-                # Clean shutdown of background threads
-                try:
-                    from market.websocket import ws_manager
-                    ws_manager.stop()
-                except Exception:
-                    pass
-                try:
-                    from engine.alerts import alert_manager
-                    alert_manager.stop_polling()
-                except Exception:
-                    pass
-                break
+                # Force-exit immediately. Background threads (Telegram bot,
+                # websocket, executor pool) are non-daemon and would keep the
+                # process alive indefinitely.  os._exit() is the only reliable
+                # way to terminate without waiting for them.
+                import os as _os
+                _os._exit(0)
 
             elif command == "help":
                 cmd_help()
@@ -1037,7 +1057,18 @@ def run_repl(broker: BrokerAPI) -> None:
                         agent.run_multi_agent_analysis(symbol)
 
             elif command == "telegram":
-                # Pre-validate before starting background thread
+                sub = args[0].lower() if args else ""
+
+                # ── telegram setup — full guided wizard ──────
+                if sub == "setup":
+                    try:
+                        from bot.telegram_bot import run_setup_wizard
+                        run_setup_wizard()
+                    except Exception as e:
+                        console.print(f"[red]Setup failed: {e}[/red]")
+                    continue
+
+                # ── telegram — start bot in background ───────
                 try:
                     import telegram as _tg_check  # noqa: F401
                 except ImportError:
@@ -1046,20 +1077,33 @@ def run_repl(broker: BrokerAPI) -> None:
                         "[dim]Run: pip install python-telegram-bot[/dim]"
                     )
                     continue
+
                 try:
                     from bot.telegram_bot import _get_bot_token
                     _get_bot_token()
                 except RuntimeError as e:
-                    console.print(f"[red]{e}[/red]")
-                    continue
-                try:
-                    from bot.telegram_bot import run_bot_background
-                    run_bot_background()
                     console.print(
-                        "[green]Telegram bot started in background.[/green]\n"
-                        "[dim]Send /start to your bot on Telegram to begin.[/dim]\n"
-                        "[dim]Alerts will be pushed automatically.[/dim]"
+                        f"[red]{e}[/red]\n"
+                        "[dim]Run [bold]telegram setup[/bold] for step-by-step guided setup.[/dim]"
                     )
+                    continue
+
+                try:
+                    from bot.telegram_bot import run_bot_background, _load_chat_id
+                    run_bot_background()
+                    chat_id = _load_chat_id()
+                    if not chat_id:
+                        console.print(
+                            "[green]Telegram bot started.[/green]\n"
+                            "[yellow]⚠  No chat connected yet.[/yellow]\n"
+                            "[dim]Send /start to your bot on Telegram to enable push notifications.\n"
+                            "Or run [bold]telegram setup[/bold] for the full guided flow.[/dim]"
+                        )
+                    else:
+                        console.print(
+                            "[green]✓ Telegram bot started.[/green]\n"
+                            "[dim]Alerts and signals will be pushed automatically.[/dim]"
+                        )
                 except Exception as e:
                     console.print(f"[red]Telegram bot failed: {e}[/red]")
 
@@ -1079,15 +1123,67 @@ def run_repl(broker: BrokerAPI) -> None:
                         else:
                             console.print(f"[dim]No {profile_name} plan available (verdict may be HOLD).[/dim]")
 
+            # ── Exports management ────────────────────────────────
+            elif command == "exports":
+                from engine.output import list_exports, open_export, clear_exports
+                sub = args[0].lower() if args else ""
+
+                if sub == "open" and len(args) >= 2:
+                    fname = args[1]
+                    if open_export(fname):
+                        console.print(f"[green]Opened:[/green] {fname}")
+                    else:
+                        console.print(f"[red]File not found:[/red] {fname}")
+
+                elif sub == "clear":
+                    days = 30
+                    for i, a in enumerate(args):
+                        if a == "--older-than" and i + 1 < len(args):
+                            raw = args[i + 1].rstrip("d")
+                            try:
+                                days = int(raw)
+                            except ValueError:
+                                pass
+                    deleted = clear_exports(days)
+                    console.print(f"[dim]Deleted {deleted} export(s) older than {days} days.[/dim]")
+
+                else:
+                    exports = list_exports()
+                    if not exports:
+                        console.print("[dim]No saved exports yet. Use --pdf on any command.[/dim]")
+                    else:
+                        from rich.table import Table as RichTable
+                        tbl = RichTable(
+                            title="Saved Exports",
+                            caption=f"~/.trading_platform/exports/",
+                            show_lines=False,
+                        )
+                        tbl.add_column("File", style="cyan")
+                        tbl.add_column("Size", justify="right")
+                        tbl.add_column("Date", style="dim")
+
+                        total_kb = 0.0
+                        for ex in exports:
+                            total_kb += ex["size_kb"]
+                            size_str = f"{ex['size_kb']:.0f} KB" if ex["size_kb"] < 1024 else f"{ex['size_kb']/1024:.1f} MB"
+                            date_str = ex["modified"].strftime("%d %b %Y, %I:%M %p")
+                            tbl.add_row(ex["name"], size_str, date_str)
+
+                        total_str = f"{total_kb:.0f} KB" if total_kb < 1024 else f"{total_kb/1024:.1f} MB"
+                        tbl.caption = f"{len(exports)} files | {total_str} total | ~/.trading_platform/exports/"
+                        console.print(tbl)
+
             # ── Post-processing commands (operate on previous output) ──
             elif command == "save-pdf":
                 if not _last_output:
                     console.print("[dim]No previous output to save. Run a command first.[/dim]")
                 else:
-                    from engine.output import export_to_pdf
-                    filepath = export_to_pdf(_last_output, title=_last_command or "Trade CLI Output")
+                    from engine.output import export_to_pdf, _archive_filename
+                    _pdf_title = _last_command or "Trade CLI Output"
+                    filepath = export_to_pdf(_last_output, title=_pdf_title)
                     if filepath:
                         console.print(f"[green]PDF saved:[/green] {filepath}")
+                        console.print(f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}")
 
             elif command == "explain":
                 if not _last_output:
@@ -1109,7 +1205,7 @@ def run_repl(broker: BrokerAPI) -> None:
                 if not _last_output:
                     console.print("[dim]No previous output. Run a command first.[/dim]")
                 else:
-                    from engine.output import explain_simply, export_to_pdf
+                    from engine.output import explain_simply, export_to_pdf, _archive_filename
                     # Step 1: Explain
                     console.print()
                     console.rule("[bold green]Simple Explanation[/bold green]", style="green")
@@ -1122,9 +1218,11 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.rule(style="green")
                     # Step 2: Combine and save PDF
                     combined = _last_output + "\n\n--- SIMPLE EXPLANATION ---\n\n" + explanation
-                    filepath = export_to_pdf(combined, title=_last_command or "Trade CLI Report")
+                    _pdf_title = _last_command or "Trade CLI Report"
+                    filepath = export_to_pdf(combined, title=_pdf_title)
                     if filepath:
                         console.print(f"\n[green]PDF saved (with explanation):[/green] {filepath}")
+                        console.print(f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}")
                     _last_output = combined
 
             elif command == "mtf":
@@ -1162,6 +1260,10 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "backtest":
                 _handle_backtest_command(args)
 
+            elif command == "strategy":
+                from app.commands.strategy import run as strategy_run
+                strategy_run(args)
+
             elif command == "whatif":
                 _handle_whatif_command(args)
 
@@ -1171,7 +1273,8 @@ def run_repl(broker: BrokerAPI) -> None:
                 message = " ".join(clean_args).strip()
                 if not message:
                     console.print(
-                        "[dim]Usage: ai <your message> [--pdf] [--explain][/dim]"
+                        "[dim]Usage: ai <your message> [--pdf] [--explain]\n"
+                        "  Follow-ups remember context. Use [bold]clear[/bold] to start fresh.[/dim]"
                     )
                 else:
                     agent = get_agent()
@@ -1238,3 +1341,58 @@ def run_repl(broker: BrokerAPI) -> None:
             if os.environ.get("DEBUG"):
                 import traceback
                 console.print(f"[dim]{traceback.format_exc()}[/dim]")
+
+        # ── Global PDF export (runs after every command) ─────
+        if _global_pdf:
+            pdf_content = ""
+            _pdf_title = _last_command or f"{command} {' '.join(args)}".strip()
+
+            if _last_output and _last_output != _pre_pdf_output:
+                # Command updated _last_output (analyze, deep-analyze, ai, backtest)
+                pdf_content = _last_output
+            else:
+                # Command only did console.print() — re-capture with Rich
+                try:
+                    with console.capture() as _cap:
+                        exec_parts = raw.replace("--pdf", "").replace("--save-pdf", "").split()
+                        exec_cmd = exec_parts[0].lower() if exec_parts else ""
+                        exec_args = exec_parts[1:]
+                        if exec_cmd == "funds" and broker:
+                            cmd_funds(broker)
+                        elif exec_cmd == "holdings" and broker:
+                            cmd_holdings(broker)
+                        elif exec_cmd == "positions" and broker:
+                            cmd_positions(broker)
+                        elif exec_cmd == "orders" and broker:
+                            cmd_orders(broker)
+                        elif exec_cmd in ("alerts",) or (exec_cmd == "alert" and (not exec_args or exec_args[0] == "list")):
+                            from engine.alerts import alert_manager
+                            alert_manager.list_alerts()
+                        elif exec_cmd == "memory":
+                            from engine.memory import trade_memory
+                            if not exec_args:
+                                trade_memory.print_recent()
+                            elif exec_args[0] == "stats":
+                                trade_memory.print_stats()
+                        elif exec_cmd == "flows":
+                            from market.flow_intel import get_flow_intel
+                            get_flow_intel()
+                        elif exec_cmd == "macro":
+                            from market.macro import print_macro_snapshot
+                            if exec_args:
+                                print_macro_snapshot(exec_args[0].upper())
+                            else:
+                                print_macro_snapshot()
+                    pdf_content = _cap.get()
+                    _pdf_title = _pdf_title or f"{exec_cmd} output"
+                except Exception:
+                    pdf_content = ""
+
+            if pdf_content.strip():
+                from engine.output import export_to_pdf, _archive_filename
+                filepath = export_to_pdf(pdf_content, title=_pdf_title)
+                if filepath:
+                    console.print(f"\n[green]PDF saved:[/green] {filepath}")
+                    console.print(f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}")
+            else:
+                console.print("[dim]No output to save as PDF.[/dim]")

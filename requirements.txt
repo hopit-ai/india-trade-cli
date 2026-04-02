@@ -37,5 +37,6 @@ python-telegram-bot>=21.0    # Telegram bot (free, official API)
 # ── Utilities ────────────────────────────────────────────────
 python-dotenv>=1.0.0        # .env file loading
 keyring>=25.2.0             # Secure OS token storage
+pyotp>=2.9.0                # TOTP 2FA (Angel One auto-login)
 python-dateutil>=2.9.0      # Date parsing helpers
 pytz>=2024.1                # Timezone handling (IST)
