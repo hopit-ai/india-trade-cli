@@ -58,6 +58,10 @@ trade = "app.main:main"
 where = ["."]
 include = ["brokers*", "market*", "analysis*", "agent*", "engine*", "ui*", "app*", "web*", "config*"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

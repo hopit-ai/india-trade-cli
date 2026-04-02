@@ -39,3 +39,7 @@ python-dotenv>=1.0.0        # .env file loading
 keyring>=25.2.0             # Secure OS token storage
 python-dateutil>=2.9.0      # Date parsing helpers
 pytz>=2024.1                # Timezone handling (IST)
+
+# ── Testing ─────────────────────────────────────────────────
+pytest>=7.0.0               # Test framework
+pytest-mock>=3.10.0         # Mocking helpers
