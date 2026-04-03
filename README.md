@@ -5,7 +5,7 @@ AI-powered multi-agent stock & options analysis platform for Indian markets (NSE
 > **Philosophy:** Every trade must be justified. Analyze first, debate second, execute third.
 
 [![CI](https://github.com/archieindian/india-trade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/archieindian/india-trade-cli/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11–3.12](https://img.shields.io/badge/python-3.11%E2%80%933.12-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -39,15 +39,13 @@ analyze RELIANCE
 
 ---
 
-## Quick Start
+## Quick Start — Zero to First Analysis in 5 Minutes
 
 ### Prerequisites
 
 - **Python 3.11 or 3.12** (3.13 not yet supported due to numba/py_vollib compatibility)
-- **One AI provider** (Gemini free tier works great, or Claude/OpenAI)
-- **No broker account needed** for analysis (yfinance provides free NSE/BSE data)
 
-### 1. Clone & install
+### Step 1: Install
 
 ```bash
 git clone https://github.com/ArchieIndian/india-trade-cli.git
@@ -57,26 +55,57 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
-### 2. Run
+### Step 2: Get a free Gemini API key
+
+1. Go to [aistudio.google.com](https://aistudio.google.com) and sign in with Google
+2. Click **Get API Key** → **Create API key**
+3. Copy the key (starts with `AIza...`)
+
+### Step 3: Get free market data (Fyers)
+
+1. Create a free account at [fyers.in](https://fyers.in)
+2. Go to [myapi.fyers.in](https://myapi.fyers.in) → **Create App**
+   - Redirect URL: `http://127.0.0.1:8765/fyers/callback` (must be exact)
+3. Note the **App ID** and **Secret Key**
+
+### Step 4: Get news headlines (optional)
+
+1. Sign up at [newsapi.org](https://newsapi.org) (free for development)
+2. Copy your API key
+
+### Step 5: Run it
 
 ```bash
 trade
-# or: python -m app.main
 ```
 
-First run prompts you to:
-1. Choose a broker (pick **Demo** for mock data — no credentials needed)
-2. Choose an AI provider (Gemini is free and works well)
+First run walks you through:
+1. **Broker** → Choose **Fyers** → enter App ID + Secret Key → browser opens for login
+2. **AI Provider** → Choose **Gemini** → paste your API key
+3. **NewsAPI** → paste your key (or press Enter to skip)
 
-That's it. You're in the REPL. Type `analyze RELIANCE` to see it work.
+You're in the REPL. Try it:
 
-### 3. No-broker mode (recommended for first try)
+```
+> analyze RELIANCE
+```
+
+This runs 7 analyst agents, a bull-vs-bear debate, and produces a fund-manager synthesis with trade plans across 3 risk profiles.
+
+```
+> deep-analyze INFY        # full LLM mode (11 AI calls)
+> morning-brief            # daily market overview
+> deals                    # today's bulk/block deals
+> quote TCS                # live quote
+```
+
+### No-broker mode (quick start without Fyers)
 
 ```bash
 trade --no-broker
 ```
 
-Uses yfinance for real NSE/BSE data (~15 min delayed). All analysis, backtesting, and AI features work — no broker account needed. Connect a broker later via the `login` command in the REPL.
+Uses yfinance for real NSE/BSE data (~15 min delayed). Technical, fundamental, sentiment, and sector analysis all work. Options chain data requires a broker connection (Fyers recommended). Connect a broker later via the `login` command in the REPL.
 
 > **Note:** `--no-broker` is a CLI flag, not an interactive menu option. The broker selection menu offers Demo, Zerodha, Groww, Angel One, Upstox, and Fyers.
 
