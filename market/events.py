@@ -13,7 +13,12 @@ from datetime    import date, datetime, timedelta
 from typing      import Optional
 
 import httpx
-import feedparser
+
+try:
+    import feedparser
+    _FEEDPARSER_AVAILABLE = True
+except ImportError:
+    _FEEDPARSER_AVAILABLE = False
 
 
 # ── Result types ─────────────────────────────────────────────
@@ -178,6 +183,8 @@ def get_rbi_calendar() -> list[RBIEvent]:
     RBI Monetary Policy Committee upcoming dates.
     Fetches from RBI RSS feed. Returns empty list if unavailable.
     """
+    if not _FEEDPARSER_AVAILABLE:
+        return []
     try:
         feed  = feedparser.parse(RBI_RSS)
         today = date.today()
