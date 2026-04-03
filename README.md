@@ -1,8 +1,8 @@
 # India Trade CLI
 
-**Open-source AI trading assistant for Indian stock markets (NSE / BSE / NFO).** Multi-agent stock analysis, quantitative strategy builder, Telegram alerts, paper trading, and OpenClaw HTTP skills — all from the terminal.
+Open-source terminal for trading Indian stocks and derivatives (NSE / BSE / NFO). Runs AI analyst agents, backtests quant strategies, pushes Telegram alerts, and exposes everything as OpenClaw HTTP skills.
 
-> **Philosophy:** Every trade must be justified. Analyze first, debate second, execute third.
+> Every trade must be justified. Analyze first, debate second, execute third.
 
 [![CI](https://github.com/hopit-ai/india-trade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/hopit-ai/india-trade-cli/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
@@ -12,17 +12,17 @@
 
 ## What is India Trade CLI?
 
-India Trade CLI is a free, open-source quantitative trading platform for Indian equity and derivatives markets. It runs **seven AI analyst agents** on any NSE or BSE listed stock — Technical, Fundamental, Options, News & Macro, Sentiment, Sector Rotation, and Risk Manager — forces them into a structured bull-vs-bear debate, and produces a fund-manager-grade synthesis with concrete trade plans across three risk profiles.
+India Trade CLI is a free, open-source trading CLI for India's equity and derivatives markets. It runs seven AI analyst agents on any NSE or BSE listed stock (Technical, Fundamental, Options, News & Macro, Sentiment, Sector Rotation, and Risk Manager), forces them into a structured bull-vs-bear debate, and outputs a fund-manager-style synthesis with trade plans across three risk profiles.
 
-Beyond single-stock analysis, the platform ships:
+It also includes:
 
-- **AI-guided strategy builder** — describe a strategy in plain English (RSI mean reversion, EMA crossover, MACD momentum, pairs spread trading), the AI interviews you, generates Python code, backtests it on NSE history, and saves it locally.
-- **Telegram trading bot** — 14 commands for live quotes, full AI analysis, FII/DII flows, earnings calendar, and price alerts pushed directly to your phone.
-- **Paper trading engine** — execute AI-recommended trade plans (aggressive / neutral / conservative) without real money.
-- **OpenClaw HTTP skills** — every capability exposed as a discoverable REST endpoint so any OpenClaw agent can call Indian market data or trigger multi-agent analysis over HTTP.
+- A strategy builder that takes plain-English descriptions (RSI mean reversion, EMA crossover, MACD, pairs spread), interviews you about parameters, generates Python code, and backtests it on NSE history.
+- A Telegram trading bot with 14 commands: live quotes, full AI analysis, FII/DII flows, earnings calendar, price alerts sent to your phone.
+- A paper trading engine to run the AI's trade plans without real money.
+- OpenClaw HTTP skills so any OpenClaw agent can call Indian market data or trigger analysis over a standard REST API.
 
-**Supports:** Gemini (free), Claude (subscription or API), OpenAI, Ollama (local), and any OpenAI-compatible endpoint (OpenRouter, Groq, etc.).
-**Brokers:** Fyers (fully supported, free real-time API), Mock/Demo mode, Zerodha / Angel One / Upstox / Groww (WIP).
+AI providers: Gemini (free), Claude (subscription or API), OpenAI, Ollama (local), OpenRouter, Groq, and anything OpenAI-compatible.
+Brokers: Fyers (fully supported, free real-time API), Demo/Mock mode, Zerodha / Angel One / Upstox / Groww (work in progress).
 
 ---
 
@@ -49,15 +49,15 @@ analyze RELIANCE
   Entry orders, stop-loss, targets, position sizing, scaling logic
 ```
 
-**Standard mode:** 8 LLM calls. **Deep mode** (`deep-analyze`): 11 LLM calls with every analyst AI-powered.
+Standard mode: 8 LLM calls. Deep mode (`deep-analyze`): 11 calls with every analyst fully AI-powered.
 
 ---
 
-## Quick Start — Zero to First Analysis in 5 Minutes
+## Quick start
 
 ### Prerequisites
 
-- **Python 3.11+** (3.11, 3.12, and 3.13 tested in CI)
+- Python 3.11+ (3.11, 3.12, and 3.13 tested in CI)
 
 ### Step 1: Install
 
@@ -71,17 +71,11 @@ pip install -e .
 
 ### Step 2: Set up an AI provider
 
-Pick **one** of these options:
+Pick one:
 
-**Option A — Gemini (free)**
-1. Go to [aistudio.google.com](https://aistudio.google.com) and sign in with Google
-2. Click **Get API Key** → **Create API key**
-3. Copy the key (starts with `AIza...`)
+Gemini (free): get a key at [aistudio.google.com](https://aistudio.google.com) → Get API Key.
 
-**Option B — Claude (if you have a Pro/Max subscription)**
-1. Install the Claude CLI: `npm install -g @anthropic-ai/claude-code`
-2. Run `claude login` and authenticate in your browser
-3. That's it — no API key needed, the platform calls the CLI directly
+Claude (Pro/Max subscription): install the CLI with `npm install -g @anthropic-ai/claude-code`, run `claude login`, and that's it. No API key needed.
 
 ### Step 3: Get free market data (Fyers)
 
@@ -94,11 +88,7 @@ Pick **one** of these options:
    - **Description:** optional
 4. After creating the app, you'll see your **App ID** (format: `XXXX-100`) and **Secret Key** — copy both
 5. Run `trade`, choose **[5] Fyers**, and paste the App ID and Secret Key when prompted
-6. A browser window opens for Fyers OAuth login. After login, the browser redirects to a URL like:
-   ```
-   http://127.0.0.1:8765/fyers/callback?auth_code=eyJ0...&state=...
-   ```
-   The redirect page will show a 404 error — **this is normal**. Copy the `auth_code` value from the URL bar (everything between `auth_code=` and `&state=`) and paste it into the terminal.
+6. A browser window opens for Fyers OAuth login. After you log in, the terminal completes automatically — no copy-pasting needed.
 
 ### Step 4: Get news headlines (optional)
 
@@ -111,13 +101,13 @@ Pick **one** of these options:
 trade
 ```
 
-First run walks you through broker, AI provider, and NewsAPI setup. You're in the REPL. Try:
+First run asks for a broker, AI provider, and NewsAPI key. After that you're in the REPL:
 
 ```
 > analyze RELIANCE
 ```
 
-This runs 7 analyst agents, a bull-vs-bear debate, and produces a fund-manager synthesis with trade plans across 3 risk profiles.
+That runs 7 analyst agents, a bull-vs-bear debate, and outputs trade plans across 3 risk profiles.
 
 ```
 > deep-analyze INFY        # full LLM mode (11 AI calls)
@@ -132,7 +122,7 @@ This runs 7 analyst agents, a bull-vs-bear debate, and produces a fund-manager s
 trade --no-broker
 ```
 
-Uses yfinance for real NSE/BSE data (~15 min delayed). Technical, fundamental, sentiment, and sector analysis all work. Options chain data requires a broker connection (Fyers recommended).
+Uses yfinance for real NSE/BSE data (~15 min delayed). Technical, fundamental, sentiment, and sector analysis work fine. Options chain data needs a broker connection (Fyers is the free option).
 
 ---
 
@@ -147,7 +137,7 @@ Uses yfinance for real NSE/BSE data (~15 min delayed). Technical, fundamental, s
 | **Any OpenAI-compatible** | Varies | OpenRouter, Groq, Together, LM Studio, vLLM |
 | **Ollama (local)** | Free | Run models locally: `ollama pull llama3.1` |
 
-**Switch anytime:** `provider gemini` or `provider claude_subscription`
+Switch anytime with `provider gemini` or `provider claude_subscription`.
 
 ### Custom OpenAI-compatible endpoint
 
@@ -161,9 +151,9 @@ OPENAI_API_KEY=sk-or-v1-...
 OPENAI_MODEL=anthropic/claude-sonnet-4
 ```
 
-Or interactively: `credentials setup` → AI Provider → **Custom (OpenAI-compatible)**
+Or interactively: `credentials setup` → AI Provider → Custom (OpenAI-compatible).
 
-API keys are stored in your OS keychain (macOS Keychain / Linux Secret Service / Windows Credential Locker) via the `keyring` library. Broker session tokens are cached under `~/.trading_platform/` and deleted on logout.
+API keys go into your OS keychain (macOS Keychain, Linux Secret Service, or Windows Credential Locker) via the `keyring` library. Broker session tokens are cached under `~/.trading_platform/` and deleted on logout.
 
 ---
 
@@ -178,23 +168,22 @@ API keys are stored in your OS keychain (macOS Keychain / Linux Secret Service /
 | Upstox | WIP | Free API, OAuth ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) |
 | Groww | WIP | No historical data API ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) |
 
-> Broker integrations beyond Fyers are work-in-progress. See [#80](https://github.com/hopit-ai/india-trade-cli/issues/80). Contributions welcome.
+> Broker integrations beyond Fyers are work in progress. See [#80](https://github.com/hopit-ai/india-trade-cli/issues/80) for status.
 
-### Fyers Setup (recommended — free, real-time NSE/BSE data)
+### Fyers setup (recommended, free real-time NSE/BSE data)
 
-1. **Create account** — Sign up at [fyers.in](https://fyers.in) if you don't have one (any Fyers trading/demat account works, free to open)
-2. **Create API app** — Go to [myapi.fyers.in](https://myapi.fyers.in), log in, and click **Create App**:
-   - **App Name:** anything (e.g. `TradeCLI`)
+1. Sign up at [fyers.in](https://fyers.in) if you don't have one (any Fyers trading/demat account works)
+2. Go to [myapi.fyers.in](https://myapi.fyers.in), log in, and click **Create App**:
    - **Redirect URL:** must be exactly `http://127.0.0.1:8765/fyers/callback`
    - **App Type:** Personal
-3. **Copy credentials** — After creation, note the **App ID** (format: `XXXX-100`) and **Secret Key**
-4. **Connect** — Run `trade` → choose `[5] Fyers` → paste App ID and Secret Key when prompted
-5. **Authorize** — A browser opens for Fyers login. After login, the browser redirects to a URL with an `auth_code` parameter. The page shows a 404 — that's expected. Copy the `auth_code` value from the URL bar (between `auth_code=` and `&state=`) and paste it into the terminal
-6. **Done** — Token is saved for 12 hours. WebSocket auto-connects for real-time quotes. Next time, just run `trade` and choose Fyers — credentials are in your OS keychain.
+3. Note the **App ID** (format: `XXXX-100`) and **Secret Key**
+4. Run `trade` → choose `[5] Fyers` → paste App ID and Secret Key when prompted
+5. A browser opens for Fyers OAuth login. After you log in, the terminal completes automatically — no copy-pasting needed.
+6. Token saved for 12 hours. WebSocket connects for real-time quotes. Next login just runs `trade` and picks up saved credentials.
 
-### NewsAPI (optional but recommended)
+### NewsAPI (optional)
 
-A free [NewsAPI](https://newsapi.org) key significantly improves `morning-brief` and news-driven analysis. Free tier: 100 requests/day.
+A free [NewsAPI](https://newsapi.org) key noticeably improves `morning-brief` and news-driven analysis. Free tier: 100 requests/day.
 
 ```bash
 NEWSAPI_KEY=your_key_here
@@ -203,26 +192,24 @@ NEWSAPI_ENABLED=1
 
 ---
 
-## Telegram Trading Bot for Indian Markets
+## Telegram trading bot for Indian markets
 
-Send commands from your phone — receive full AI analysis, live NSE/BSE quotes, FII/DII flow data, earnings events, and price alerts with automatic push notifications.
+Run `telegram setup` from the REPL. A short wizard creates the bot via @BotFather and connects your chat. After that, you can query quotes, run full AI analysis, check FII/DII flows, and get price alerts pushed to your phone.
 
 ```
 trade
 > telegram setup
 ```
 
-The wizard walks you through creating a bot via @BotFather and connecting your chat.
+14 commands: `/quote`, `/analyze`, `/deepanalyze`, `/brief`, `/flows`, `/earnings`, `/events`, `/macro`, `/alert`, `/alerts`, `/memory`, `/pnl`, `/help`
 
-**14 bot commands:** `/quote`, `/analyze`, `/deepanalyze`, `/brief`, `/flows`, `/earnings`, `/events`, `/macro`, `/alert`, `/alerts`, `/memory`, `/pnl`, `/help`
-
-Alerts auto-push to Telegram when triggered. The REPL shows a live status badge when bot commands are running.
+Alerts fire to Telegram automatically when triggered. The REPL shows a status badge while bot commands are running.
 
 ---
 
-## OpenClaw Integration — HTTP Skills for Indian Market Data
+## OpenClaw integration
 
-Expose every capability as **discoverable HTTP skill endpoints** that any OpenClaw agent can call — no CLI installation needed on the agent side.
+Every capability is available as a discoverable HTTP skill endpoint. An OpenClaw agent fetches the manifest, reads the input schemas, and calls whichever skills it needs. No CLI installation required on the agent side.
 
 ```
 OpenClaw Agent
@@ -243,7 +230,7 @@ uvicorn web.api:app --host 127.0.0.1 --port 8765
 
 Or from the REPL: `web`
 
-> **Security:** The skills server has no authentication. Keep it bound to `127.0.0.1` (localhost only). Do not expose on `0.0.0.0` without adding a reverse proxy with authentication.
+> **Security:** The server has no authentication. Keep it on `127.0.0.1`. If you need network access, put it behind a reverse proxy that handles auth.
 
 ### Skill discovery
 
@@ -251,7 +238,7 @@ Or from the REPL: `web`
 curl http://localhost:8765/.well-known/openclaw.json
 ```
 
-Returns a manifest with all 17 skills, their JSON input schemas, and descriptions. Any OpenClaw agent reads this URL to know what's available.
+Returns a manifest with all 17 skills, their input schemas, and descriptions.
 
 ### Available skills
 
@@ -298,7 +285,7 @@ curl -X POST http://localhost:8765/skills/chat \
 
 ### Webhook alerts
 
-Register a callback URL — the server POSTs to it the moment an alert fires:
+Register a callback URL. The server POSTs to it the moment an alert fires:
 
 ```bash
 curl -X POST http://localhost:8765/skills/alerts/add \
@@ -568,25 +555,24 @@ india-trade-cli/
 
 ## Contributing
 
-Contributions welcome. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for dev setup, running tests, and code style.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, tests, and code style.
 
-**Quick version:**
-1. Fork & clone → `pip install -e .`
-2. Run tests: `pytest` (no API keys needed — network tests excluded by default)
-3. Test the app: `trade --no-broker` (uses yfinance)
-4. Submit a PR against `main`
+Short version:
+1. Fork & clone, then `pip install -e .`
+2. Run `pytest` — no API keys needed, network tests are skipped by default
+3. Smoke test with `trade --no-broker` (uses yfinance, no broker account)
+4. Open a PR against `main`
 
-**Python 3.11+** required.
+Python 3.11+ required.
 
 ### Where help is needed
 
-Check [open issues](https://github.com/hopit-ai/india-trade-cli/issues) for current priorities:
+See [open issues](https://github.com/hopit-ai/india-trade-cli/issues). The most useful areas right now:
 
-- **Broker integrations** ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) — deepen Zerodha / Angel One / Upstox support, add Dhan, ICICI Direct, 5paisa
-- **Integration tests** ([#79](https://github.com/hopit-ai/india-trade-cli/issues/79)) — live broker / market-data test suite
-- **Web dashboard** — FastAPI backend and OAuth flow exist, frontend needed
-- **Options backtesting** — strategy-specific backtest engine for options
-- Bug fixes and documentation improvements are always welcome
+- Broker integrations ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) — Zerodha / Angel One / Upstox depth, plus Dhan, ICICI Direct, 5paisa
+- Integration tests ([#79](https://github.com/hopit-ai/india-trade-cli/issues/79)) — live broker and market-data coverage
+- Web dashboard — FastAPI backend and OAuth exist, frontend is missing
+- Options-specific backtest engine
 
 ---
 
@@ -643,7 +629,7 @@ See [all open issues](https://github.com/hopit-ai/india-trade-cli/issues).
 
 ## Disclaimer
 
-This software is for **educational and informational purposes only**. It is not financial advice. Trading in stocks and derivatives involves substantial risk of loss. Past performance — including backtests — does not guarantee future results. Always do your own research and consult a qualified financial advisor before making investment decisions. The authors are not responsible for any financial losses.
+This software is for **educational and informational purposes only**. It is not financial advice. Trading in stocks and derivatives involves substantial risk of loss. Past performance (including backtests) does not guarantee future results. Always do your own research and consult a qualified financial advisor before making investment decisions. The authors are not responsible for any financial losses.
 
 ---
 
