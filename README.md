@@ -448,34 +448,26 @@ india-trade-cli/
 
 ## Contributing
 
-Contributions welcome! Here's how to get started:
+Contributions welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide (dev setup, running tests, code style).
 
-### Setup for development
+**Quick version:**
 
-```bash
-git clone https://github.com/ArchieIndian/india-trade-cli.git
-cd india-trade-cli
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
+1. Fork & clone → `pip install -e .` → `python -m venv .venv`
+2. Run tests: `pytest` (no API keys needed — network tests are excluded by default)
+3. Test the app: `trade --no-broker` (uses yfinance, no broker account needed)
+4. Submit a PR against `main`
+
+**Requires Python 3.11 or 3.12.**
 
 ### Areas where help is needed
 
-Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for current priorities. Some good first issues:
+Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for current priorities. Good areas to contribute:
 
-- **Options backtesting** (#31) - strategy-specific backtest engine for options
-- **Options scanner** (#33) - scan for high IV, unusual OI
-- **PDF auto-save** (#53) - timestamped PDFs on generation
-- **Test suite** (#28) - end-to-end tests
-
-### Submitting changes
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Make your changes
-4. Test with `trade --no-broker` (no API keys needed for basic testing)
-5. Submit a PR
+- **Integration tests** ([#79](https://github.com/ArchieIndian/india-trade-cli/issues/79)) — live broker/market-data test suite
+- **Options backtesting** — strategy-specific backtest engine
+- **Options scanner** — scan for high IV, unusual OI
+- **Web dashboard** — FastAPI backend exists, frontend needed
+- Bug fixes and documentation improvements are always welcome
 
 ---
 
