@@ -389,28 +389,28 @@ class OpenAIProvider(LLMProvider):
         text     = ""
         tc_acc: dict[int, dict] = {}
 
-        with self._client.chat.completions.stream(
-            model=self.model, messages=messages, tools=tools
-        ) as s:
-            for chunk in s:
-                if not chunk.choices:
-                    continue
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    text += delta.content
-                    console.print(delta.content, end="", markup=False, highlight=False)
-                if delta.tool_calls:
-                    for d in delta.tool_calls:
-                        idx = d.index
-                        if idx not in tc_acc:
-                            tc_acc[idx] = {"id": "", "name": "", "args": ""}
-                        if d.id:
-                            tc_acc[idx]["id"] += d.id
-                        if d.function:
-                            if d.function.name:
-                                tc_acc[idx]["name"] += d.function.name
-                            if d.function.arguments:
-                                tc_acc[idx]["args"] += d.function.arguments
+        stream = self._client.chat.completions.create(
+            model=self.model, messages=messages, tools=tools, stream=True
+        )
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                text += delta.content
+                console.print(delta.content, end="", markup=False, highlight=False)
+            if delta.tool_calls:
+                for d in delta.tool_calls:
+                    idx = d.index
+                    if idx not in tc_acc:
+                        tc_acc[idx] = {"id": "", "name": "", "args": ""}
+                    if d.id:
+                        tc_acc[idx]["id"] += d.id
+                    if d.function:
+                        if d.function.name:
+                            tc_acc[idx]["name"] += d.function.name
+                        if d.function.arguments:
+                            tc_acc[idx]["args"] += d.function.arguments
 
         if text:
             console.print()
