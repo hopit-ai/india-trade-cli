@@ -532,6 +532,7 @@ See [all open issues](https://github.com/ArchieIndian/india-trade-cli/issues) fo
 | `No active broker session` | Run `login` or `login 0` (demo mode) before using broker-dependent commands like `portfolio` or `orders`. |
 | AI commands return errors | Run `credentials setup` to configure your AI provider (Anthropic, OpenAI, or Gemini). Free tier available with Google AI Studio. |
 | `keyring` errors on Linux | Install the SecretService backend: `sudo apt install gnome-keyring` or set credentials via environment variables in `.env`. |
+| Reset to fresh setup | Run `credentials clear` in the REPL to wipe all saved credentials from the keychain, then `credentials setup` to re-enter them. If login crashes on startup, the REPL will still open with a mock broker so you can fix credentials. |
 | Tests failing locally | Run `pip install pytest pytest-mock && pytest tests/ -v`. Some tests require optional dependencies — check the error for which package to install. |
 
 ---
