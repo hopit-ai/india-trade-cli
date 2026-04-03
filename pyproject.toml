@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "india-trade-cli"
 version = "0.1.0"
 description = "AI-powered multi-agent stock & options analysis platform for Indian markets"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 readme = "README.md"
 license = {text = "MIT"}
 keywords = ["trading", "stocks", "options", "nse", "bse", "india", "ai", "llm", "analysis"]
@@ -27,7 +27,7 @@ dependencies = [
     # ── AI ───────────────────────────────────────────────────────────
     "anthropic>=0.40.0",
     "openai>=1.40.0",
-    "google-generativeai>=0.8.0",
+    "google-genai>=1.0.0",
     "google-cloud-aiplatform>=1.60.0",
     # ── Terminal UI ───────────────────────────────────────────────────
     "rich>=13.7.0",
@@ -36,7 +36,9 @@ dependencies = [
     # ── Data & Analysis ───────────────────────────────────────────────
     "pandas>=2.2.0",
     "numpy>=1.26.0",
-    "py_vollib>=1.0.1",
+    # py_vollib is optional: depends on numba which breaks on Python 3.13+.
+    # Install separately if needed: pip install py_vollib
+    # The platform gracefully falls back to built-in BS formulas without it.
     "yfinance>=0.2.40",
     "feedparser>=6.0.11",
     "newsapi-python>=0.2.7",
@@ -54,6 +56,9 @@ dependencies = [
     "python-dateutil>=2.9.0",
     "pytz>=2024.1",
 ]
+
+[project.optional-dependencies]
+vollib = ["py_vollib>=1.0.1"]
 
 # ── Optional broker SDKs (install separately if needed) ─────────────
 # Angel One SmartAPI:  pip install smartapi-python logzero
