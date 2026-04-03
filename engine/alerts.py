@@ -64,6 +64,8 @@ class Alert:
     triggered_at: Optional[str] = None
     # Conditional alert: multiple conditions joined by AND
     conditions:   list[dict] = field(default_factory=list)
+    # OpenClaw / external callback: POST alert payload here when triggered
+    webhook_url:  Optional[str] = None
 
     def describe(self) -> str:
         if self.alert_type == "CONDITIONAL" and self.conditions:
@@ -92,10 +94,11 @@ class AlertManager:
 
     def add_price_alert(
         self,
-        symbol:    str,
-        condition: str,
-        threshold: float,
-        exchange:  str = "NSE",
+        symbol:      str,
+        condition:   str,
+        threshold:   float,
+        exchange:    str = "NSE",
+        webhook_url: Optional[str] = None,
     ) -> Alert:
         """Create a price-based alert (ABOVE / BELOW / CROSSES)."""
         alert = Alert(
@@ -106,6 +109,7 @@ class AlertManager:
             condition=condition.upper(),
             threshold=float(threshold),
             created_at=datetime.now().isoformat(timespec="seconds"),
+            webhook_url=webhook_url,
         )
         alert.message = alert.describe()
         self._alerts.append(alert)
@@ -115,11 +119,12 @@ class AlertManager:
 
     def add_technical_alert(
         self,
-        symbol:    str,
-        indicator: str,
-        condition: str,
-        threshold: float,
-        exchange:  str = "NSE",
+        symbol:      str,
+        indicator:   str,
+        condition:   str,
+        threshold:   float,
+        exchange:    str = "NSE",
+        webhook_url: Optional[str] = None,
     ) -> Alert:
         """Create a technical-indicator alert (RSI > 70, etc.)."""
         alert = Alert(
@@ -131,6 +136,7 @@ class AlertManager:
             threshold=float(threshold),
             indicator=indicator.upper(),
             created_at=datetime.now().isoformat(timespec="seconds"),
+            webhook_url=webhook_url,
         )
         alert.message = alert.describe()
         self._alerts.append(alert)
@@ -139,9 +145,10 @@ class AlertManager:
 
     def add_conditional_alert(
         self,
-        symbol:     str,
-        conditions: list[dict],
-        exchange:   str = "NSE",
+        symbol:      str,
+        conditions:  list[dict],
+        exchange:    str = "NSE",
+        webhook_url: Optional[str] = None,
     ) -> Alert:
         """
         Create a conditional alert with AND logic.
@@ -168,6 +175,7 @@ class AlertManager:
             threshold=0,
             conditions=conditions,
             created_at=datetime.now().isoformat(timespec="seconds"),
+            webhook_url=webhook_url,
         )
         alert.message = alert.describe()
         self._alerts.append(alert)
@@ -350,6 +358,10 @@ class AlertManager:
         # 3. Telegram push
         _telegram_notify(f"🔔 ALERT TRIGGERED\n\n{desc}{ltp_str}")
 
+        # 4. Webhook (OpenClaw / external agents)
+        if alert.webhook_url:
+            _webhook_notify(alert, ltp=ltp)
+
     def _evaluate(self, alert: Alert) -> bool:
         """Check if an alert's condition is met right now."""
         if alert.alert_type == "PRICE":
@@ -529,6 +541,40 @@ def _telegram_notify(message: str) -> None:
         send_push(message)
     except Exception:
         pass
+
+
+def _webhook_notify(alert: Alert, ltp: Optional[float] = None) -> None:
+    """
+    POST alert payload to the registered webhook_url.
+    Non-blocking — runs in a background thread.
+    """
+    import json as _json
+
+    def _send():
+        try:
+            import urllib.request
+            payload = {
+                "event":        "alert_triggered",
+                "alert_id":     alert.id,
+                "alert_type":   alert.alert_type,
+                "symbol":       alert.symbol,
+                "exchange":     alert.exchange,
+                "description":  alert.describe(),
+                "triggered_at": alert.triggered_at,
+                "ltp":          ltp,
+            }
+            body = _json.dumps(payload).encode()
+            req = urllib.request.Request(
+                alert.webhook_url,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10)
+        except Exception:
+            pass
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 alert_manager = AlertManager()

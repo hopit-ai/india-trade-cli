@@ -55,6 +55,23 @@ _load_keychain()
 
 app = FastAPI(title="india-trade-cli", docs_url=None, redoc_url=None)
 
+# ── OpenClaw Skills ───────────────────────────────────────────
+
+from web.skills import router as _skills_router
+from web.openclaw import MANIFEST as _MANIFEST
+from fastapi import Request
+import copy
+
+app.include_router(_skills_router)
+
+
+@app.get("/.well-known/openclaw.json", tags=["OpenClaw"])
+async def openclaw_manifest(request: Request):
+    """OpenClaw skill discovery manifest — lists all available skills and their input schemas."""
+    manifest = copy.deepcopy(_MANIFEST)
+    manifest["base_url"] = str(request.base_url).rstrip("/")
+    return manifest
+
 
 # ── Shared CSS ────────────────────────────────────────────────
 
