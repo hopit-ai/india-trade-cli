@@ -159,12 +159,17 @@ class AnthropicProvider(LLMProvider):
             if not api_key:
                 raise RuntimeError(
                     "Anthropic API key not set.\n"
-                    "Run [bold]credentials setup[/bold] → AI Provider → choose your option\n"
-                    "  or set AI_PROVIDER=claude_subscription to use your Claude subscription."
+                    "To fix, run one of:\n"
+                    "  credentials setup          (interactive wizard)\n"
+                    "  provider claude_subscription  (use Claude Pro/Max subscription instead)\n"
+                    "  provider gemini             (switch to free Gemini)"
                 )
             self._client = _sdk.Anthropic(api_key=api_key)
         except ImportError:
-            raise RuntimeError("anthropic not installed. Run: pip install anthropic")
+            raise RuntimeError(
+                "anthropic package not installed. Run: pip install anthropic\n"
+                "Or switch provider: provider gemini  (free, no install needed)"
+            )
 
     @property
     def provider_name(self) -> str:
@@ -317,7 +322,10 @@ class OpenAIProvider(LLMProvider):
             )
             self._base_url = resolved_base
         except ImportError:
-            raise RuntimeError("openai not installed. Run: pip install openai")
+            raise RuntimeError(
+                "openai package not installed. Run: pip install openai\n"
+                "Or switch provider: provider gemini  (free, no install needed)"
+            )
 
     @property
     def provider_name(self) -> str:
@@ -1172,14 +1180,17 @@ class GeminiProvider(LLMProvider):
             )
             if not api_key:
                 raise RuntimeError(
-                    "GEMINI_API_KEY not set. Get a free key at aistudio.google.com"
+                    "GEMINI_API_KEY not set.\n"
+                    "Get a free key at: https://aistudio.google.com/apikey\n"
+                    "Then run: credentials set GEMINI_API_KEY"
                 )
             self._client = genai.Client(api_key=api_key)
             self._tools_schema = self._build_gemini_tools()
         except ImportError:
             raise RuntimeError(
-                "google-genai not installed.\n"
-                "Run: pip install google-genai"
+                "google-genai package not installed.\n"
+                "Run: pip install google-genai\n"
+                "Or switch provider: provider anthropic"
             )
 
     @property

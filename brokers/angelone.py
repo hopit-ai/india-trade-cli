@@ -102,7 +102,20 @@ class AngelOneAPI(BrokerAPI):
 
         if not data or data.get("status") is False:
             msg = data.get("message", "Unknown error") if data else "No response"
-            raise RuntimeError(f"Angel One login failed: {msg}")
+            msg_lower = msg.lower()
+            hint = ""
+            if "invalid" in msg_lower and ("totp" in msg_lower or "otp" in msg_lower):
+                hint = "\nYour TOTP secret may be wrong. Re-enter with:\n  credentials delete ANGEL_TOTP_SECRET"
+            elif "invalid" in msg_lower:
+                hint = (
+                    "\nCheck your credentials at smartapi.angelone.in.\n"
+                    "To re-enter:\n"
+                    "  credentials delete ANGEL_API_KEY\n"
+                    "  credentials delete ANGEL_PASSWORD"
+                )
+            elif "session" in msg_lower or "expired" in msg_lower:
+                hint = "\nYour session has expired. Try logging in again."
+            raise RuntimeError(f"Angel One login failed: {msg}{hint}")
 
         d = data.get("data", {})
         self._auth_token    = d.get("jwtToken", "")
@@ -188,7 +201,7 @@ class AngelOneAPI(BrokerAPI):
         if self._profile_cache:
             return self._profile_cache
         if not self._obj:
-            raise RuntimeError("Not authenticated. Call complete_login() first.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         data = self._obj.getProfile(self._refresh_token)
         pd   = data.get("data", {}) if data else {}
         self._profile_cache = UserProfile(
@@ -201,7 +214,7 @@ class AngelOneAPI(BrokerAPI):
 
     def get_funds(self) -> Funds:
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         data = self._obj.rmsLimit()
         d    = data.get("data", {}) if data else {}
         # Angel One returns strings — convert carefully
@@ -219,7 +232,7 @@ class AngelOneAPI(BrokerAPI):
 
     def get_holdings(self) -> list[Holding]:
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         data     = self._obj.holding()
         holdings = data.get("data", []) if data else []
         result   = []
@@ -247,7 +260,7 @@ class AngelOneAPI(BrokerAPI):
 
     def get_positions(self) -> list[Position]:
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         data      = self._obj.position()
         positions = data.get("data", []) if data else []
         result    = []
@@ -283,7 +296,7 @@ class AngelOneAPI(BrokerAPI):
         but we convert the symbol format for a clean interface.
         """
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         result = {}
         # Group by exchange
         by_exchange: dict[str, list[str]] = {}
@@ -324,7 +337,7 @@ class AngelOneAPI(BrokerAPI):
         Uses the public NSE options chain endpoint as fallback.
         """
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         # Angel One doesn't have a dedicated chain endpoint in the free tier —
         # delegate to the NSE public endpoint (already implemented in market/options.py)
         try:
@@ -373,7 +386,7 @@ class AngelOneAPI(BrokerAPI):
 
     def place_order(self, order: OrderRequest) -> OrderResponse:
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         params = {
             "variety":         "NORMAL",
             "tradingsymbol":   order.symbol,
@@ -400,7 +413,7 @@ class AngelOneAPI(BrokerAPI):
 
     def get_orders(self) -> list[Order]:
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         data   = self._obj.orderBook()
         orders = data.get("data", []) if data else []
         result = []
@@ -427,7 +440,7 @@ class AngelOneAPI(BrokerAPI):
 
     def cancel_order(self, order_id: str) -> bool:
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
         data = self._obj.cancelOrder(order_id, "NORMAL")
         return bool(data and data.get("status") is not False)
 
@@ -442,7 +455,7 @@ class AngelOneAPI(BrokerAPI):
         to_date:   Optional[datetime] = None,
     ) -> list[dict]:
         if not self._obj:
-            raise RuntimeError("Not authenticated.")
+            raise RuntimeError("Not authenticated. Run the 'login' command first.")
 
         interval_map = {
             "day":      "ONE_DAY",

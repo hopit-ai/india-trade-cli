@@ -128,11 +128,29 @@ class UpstoxAPI(BrokerAPI):
             headers={"Accept": "application/json"},
             timeout=20,
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except Exception:
+            status = resp.status_code
+            if status == 401:
+                raise RuntimeError(
+                    "Upstox login failed: invalid credentials.\n"
+                    "Check your API Key and Secret at upstox.com/developer/apps.\n"
+                    "To re-enter:\n"
+                    "  credentials delete UPSTOX_API_KEY\n"
+                    "  credentials delete UPSTOX_API_SECRET"
+                )
+            elif status == 429:
+                raise RuntimeError("Upstox login failed: rate limited. Wait a minute and try again.")
+            else:
+                raise RuntimeError(f"Upstox login failed (HTTP {status}): {resp.text[:200]}")
         payload = resp.json()
         token   = payload.get("access_token", "")
         if not token:
-            raise RuntimeError(f"Upstox login failed: {payload}")
+            raise RuntimeError(
+                "Upstox login failed: no access token in response.\n"
+                "The auth code may have expired — try logging in again."
+            )
 
         self._access_token = token
         self._token_ts     = time.time()

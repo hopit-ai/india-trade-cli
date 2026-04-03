@@ -585,7 +585,8 @@ def _handle_backtest_command(args: list[str]) -> None:
             handle_output_flags(_bt_summary, f"Backtest {symbol} {strategy_name}",
                                 wants_pdf, wants_explain)
     except Exception as e:
-        console.print(f"[red]Backtest failed: {e}[/red]")
+        console.print(f"[red]Backtest failed:[/red] {e}")
+        console.print("[dim]Check that the symbol exists and you have market data access (broker login or yfinance).[/dim]")
 
 
 def _handle_whatif_command(args: list[str]) -> None:
@@ -936,21 +937,24 @@ def run_repl(broker: BrokerAPI) -> None:
                 try:
                     cmd_holdings(broker)
                 except Exception as e:
-                    console.print(f"[red]Error: {e}[/red]")
+                    console.print(f"[red]Holdings fetch failed:[/red] {e}")
+                    console.print("[dim]Your broker session may have expired. Try: logout → login[/dim]")
 
             elif command == "positions":
                 _warn_if_mock(broker)
                 try:
                     cmd_positions(broker)
                 except Exception as e:
-                    console.print(f"[red]Error: {e}[/red]")
+                    console.print(f"[red]Positions fetch failed:[/red] {e}")
+                    console.print("[dim]Your broker session may have expired. Try: logout → login[/dim]")
 
             elif command == "orders":
                 _warn_if_mock(broker)
                 try:
                     cmd_orders(broker)
                 except Exception as e:
-                    console.print(f"[red]Error: {e}[/red]")
+                    console.print(f"[red]Orders fetch failed:[/red] {e}")
+                    console.print("[dim]Your broker session may have expired. Try: logout → login[/dim]")
 
             # ── Portfolio (unified multi-broker view) ─────────
             elif command == "portfolio":
@@ -959,7 +963,8 @@ def run_repl(broker: BrokerAPI) -> None:
                     from engine.portfolio import get_multi_broker_summary
                     _cmd_portfolio(get_multi_broker_summary())
                 except Exception as e:
-                    console.print(f"[red]Error: {e}[/red]")
+                    console.print(f"[red]Portfolio fetch failed:[/red] {e}")
+                    console.print("[dim]One or more broker sessions may have expired. Try: logout → login[/dim]")
 
             # ── AI-powered commands ───────────────────────────
             elif command == "morning-brief":
@@ -1148,7 +1153,8 @@ def run_repl(broker: BrokerAPI) -> None:
                                 llm_provider=agent._provider if wants_explain else None,
                             )
                     except Exception as e:
-                        console.print(f"[red]Deep analysis failed: {e}[/red]")
+                        console.print(f"[red]Deep analysis failed:[/red] {e}")
+                        console.print("[dim]This usually means the AI provider hit a rate limit or the symbol wasn't found.[/dim]")
                         console.print("[dim]Falling back to standard analysis...[/dim]")
                         agent.run_multi_agent_analysis(symbol)
 
@@ -1161,7 +1167,9 @@ def run_repl(broker: BrokerAPI) -> None:
                         from bot.telegram_bot import run_setup_wizard
                         run_setup_wizard()
                     except Exception as e:
-                        console.print(f"[red]Setup failed: {e}[/red]")
+                        console.print(f"[red]Telegram setup failed:[/red] {e}")
+                        console.print("[dim]Make sure you have a bot token from @BotFather on Telegram.[/dim]")
+                        console.print("[dim]Run: credentials set TELEGRAM_BOT_TOKEN[/dim]")
                     continue
 
                 # ── telegram — start bot in background ───────
@@ -1201,7 +1209,8 @@ def run_repl(broker: BrokerAPI) -> None:
                             "[dim]Alerts and signals will be pushed automatically.[/dim]"
                         )
                 except Exception as e:
-                    console.print(f"[red]Telegram bot failed: {e}[/red]")
+                    console.print(f"[red]Telegram bot failed:[/red] {e}")
+                    console.print("[dim]Run 'telegram setup' for guided configuration, or check your bot token.[/dim]")
 
             # ── Paper execution ──────────────────────────────────
             elif command == "paper-execute":
@@ -1346,7 +1355,8 @@ def run_repl(broker: BrokerAPI) -> None:
                         result = walk_forward_test(sym, strat, total_period=period)
                         result.print_summary()
                     except Exception as e:
-                        console.print(f"[red]Walk-forward failed: {e}[/red]")
+                        console.print(f"[red]Walk-forward failed:[/red] {e}")
+                        console.print("[dim]Ensure the symbol has enough historical data for the requested period.[/dim]")
 
             elif command == "events":
                 from engine.event_strategies import print_event_strategies
@@ -1433,6 +1443,7 @@ def run_repl(broker: BrokerAPI) -> None:
             console.print("\n[dim]Command interrupted.[/dim]")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
+            console.print("[dim]If this keeps happening, try: logout → login, or run with DEBUG=1 for details.[/dim]")
             import os
             if os.environ.get("DEBUG"):
                 import traceback
