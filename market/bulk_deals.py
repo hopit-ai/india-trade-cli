@@ -368,7 +368,7 @@ def print_deals(symbol: Optional[str] = None, days: int = 5) -> None:
     table.add_column("Price", justify="right")
     table.add_column("Entity", width=8)
 
-    for d in all_deals[:20]:
+    for d in all_deals:
         action_color = "green" if d.deal_type == "BUY" else "red"
         entity_color = {"FII": "yellow", "MF": "cyan", "DII": "blue", "PROMOTER": "green"}.get(d.entity_type, "dim")
         table.add_row(
@@ -383,3 +383,4 @@ def print_deals(symbol: Optional[str] = None, days: int = 5) -> None:
         )
 
     console.print(table)
+    console.print(f"[dim]{len(all_deals)} deals shown[/dim]")
