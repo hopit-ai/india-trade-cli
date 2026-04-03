@@ -186,7 +186,8 @@ def get_block_deals() -> list[Deal]:
         data = r.json()
         items = data if isinstance(data, list) else data.get("data", [])
         return [_parse_deal_item(it, "BLOCK") for it in items]
-    except Exception:
+    except Exception as e:
+        console.print(f"[dim]Block deals error: {e}[/dim]")
         return []
 
 
@@ -194,15 +195,21 @@ def get_block_deals() -> list[Deal]:
 
 def _bulk_via_snapshot(session: httpx.Client) -> list[Deal]:
     """Try the snapshot endpoint for today's bulk deals."""
-    r = session.get(
-        "https://www.nseindia.com/api/snapshot-capital-market-largedeal",
-        timeout=10,
-    )
-    if r.status_code != 200:
+    try:
+        r = session.get(
+            "https://www.nseindia.com/api/snapshot-capital-market-largedeal",
+            timeout=10,
+        )
+        console.print(f"[dim]  snapshot: HTTP {r.status_code}[/dim]")
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        items = data.get("BULK_DEALS_DATA", [])
+        console.print(f"[dim]  snapshot: {len(items)} bulk deals[/dim]")
+        return [_parse_deal_item(it, "BULK") for it in items]
+    except Exception as e:
+        console.print(f"[dim]  snapshot error: {e}[/dim]")
         return []
-    data = r.json()
-    items = data.get("BULK_DEALS_DATA", [])
-    return [_parse_deal_item(it, "BULK") for it in items]
 
 
 def _bulk_via_historical(
@@ -219,41 +226,52 @@ def _bulk_via_historical(
     from_str = from_dt.strftime("%d-%m-%Y")
     to_str = to_dt.strftime("%d-%m-%Y")
 
-    # New endpoint (2025+): /api/historicalOR/bulk-block-short-deals
-    params_new = {
-        "optionType": "bulk_deals",
-        "from": from_str,
-        "to": to_str,
-    }
-    r = session.get(
-        "https://www.nseindia.com/api/historicalOR/bulk-block-short-deals",
-        params=params_new,
-        timeout=10,
-    )
-    if r.status_code == 200:
+    try:
+        # New endpoint (2025+): /api/historicalOR/bulk-block-short-deals
+        params_new = {
+            "optionType": "bulk_deals",
+            "from": from_str,
+            "to": to_str,
+        }
+        r = session.get(
+            "https://www.nseindia.com/api/historicalOR/bulk-block-short-deals",
+            params=params_new,
+            timeout=10,
+        )
+        console.print(f"[dim]  historicalOR: HTTP {r.status_code}[/dim]")
+        if r.status_code == 200:
+            data = r.json()
+            items = data if isinstance(data, list) else data.get("data", [])
+            console.print(f"[dim]  historicalOR: {len(items)} deals[/dim]")
+            if items:
+                deals = [_parse_deal_item(it, "BULK") for it in items]
+                if symbol:
+                    deals = [d for d in deals if d.symbol.upper() == symbol.upper()]
+                return deals
+    except Exception as e:
+        console.print(f"[dim]  historicalOR error: {e}[/dim]")
+
+    try:
+        # Legacy endpoint fallback: /api/historical/bulk-deals
+        params_old = {"from": from_str, "to": to_str}
+        if symbol:
+            params_old["symbol"] = symbol.upper()
+
+        r = session.get(
+            "https://www.nseindia.com/api/historical/bulk-deals",
+            params=params_old,
+            timeout=10,
+        )
+        console.print(f"[dim]  legacy historical: HTTP {r.status_code}[/dim]")
+        if r.status_code != 200:
+            return []
         data = r.json()
         items = data if isinstance(data, list) else data.get("data", [])
-        if items:
-            deals = [_parse_deal_item(it, "BULK") for it in items]
-            if symbol:
-                deals = [d for d in deals if d.symbol.upper() == symbol.upper()]
-            return deals
-
-    # Legacy endpoint fallback: /api/historical/bulk-deals
-    params_old = {"from": from_str, "to": to_str}
-    if symbol:
-        params_old["symbol"] = symbol.upper()
-
-    r = session.get(
-        "https://www.nseindia.com/api/historical/bulk-deals",
-        params=params_old,
-        timeout=10,
-    )
-    if r.status_code != 200:
+        console.print(f"[dim]  legacy historical: {len(items)} deals[/dim]")
+        return [_parse_deal_item(it, "BULK") for it in items]
+    except Exception as e:
+        console.print(f"[dim]  legacy historical error: {e}[/dim]")
         return []
-    data = r.json()
-    items = data if isinstance(data, list) else data.get("data", [])
-    return [_parse_deal_item(it, "BULK") for it in items]
 
 
 def _bulk_via_csv() -> list[Deal]:
@@ -295,8 +313,9 @@ def get_bulk_deals(days: int = 5, symbol: Optional[str] = None) -> list[Deal]:
     """
     try:
         session = _nse_session()
-    except Exception:
+    except Exception as e:
         # If even the session warmup fails, jump to CSV
+        console.print(f"[dim]  session warmup failed: {e}[/dim]")
         deals = _bulk_via_csv()
         if symbol:
             deals = [d for d in deals if d.symbol.upper() == symbol.upper()]
