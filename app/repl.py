@@ -1413,8 +1413,14 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "trade":
                 sym  = args[0].upper() if args else None
                 view = args[1].upper() if len(args) > 1 else None
-                from app.commands.trade import run as trade_run
-                trade_run(symbol=sym, view=view)
+                try:
+                    from app.commands.trade import run as trade_run
+                    trade_run(symbol=sym, view=view)
+                except KeyboardInterrupt:
+                    console.print("\n[dim]Trade cancelled.[/dim]")
+                except Exception as e:
+                    console.print(f"[red]Trade builder error:[/red] {e}")
+                    console.print("[dim]Make sure you're logged in to a broker. Try: logout → login[/dim]")
 
             elif command == "paper":
                 _cmd_toggle_paper()
