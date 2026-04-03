@@ -42,8 +42,13 @@ def run(symbol: str | None = None, view: str | None = None) -> None:
         view:   Pre-filled view (from `trade RELIANCE BULLISH`)
     """
     console.print()
+
+    mode = os.environ.get("TRADING_MODE", "PAPER")
+    mode_badge = "[green]PAPER[/green]" if mode == "PAPER" else "[bold red]LIVE[/bold red]"
     console.print(Panel(
-        "[bold cyan]📈  Trade Builder[/bold cyan]",
+        "[bold cyan]📈  Trade Builder[/bold cyan]\n"
+        f"[dim]Mode: {mode_badge}  •  Pick a symbol → choose a strategy → confirm order[/dim]\n"
+        "[dim]Type Ctrl+C or enter 0 at any step to cancel.[/dim]",
         box=box.SIMPLE_HEAVY,
         style="cyan",
     ))
