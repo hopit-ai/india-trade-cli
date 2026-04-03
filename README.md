@@ -124,20 +124,36 @@ Uses yfinance for real NSE/BSE data (~15 min delayed). Technical, fundamental, s
 
 ---
 
-## AI Provider Setup
+## Supported AI Providers
 
-You need one AI provider for the analysis brain. The platform guides you through setup on first run, or you can configure manually:
+You need one AI provider for the analysis brain. The platform guides you through setup on first run (`credentials setup`), or configure manually via `.env`.
 
 | Provider | Cost | Setup |
 |----------|------|-------|
 | **Gemini** | Free tier available | Get key at [aistudio.google.com](https://aistudio.google.com) |
 | **Claude (subscription)** | Free with Pro/Max plan | Install CLI: `npm i -g @anthropic-ai/claude-code` then `claude login` |
-| Claude API | Pay per token | Key from [console.anthropic.com](https://console.anthropic.com) |
-| OpenAI GPT-4o | Pay per token | Key from [platform.openai.com](https://platform.openai.com) |
+| **Claude API** | Pay per token | Key from [console.anthropic.com](https://console.anthropic.com) |
+| **OpenAI API** | Pay per token | Key from [platform.openai.com](https://platform.openai.com) |
+| **Any OpenAI-compatible** | Varies | OpenRouter, PaleDotBlue, Groq, Together, Fireworks, LM Studio, vLLM |
+| **Ollama (local)** | Free | Run models locally: `ollama pull llama3.1` |
 
 **Switch anytime:** `provider gemini` or `provider claude_subscription`
 
-### Manual config (optional)
+### Custom OpenAI-compatible endpoint
+
+For providers like OpenRouter, PaleDotBlue, Groq, etc.:
+
+```bash
+# In .env
+AI_PROVIDER=openai
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_API_KEY=sk-or-v1-...
+OPENAI_MODEL=anthropic/claude-sonnet-4    # model name depends on your provider
+```
+
+Or interactively: `credentials setup` -> AI Provider -> **Custom (OpenAI-compatible)**
+
+### Manual config
 
 Copy the example env file and fill in your keys:
 
@@ -157,9 +173,20 @@ API keys and secrets are stored in your OS keychain (macOS Keychain / Linux Secr
 
 ---
 
-## Broker Setup (Optional)
+## Supported Brokers
 
-### Fyers (Recommended - free, real-time data)
+| Broker | Status | Notes |
+|--------|--------|-------|
+| **Fyers** | **Fully supported** | Free API, real-time WebSocket, options chain |
+| **Mock/Demo** | **Fully supported** | Synthetic data, no login needed |
+| Zerodha | WIP | Requires Kite Connect subscription ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) |
+| Angel One | WIP | Free SmartAPI, TOTP login ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) |
+| Upstox | WIP | Free API, OAuth ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) |
+| Groww | WIP | No historical data API ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) |
+
+> **Broker integrations beyond Fyers are work-in-progress.** See [#80](https://github.com/hopit-ai/india-trade-cli/issues/80) for status. Contributions welcome!
+
+### Fyers Setup (Recommended -- free, real-time data)
 
 1. Create account at [fyers.in](https://fyers.in)
 2. Create API app at [myapi.fyers.in](https://myapi.fyers.in)
@@ -175,16 +202,17 @@ API keys and secrets are stored in your OS keychain (macOS Keychain / Linux Secr
 
 **WebSocket**: Auto-connects on login for real-time quotes.
 
-### Other Brokers
+### NewsAPI (Optional but recommended)
 
-| Broker | Status | Notes |
-|--------|--------|-------|
-| **Fyers** | **Fully supported** | Free API, WebSocket, options chain |
-| Zerodha | Basic | Requires Kite Connect subscription |
-| Angel One | Basic | Free SmartAPI, TOTP login |
-| Upstox | Basic | Free API, OAuth |
-| Groww | Basic | No historical data API |
-| Mock/Demo | Full | Synthetic data, no login needed |
+A free [NewsAPI](https://newsapi.org) key significantly improves the `morning-brief` and news-driven analysis. The free tier gives 100 requests/day -- more than enough for personal use.
+
+```bash
+# In .env
+NEWSAPI_KEY=your_key_here
+NEWSAPI_ENABLED=1
+```
+
+Or: `credentials set NEWSAPI_KEY` in the REPL.
 
 ---
 
