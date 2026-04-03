@@ -190,6 +190,17 @@ class FyersAPI(BrokerAPI):
         response = session.generate_token()
         token = response.get("access_token", "")
         if not token:
+            error_msg = response.get("message", "Unknown error")
+            if "invalid app id" in error_msg.lower() or "app id hash" in error_msg.lower():
+                raise RuntimeError(
+                    f"Fyers login failed: {error_msg}\n"
+                    "Your App ID and Secret Key don't match. To fix:\n"
+                    "  trade\n"
+                    "  > credentials delete FYERS_APP_ID\n"
+                    "  > credentials delete FYERS_SECRET_KEY\n"
+                    "  > login\n"
+                    "Then re-enter the correct values from myapi.fyers.in"
+                )
             raise RuntimeError(f"Fyers login failed: {response}")
 
         self._access_token = token

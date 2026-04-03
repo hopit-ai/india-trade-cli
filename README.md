@@ -39,15 +39,13 @@ analyze RELIANCE
 
 ---
 
-## Quick Start
+## Quick Start — Zero to First Analysis in 5 Minutes
 
 ### Prerequisites
 
-- **Python 3.11 or 3.12** (3.13 not yet supported due to numba/py_vollib compatibility)
-- **One AI provider** (Gemini free tier works great, or Claude/OpenAI)
-- **No broker account needed** for analysis (yfinance provides free NSE/BSE data)
+- **Python 3.11+** (3.11 and 3.12 are tested in CI; 3.13+ should work but py_vollib/numba may not be available)
 
-### 1. Clone & install
+### Step 1: Install
 
 ```bash
 git clone https://github.com/ArchieIndian/india-trade-cli.git
@@ -57,26 +55,70 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
-### 2. Run
+### Step 2: Set up an AI provider
+
+Pick **one** of these options:
+
+**Option A — Gemini (free)**
+1. Go to [aistudio.google.com](https://aistudio.google.com) and sign in with Google
+2. Click **Get API Key** → **Create API key**
+3. Copy the key (starts with `AIza...`)
+
+**Option B — Claude (if you have a Pro/Max subscription)**
+1. Install the Claude CLI: `npm install -g @anthropic-ai/claude-code`
+2. Run `claude login` and authenticate in your browser
+3. That's it — no API key needed, the platform calls the CLI directly
+
+### Step 3: Get free market data (Fyers)
+
+1. Create a free account at [fyers.in](https://fyers.in)
+2. Go to [myapi.fyers.in](https://myapi.fyers.in) → **Create App**
+   - Redirect URL: `http://127.0.0.1:8765/fyers/callback` (must be exact)
+3. Note the **App ID** and **Secret Key**
+4. When you run `trade` and choose Fyers, enter these credentials. A browser window opens for Fyers login. After login, the browser redirects to a URL like:
+   ```
+   http://127.0.0.1:8765/fyers/callback?auth_code=eyJ0...&state=...
+   ```
+   Copy the `auth_code` value (everything between `auth_code=` and `&`) and paste it into the terminal when prompted.
+
+### Step 4: Get news headlines (optional)
+
+1. Sign up at [newsapi.org](https://newsapi.org) (free for development)
+2. Copy your API key
+
+### Step 5: Run it
 
 ```bash
 trade
-# or: python -m app.main
 ```
 
-First run prompts you to:
-1. Choose a broker (pick **Demo** for mock data — no credentials needed)
-2. Choose an AI provider (Gemini is free and works well)
+First run walks you through:
+1. **Broker** → Choose **Fyers** → enter App ID + Secret Key (from Step 3 above)
+2. **AI Provider** → Choose **Gemini** (paste API key) or **Claude subscription** (no key needed)
+3. **NewsAPI** → paste your key (or press Enter to skip)
 
-That's it. You're in the REPL. Type `analyze RELIANCE` to see it work.
+You're in the REPL. Try it:
 
-### 3. No-broker mode (recommended for first try)
+```
+> analyze RELIANCE
+```
+
+This runs 7 analyst agents, a bull-vs-bear debate, and produces a fund-manager synthesis with trade plans across 3 risk profiles.
+
+```
+> deep-analyze INFY        # full LLM mode (11 AI calls)
+> morning-brief            # daily market overview
+> deals                    # today's bulk/block deals
+> quote TCS                # live quote
+```
+
+### No-broker mode (quick start without Fyers)
 
 ```bash
 trade --no-broker
 ```
 
-Uses yfinance for real NSE/BSE data (~15 min delayed). All analysis, backtesting, and AI features work — no broker account needed. Connect a broker later via the `login` command in the REPL.
+Uses yfinance for real NSE/BSE data (~15 min delayed). Technical, fundamental, sentiment, and sector analysis all work. Options chain data requires a broker connection (Fyers recommended). Connect a broker later via the `login` command in the REPL.
 
 > **Note:** `--no-broker` is a CLI flag, not an interactive menu option. The broker selection menu offers Demo, Zerodha, Groww, Angel One, Upstox, and Fyers.
 
@@ -406,34 +448,27 @@ india-trade-cli/
 
 ## Contributing
 
-Contributions welcome! Here's how to get started:
+Contributions welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide (dev setup, running tests, code style).
 
-### Setup for development
+**Quick version:**
 
-```bash
-git clone https://github.com/ArchieIndian/india-trade-cli.git
-cd india-trade-cli
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
+1. Fork & clone → `pip install -e .` → `python -m venv .venv`
+2. Run tests: `pytest` (no API keys needed — network tests are excluded by default)
+3. Test the app: `trade --no-broker` (uses yfinance, no broker account needed)
+4. Submit a PR against `main`
+
+**Requires Python 3.11+.**
 
 ### Areas where help is needed
 
-Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for current priorities. Some good first issues:
+Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for current priorities. Good areas to contribute:
 
-- **Options backtesting** (#31) - strategy-specific backtest engine for options
-- **Options scanner** (#33) - scan for high IV, unusual OI
-- **PDF auto-save** (#53) - timestamped PDFs on generation
-- **Test suite** (#28) - end-to-end tests
-
-### Submitting changes
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Make your changes
-4. Test with `trade --no-broker` (no API keys needed for basic testing)
-5. Submit a PR
+- **Trade execution & broker integrations** ([#80](https://github.com/ArchieIndian/india-trade-cli/issues/80)) — bridge TraderAgent plans to real orders, deepen Zerodha/Angel One/Upstox support, add new brokers (Dhan, ICICI Direct, 5paisa)
+- **Integration tests** ([#79](https://github.com/ArchieIndian/india-trade-cli/issues/79)) — live broker/market-data test suite
+- **Options backtesting** — strategy-specific backtest engine
+- **Options scanner** — scan for high IV, unusual OI
+- **Web dashboard** — FastAPI backend exists, frontend needed
+- Bug fixes and documentation improvements are always welcome
 
 ---
 
@@ -491,11 +526,13 @@ See [all open issues](https://github.com/ArchieIndian/india-trade-cli/issues) fo
 |---------|----------|
 | `ModuleNotFoundError: kiteconnect` | Broker SDKs are optional. Install only the one you use: `pip install kiteconnect` for Zerodha, or use Demo mode (`login 0`). |
 | `ModuleNotFoundError: feedparser` | Install with `pip install feedparser`. RSS news feeds are optional — the CLI works without them. |
-| `py_vollib` errors on Python 3.13 | py_vollib uses numba which doesn't support 3.13 yet. Use Python 3.11 or 3.12. Options Greeks will use fallback calculations. |
+| `py_vollib` errors on Python 3.13+ | py_vollib uses numba which may not support newer Python versions yet. The platform gracefully falls back to built-in Black-Scholes calculations. |
 | NSE API returns empty data | NSE rate-limits automated requests. Wait a few minutes and retry. The CLI uses browser-like headers to reduce blocks. |
+| Fyers `invalid app id hash` | Your App ID and Secret Key don't match. To clear and re-enter: `credentials delete FYERS_APP_ID` then `credentials delete FYERS_SECRET_KEY` then `login`. Verify values at [myapi.fyers.in](https://myapi.fyers.in) (App ID format: `XXXX-100`). |
 | `No active broker session` | Run `login` or `login 0` (demo mode) before using broker-dependent commands like `portfolio` or `orders`. |
 | AI commands return errors | Run `credentials setup` to configure your AI provider (Anthropic, OpenAI, or Gemini). Free tier available with Google AI Studio. |
 | `keyring` errors on Linux | Install the SecretService backend: `sudo apt install gnome-keyring` or set credentials via environment variables in `.env`. |
+| Reset to fresh setup | Run `credentials clear` in the REPL to wipe all saved credentials from the keychain, then `credentials setup` to re-enter them. If login crashes on startup, the REPL will still open with a mock broker so you can fix credentials. |
 | Tests failing locally | Run `pip install pytest pytest-mock && pytest tests/ -v`. Some tests require optional dependencies — check the error for which package to install. |
 
 ---

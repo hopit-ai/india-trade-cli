@@ -11,11 +11,13 @@ Thanks for your interest in contributing! This document explains how to get star
 
 ## Development Setup
 
+**Requires Python 3.11+.** CI tests against 3.11 and 3.12. Python 3.13+ should work but py_vollib (optional) may not be available.
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
-pip install pytest ruff
+pip install pytest pytest-mock ruff
 ```
 
 Test without a broker account:
@@ -27,7 +29,14 @@ trade --no-broker
 ## Running Tests
 
 ```bash
-pytest tests/ -v
+pytest
+```
+
+By default, tests that require network access (yfinance, NSE API) are **excluded**. To run the full suite including network tests:
+
+```bash
+pytest -m ""           # all tests (needs network)
+pytest -m network      # only network tests
 ```
 
 ## Code Style
