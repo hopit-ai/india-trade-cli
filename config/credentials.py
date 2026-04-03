@@ -27,8 +27,8 @@ import os
 from typing import Optional
 
 from rich.console import Console
-from rich.prompt  import Prompt, Confirm
-from rich.table   import Table
+from rich.prompt import Prompt, Confirm
+from rich.table import Table
 
 console = Console()
 
@@ -40,36 +40,36 @@ SERVICE = "india-trade-cli"
 
 KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     # ── Zerodha ──────────────────────────────────────────────
-    ("KITE_API_KEY",        "Zerodha API Key",                     False),
-    ("KITE_API_SECRET",     "Zerodha API Secret",                  True),
+    ("KITE_API_KEY", "Zerodha API Key", False),
+    ("KITE_API_SECRET", "Zerodha API Secret", True),
     # ── Groww ────────────────────────────────────────────────
-    ("GROWW_CLIENT_ID",     "Groww Client ID",                     False),
-    ("GROWW_CLIENT_SECRET", "Groww Client Secret",                 True),
+    ("GROWW_CLIENT_ID", "Groww Client ID", False),
+    ("GROWW_CLIENT_SECRET", "Groww Client Secret", True),
     # ── Angel One ────────────────────────────────────────────
-    ("ANGEL_API_KEY",       "Angel One API Key",                   False),
-    ("ANGEL_CLIENT_CODE",   "Angel One Client Code (Login ID)",    False),
-    ("ANGEL_PASSWORD",      "Angel One Trading Password",          True),
-    ("ANGEL_TOTP_SECRET",   "Angel One TOTP Secret",               True),
+    ("ANGEL_API_KEY", "Angel One API Key", False),
+    ("ANGEL_CLIENT_CODE", "Angel One Client Code (Login ID)", False),
+    ("ANGEL_PASSWORD", "Angel One Trading Password", True),
+    ("ANGEL_TOTP_SECRET", "Angel One TOTP Secret", True),
     # ── Upstox ───────────────────────────────────────────────
-    ("UPSTOX_API_KEY",      "Upstox API Key",                      False),
-    ("UPSTOX_API_SECRET",   "Upstox API Secret",                   True),
+    ("UPSTOX_API_KEY", "Upstox API Key", False),
+    ("UPSTOX_API_SECRET", "Upstox API Secret", True),
     # ── Fyers ────────────────────────────────────────────────
-    ("FYERS_APP_ID",        "Fyers App ID",                        False),
-    ("FYERS_SECRET_KEY",    "Fyers Secret Key",                    True),
+    ("FYERS_APP_ID", "Fyers App ID", False),
+    ("FYERS_SECRET_KEY", "Fyers Secret Key", True),
     # ── AI Provider selection ─────────────────────────────────
-    ("AI_PROVIDER",         "AI Provider (anthropic / claude_subscription / openai / gemini / …)", False),
+    ("AI_PROVIDER", "AI Provider (anthropic / claude_subscription / openai / gemini / …)", False),
     # ── AI API Keys ──────────────────────────────────────────
-    ("ANTHROPIC_API_KEY",   "Anthropic API Key",                   True),
-    ("OPENAI_API_KEY",      "OpenAI API Key",                      True),
-    ("OPENAI_BASE_URL",     "OpenAI-compatible Base URL (OpenRouter, PaleDotBlue, etc.)", False),
-    ("OPENAI_MODEL",        "Model name for OpenAI-compatible provider",               False),
-    ("GEMINI_API_KEY",      "Google Gemini API Key",               True),
-    ("OPENAI_SESSION_TOKEN","OpenAI Session Token (ChatGPT Plus)", True),
-    ("GOOGLE_CLOUD_PROJECT","Google Cloud Project ID",             False),
+    ("ANTHROPIC_API_KEY", "Anthropic API Key", True),
+    ("OPENAI_API_KEY", "OpenAI API Key", True),
+    ("OPENAI_BASE_URL", "OpenAI-compatible Base URL (OpenRouter, PaleDotBlue, etc.)", False),
+    ("OPENAI_MODEL", "Model name for OpenAI-compatible provider", False),
+    ("GEMINI_API_KEY", "Google Gemini API Key", True),
+    ("OPENAI_SESSION_TOKEN", "OpenAI Session Token (ChatGPT Plus)", True),
+    ("GOOGLE_CLOUD_PROJECT", "Google Cloud Project ID", False),
     # ── Data / News ───────────────────────────────────────────
-    ("NEWSAPI_KEY",         "NewsAPI.org Key",                     True),
+    ("NEWSAPI_KEY", "NewsAPI.org Key", True),
     # ── Notifications ─────────────────────────────────────────
-    ("TELEGRAM_BOT_TOKEN",  "Telegram Bot Token",                  True),
+    ("TELEGRAM_BOT_TOKEN", "Telegram Bot Token", True),
 ]
 
 _KNOWN_KEYS = {k for k, _, _ in KNOWN_CREDENTIALS}
@@ -77,9 +77,11 @@ _KNOWN_KEYS = {k for k, _, _ in KNOWN_CREDENTIALS}
 
 # ── Keyring helper (graceful fallback if keyring unavailable) ─
 
+
 def _kr_get(key: str) -> Optional[str]:
     try:
         import keyring
+
         return keyring.get_password(SERVICE, key) or None
     except Exception:
         return None
@@ -88,6 +90,7 @@ def _kr_get(key: str) -> Optional[str]:
 def _kr_set(key: str, value: str) -> bool:
     try:
         import keyring
+
         keyring.set_password(SERVICE, key, value)
         return True
     except Exception:
@@ -97,6 +100,7 @@ def _kr_set(key: str, value: str) -> bool:
 def _kr_delete(key: str) -> bool:
     try:
         import keyring
+
         keyring.delete_password(SERVICE, key)
         return True
     except Exception:
@@ -104,6 +108,7 @@ def _kr_delete(key: str) -> bool:
 
 
 # ── Public API ────────────────────────────────────────────────
+
 
 def load_all() -> None:
     """
@@ -116,16 +121,14 @@ def load_all() -> None:
     loaded = 0
     for key, _, _ in KNOWN_CREDENTIALS:
         if os.environ.get(key):
-            continue            # .env / shell already set this — leave it
+            continue  # .env / shell already set this — leave it
         value = _kr_get(key)
         if value:
             os.environ[key] = value
             loaded += 1
 
     if loaded:
-        console.print(
-            f"[dim]🔑 Loaded {loaded} credential(s) from OS keychain.[/dim]"
-        )
+        console.print(f"[dim]🔑 Loaded {loaded} credential(s) from OS keychain.[/dim]")
 
 
 def get_credential(
@@ -153,7 +156,7 @@ def get_credential(
     # 1. Keychain
     value = _kr_get(key)
     if value:
-        os.environ[key] = value   # inject so rest of code sees it via os.environ
+        os.environ[key] = value  # inject so rest of code sees it via os.environ
         return value
 
     # 2. Environment variable / .env (already loaded by dotenv)
@@ -189,7 +192,7 @@ def get_credential(
         return ""
 
     # Offer to save to keychain
-    if _kr_set.__module__:   # keyring available
+    if _kr_set.__module__:  # keyring available
         try:
             save = Confirm.ask("  Save to OS keychain for future sessions?", default=True)
             if save:
@@ -197,7 +200,9 @@ def get_credential(
                     os.environ[key] = value
                     console.print("  [green]✓ Saved to keychain[/green]\n")
                 else:
-                    console.print("  [yellow]Could not save to keychain — keyring unavailable.[/yellow]\n")
+                    console.print(
+                        "  [yellow]Could not save to keychain — keyring unavailable.[/yellow]\n"
+                    )
         except Exception:
             pass
 
@@ -209,7 +214,9 @@ def set_credential(key: str, value: str) -> None:
     """Save a credential to both the keychain and os.environ."""
     os.environ[key] = value
     if not _kr_set(key, value):
-        console.print("[yellow]keyring unavailable — credential set only for this session.[/yellow]")
+        console.print(
+            "[yellow]keyring unavailable — credential set only for this session.[/yellow]"
+        )
 
 
 def delete_credential(key: str) -> None:
@@ -227,20 +234,20 @@ def list_credentials() -> None:
         show_header=True,
         header_style="bold cyan",
     )
-    t.add_column("Key",            style="bold")
-    t.add_column("Label",          style="dim")
-    t.add_column("Keychain",       justify="center")
-    t.add_column("Env / .env",     justify="center")
-    t.add_column("Status",         justify="center")
+    t.add_column("Key", style="bold")
+    t.add_column("Label", style="dim")
+    t.add_column("Keychain", justify="center")
+    t.add_column("Env / .env", justify="center")
+    t.add_column("Status", justify="center")
 
     for key, label, is_secret in KNOWN_CREDENTIALS:
         in_keychain = bool(_kr_get(key))
-        in_env      = bool(os.environ.get(key, "").strip())
-        available   = in_keychain or in_env
+        in_env = bool(os.environ.get(key, "").strip())
+        available = in_keychain or in_env
 
-        kc_icon  = "[green]●[/green]" if in_keychain else "[dim]○[/dim]"
-        env_icon = "[green]●[/green]" if in_env      else "[dim]○[/dim]"
-        status   = "[green]✓  Set[/green]" if available else "[red]✗  Missing[/red]"
+        kc_icon = "[green]●[/green]" if in_keychain else "[dim]○[/dim]"
+        env_icon = "[green]●[/green]" if in_env else "[dim]○[/dim]"
+        status = "[green]✓  Set[/green]" if available else "[red]✗  Missing[/red]"
 
         t.add_row(key, label, kc_icon, env_icon, status)
 
@@ -260,9 +267,7 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
         keys: List of credential keys to configure. If None, runs all.
     """
     targets = (
-        [(k, l, s) for k, l, s in KNOWN_CREDENTIALS if k in keys]
-        if keys
-        else KNOWN_CREDENTIALS
+        [(k, l, s) for k, l, s in KNOWN_CREDENTIALS if k in keys] if keys else KNOWN_CREDENTIALS
     )
 
     console.print("\n[bold cyan]Credential Setup Wizard[/bold cyan]")
@@ -272,41 +277,32 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
     )
 
     # Group by section
-    _ZERODHA_KEYS   = {"KITE_API_KEY", "KITE_API_SECRET"}
-    _GROWW_KEYS     = {"GROWW_CLIENT_ID", "GROWW_CLIENT_SECRET"}
-    _ANGEL_KEYS     = {"ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PASSWORD", "ANGEL_TOTP_SECRET"}
-    _UPSTOX_KEYS    = {"UPSTOX_API_KEY", "UPSTOX_API_SECRET"}
-    _FYERS_KEYS     = {"FYERS_APP_ID", "FYERS_SECRET_KEY"}
-    _AI_KEYS        = {"AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENAI_BASE_URL",
-                       "OPENAI_MODEL", "GEMINI_API_KEY", "OPENAI_SESSION_TOKEN",
-                       "GOOGLE_CLOUD_PROJECT"}
-    _TELEGRAM_KEYS  = {"TELEGRAM_BOT_TOKEN"}
+    _ZERODHA_KEYS = {"KITE_API_KEY", "KITE_API_SECRET"}
+    _GROWW_KEYS = {"GROWW_CLIENT_ID", "GROWW_CLIENT_SECRET"}
+    _ANGEL_KEYS = {"ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PASSWORD", "ANGEL_TOTP_SECRET"}
+    _UPSTOX_KEYS = {"UPSTOX_API_KEY", "UPSTOX_API_SECRET"}
+    _FYERS_KEYS = {"FYERS_APP_ID", "FYERS_SECRET_KEY"}
+    _AI_KEYS = {
+        "AI_PROVIDER",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENAI_MODEL",
+        "GEMINI_API_KEY",
+        "OPENAI_SESSION_TOKEN",
+        "GOOGLE_CLOUD_PROJECT",
+    }
+    _TELEGRAM_KEYS = {"TELEGRAM_BOT_TOKEN"}
 
     sections: dict[str, list] = {
-        "Zerodha (Kite Connect)": [
-            (k, l, s) for k, l, s in targets if k in _ZERODHA_KEYS
-        ],
-        "Groww": [
-            (k, l, s) for k, l, s in targets if k in _GROWW_KEYS
-        ],
-        "Angel One (SmartAPI — free)": [
-            (k, l, s) for k, l, s in targets if k in _ANGEL_KEYS
-        ],
-        "Upstox": [
-            (k, l, s) for k, l, s in targets if k in _UPSTOX_KEYS
-        ],
-        "Fyers": [
-            (k, l, s) for k, l, s in targets if k in _FYERS_KEYS
-        ],
-        "AI Provider": [
-            (k, l, s) for k, l, s in targets if k in _AI_KEYS
-        ],
-        "Market Data": [
-            (k, l, s) for k, l, s in targets if "NEWSAPI" in k
-        ],
-        "Notifications (Telegram)": [
-            (k, l, s) for k, l, s in targets if k in _TELEGRAM_KEYS
-        ],
+        "Zerodha (Kite Connect)": [(k, l, s) for k, l, s in targets if k in _ZERODHA_KEYS],
+        "Groww": [(k, l, s) for k, l, s in targets if k in _GROWW_KEYS],
+        "Angel One (SmartAPI — free)": [(k, l, s) for k, l, s in targets if k in _ANGEL_KEYS],
+        "Upstox": [(k, l, s) for k, l, s in targets if k in _UPSTOX_KEYS],
+        "Fyers": [(k, l, s) for k, l, s in targets if k in _FYERS_KEYS],
+        "AI Provider": [(k, l, s) for k, l, s in targets if k in _AI_KEYS],
+        "Market Data": [(k, l, s) for k, l, s in targets if "NEWSAPI" in k],
+        "Notifications (Telegram)": [(k, l, s) for k, l, s in targets if k in _TELEGRAM_KEYS],
     }
 
     saved = 0
@@ -332,7 +328,7 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
 
         for key, label, is_secret in items:
             current = _kr_get(key) or os.environ.get(key, "")
-            hint    = " [dim](already set — press Enter to keep)[/dim]" if current else ""
+            hint = " [dim](already set — press Enter to keep)[/dim]" if current else ""
             console.print(f"  {label}{hint}")
 
             if is_secret:
@@ -353,8 +349,7 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
         console.print()
 
     console.print(
-        f"[bold green]✓  Setup complete.[/bold green]  "
-        f"{saved} credential(s) saved to keychain.\n"
+        f"[bold green]✓  Setup complete.[/bold green]  {saved} credential(s) saved to keychain.\n"
     )
 
 
@@ -375,7 +370,9 @@ def _wizard_ai_provider(items: list[tuple[str, str, bool]]) -> None:
         "  [cyan][8][/cyan] [bold]Ollama (local)[/bold]  [dim](free, runs on your machine)[/dim]\n"
         "  [cyan][9][/cyan] Skip / keep existing\n"
     )
-    choice = Prompt.ask("  Choice", choices=["1", "2", "3", "4", "5", "6", "7", "8", "9"], default="9")
+    choice = Prompt.ask(
+        "  Choice", choices=["1", "2", "3", "4", "5", "6", "7", "8", "9"], default="9"
+    )
 
     if choice == "1":
         _save_cred("AI_PROVIDER", "anthropic")
@@ -429,7 +426,9 @@ def _wizard_ai_provider(items: list[tuple[str, str, bool]]) -> None:
             "    Groq:         [cyan]https://api.groq.com/openai/v1[/cyan]\n"
             "    Together:     [cyan]https://api.together.xyz/v1[/cyan]\n"
         )
-        _prompt_and_save("OPENAI_BASE_URL", "Base URL (e.g. https://openrouter.ai/api/v1)", secret=False)
+        _prompt_and_save(
+            "OPENAI_BASE_URL", "Base URL (e.g. https://openrouter.ai/api/v1)", secret=False
+        )
         _prompt_and_save("OPENAI_API_KEY", "API Key for this provider", secret=True)
         console.print(
             "\n  [dim]Model name depends on your provider. Examples:[/dim]\n"
@@ -476,7 +475,7 @@ def _wizard_telegram(items: list[tuple[str, str, bool]]) -> None:
     )
 
     current = _kr_get("TELEGRAM_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    hint    = " [dim](already set — press Enter to keep)[/dim]" if current else ""
+    hint = " [dim](already set — press Enter to keep)[/dim]" if current else ""
     console.print(f"  Telegram Bot Token{hint}")
     value = Prompt.ask("  Token", password=True, default="").strip()
 
@@ -489,7 +488,9 @@ def _wizard_telegram(items: list[tuple[str, str, bool]]) -> None:
 
     # Basic format check: Telegram tokens look like  123456789:ABCdef...
     if ":" not in value or len(value) < 20:
-        console.print("  [yellow]⚠  Token format looks unexpected. Expected: 123456789:ABCdef...[/yellow]")
+        console.print(
+            "  [yellow]⚠  Token format looks unexpected. Expected: 123456789:ABCdef...[/yellow]"
+        )
         if not Confirm.ask("  Save anyway?", default=False):
             return
 
@@ -509,7 +510,7 @@ def _wizard_telegram(items: list[tuple[str, str, bool]]) -> None:
 def _prompt_and_save(key: str, label: str, *, secret: bool) -> None:
     """Prompt for a single credential and save it."""
     current = _kr_get(key) or os.environ.get(key, "")
-    hint    = " [dim](already set — press Enter to keep)[/dim]" if current else ""
+    hint = " [dim](already set — press Enter to keep)[/dim]" if current else ""
     console.print(f"  {label}{hint}")
     if secret:
         value = Prompt.ask("  Value", password=True, default="")
@@ -550,24 +551,30 @@ def cmd_credentials(args: list[str]) -> None:
         if len(args) < 2:
             console.print("[red]Usage: credentials set <KEY>[/red]")
             return
-        key  = args[1].upper()
+        key = args[1].upper()
         _, _, is_secret = next(
             ((k, l, s) for k, l, s in KNOWN_CREDENTIALS if k == key),
             (key, key, True),
         )
-        label = next(
-            (l for k, l, _ in KNOWN_CREDENTIALS if k == key), key
-        )
+        label = next((l for k, l, _ in KNOWN_CREDENTIALS if k == key), key)
         console.print(f"\n[bold]Set credential:[/bold] {label}")
         value = Prompt.ask("  New value", password=is_secret)
         if value.strip():
             set_credential(key, value.strip())
             console.print(f"[green]✓ {key} updated.[/green]")
             # Hint: AI-related changes need a provider reload to take effect
-            _AI_CREDS = {"AI_PROVIDER", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL",
-                         "ANTHROPIC_API_KEY", "GEMINI_API_KEY"}
+            _AI_CREDS = {
+                "AI_PROVIDER",
+                "OPENAI_API_KEY",
+                "OPENAI_BASE_URL",
+                "OPENAI_MODEL",
+                "ANTHROPIC_API_KEY",
+                "GEMINI_API_KEY",
+            }
             if key in _AI_CREDS:
-                console.print("[dim]Run 'provider openai' (or your provider name) to apply the change.[/dim]")
+                console.print(
+                    "[dim]Run 'provider openai' (or your provider name) to apply the change.[/dim]"
+                )
             console.print()
 
     elif sub == "delete":
@@ -577,9 +584,7 @@ def cmd_credentials(args: list[str]) -> None:
         delete_credential(args[1].upper())
 
     elif sub == "clear":
-        confirmed = Confirm.ask(
-            "[red]Remove ALL credentials from keychain?[/red]", default=False
-        )
+        confirmed = Confirm.ask("[red]Remove ALL credentials from keychain?[/red]", default=False)
         if confirmed:
             for key, _, _ in KNOWN_CREDENTIALS:
                 _kr_delete(key)

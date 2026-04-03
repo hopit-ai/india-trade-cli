@@ -29,32 +29,35 @@ console = Console()
 @dataclass
 class DriftReport:
     """Model drift analysis results."""
-    total_trades:       int = 0
+
+    total_trades: int = 0
     trades_with_outcome: int = 0
 
     # Win rate trend
-    recent_win_rate:    float = 0.0      # last 10 trades
-    older_win_rate:     float = 0.0      # trades before last 10
-    win_rate_trend:     str = "STABLE"   # IMPROVING / DECLINING / STABLE
-    win_rate_delta:     float = 0.0      # recent - older
+    recent_win_rate: float = 0.0  # last 10 trades
+    older_win_rate: float = 0.0  # trades before last 10
+    win_rate_trend: str = "STABLE"  # IMPROVING / DECLINING / STABLE
+    win_rate_delta: float = 0.0  # recent - older
 
     # By VIX regime
-    low_vix_win_rate:   float = 0.0      # VIX < 15
-    high_vix_win_rate:  float = 0.0      # VIX > 18
-    best_vix_regime:    str = ""
+    low_vix_win_rate: float = 0.0  # VIX < 15
+    high_vix_win_rate: float = 0.0  # VIX > 18
+    best_vix_regime: str = ""
 
     # By verdict type
-    buy_accuracy:       float = 0.0
-    sell_accuracy:      float = 0.0
-    hold_accuracy:      float = 0.0
+    buy_accuracy: float = 0.0
+    sell_accuracy: float = 0.0
+    hold_accuracy: float = 0.0
 
     # Analyst-level drift
-    analyst_accuracy:   dict = field(default_factory=dict)  # analyst → win rate when they were bullish
-    worst_analyst:      str = ""
-    best_analyst:       str = ""
+    analyst_accuracy: dict = field(
+        default_factory=dict
+    )  # analyst → win rate when they were bullish
+    worst_analyst: str = ""
+    best_analyst: str = ""
 
     # Alerts
-    alerts:             list[str] = field(default_factory=list)
+    alerts: list[str] = field(default_factory=list)
 
     def print_report(self) -> None:
         if self.trades_with_outcome < 5:
@@ -66,7 +69,9 @@ class DriftReport:
             return
 
         trend_style = {
-            "IMPROVING": "green", "DECLINING": "red", "STABLE": "yellow",
+            "IMPROVING": "green",
+            "DECLINING": "red",
+            "STABLE": "yellow",
         }.get(self.win_rate_trend, "white")
 
         lines = [
@@ -88,16 +93,22 @@ class DriftReport:
         ]
 
         if self.best_analyst:
-            lines.extend([
-                "",
-                "  [bold]Analyst Accuracy[/bold]",
-                f"  Best analyst      : [green]{self.best_analyst}[/green]",
-                f"  Worst analyst     : [red]{self.worst_analyst}[/red]",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "  [bold]Analyst Accuracy[/bold]",
+                    f"  Best analyst      : [green]{self.best_analyst}[/green]",
+                    f"  Worst analyst     : [red]{self.worst_analyst}[/red]",
+                ]
+            )
 
-        console.print(Panel("\n".join(lines),
-                            title="[bold cyan]Model Drift Report[/bold cyan]",
-                            border_style="cyan"))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold cyan]Model Drift Report[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
         if self.analyst_accuracy:
             table = Table(title="Analyst Accuracy (when they were bullish, did stock go up?)")
@@ -105,8 +116,9 @@ class DriftReport:
             table.add_column("Accuracy", justify="right", width=10)
             table.add_column("Trades", justify="right", width=8)
 
-            for analyst, data in sorted(self.analyst_accuracy.items(),
-                                        key=lambda x: -x[1].get("accuracy", 0)):
+            for analyst, data in sorted(
+                self.analyst_accuracy.items(), key=lambda x: -x[1].get("accuracy", 0)
+            ):
                 acc = data.get("accuracy", 0)
                 n = data.get("count", 0)
                 style = "green" if acc >= 60 else "red" if acc < 40 else "yellow"
@@ -164,7 +176,9 @@ def detect_drift() -> DriftReport:
     if low_vix:
         report.low_vix_win_rate = sum(1 for r in low_vix if r.outcome == "WIN") / len(low_vix) * 100
     if high_vix:
-        report.high_vix_win_rate = sum(1 for r in high_vix if r.outcome == "WIN") / len(high_vix) * 100
+        report.high_vix_win_rate = (
+            sum(1 for r in high_vix if r.outcome == "WIN") / len(high_vix) * 100
+        )
 
     if report.low_vix_win_rate > report.high_vix_win_rate:
         report.best_vix_regime = "Low VIX (<15)"
@@ -212,7 +226,10 @@ def detect_drift() -> DriftReport:
             f"Win rate declining sharply: {report.older_win_rate:.0f}% → {report.recent_win_rate:.0f}%"
         )
 
-    if report.worst_analyst and report.analyst_accuracy.get(report.worst_analyst, {}).get("accuracy", 50) < 35:
+    if (
+        report.worst_analyst
+        and report.analyst_accuracy.get(report.worst_analyst, {}).get("accuracy", 50) < 35
+    ):
         report.alerts.append(
             f"{report.worst_analyst} analyst accuracy below 35% — consider reducing its weight"
         )

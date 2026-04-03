@@ -12,6 +12,7 @@ class TestSectorFallback:
     def test_get_sector_snapshot_returns_list(self):
         """Should return list of IndexSnapshot."""
         from market.indices import get_sector_snapshot
+
         result = get_sector_snapshot()
         assert isinstance(result, list)
 
@@ -23,6 +24,7 @@ class TestSectorFallback:
         Run with: pytest -m network
         """
         from market.indices import get_sector_snapshot
+
         result = get_sector_snapshot()
         non_zero = [s for s in result if s.ltp > 0]
         # With yfinance fallback, should always have data when online
@@ -54,6 +56,7 @@ class TestNSEShareholding:
     def test_fetch_nse_shareholding_returns_dict(self):
         """fetch should return a dict (may be empty if API fails)."""
         from analysis.fundamental import _fetch_nse_shareholding
+
         result = _fetch_nse_shareholding("RELIANCE")
         assert isinstance(result, dict)
 
@@ -61,6 +64,7 @@ class TestNSEShareholding:
     def test_shareholding_has_promoter(self):
         """If data available, promoter % should be present."""
         from analysis.fundamental import _fetch_nse_shareholding
+
         result = _fetch_nse_shareholding("RELIANCE")
         # May be empty if NSE API is down, but if data exists it should have promoter
         if result:
@@ -71,6 +75,7 @@ class TestNSEShareholding:
     def test_shareholding_has_fii_dii(self):
         """If data available, FII and DII % should be present."""
         from analysis.fundamental import _fetch_nse_shareholding
+
         result = _fetch_nse_shareholding("RELIANCE")
         if result:
             assert "fii_pct" in result
@@ -80,6 +85,7 @@ class TestNSEShareholding:
     def test_shareholding_has_pledge(self):
         """If data available, pledge status should be present."""
         from analysis.fundamental import _fetch_nse_shareholding
+
         result = _fetch_nse_shareholding("RELIANCE")
         if result:
             assert "pledged" in result

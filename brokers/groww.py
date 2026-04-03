@@ -32,8 +32,8 @@ from .base import (
 )
 
 TOKEN_FILE = Path.home() / ".trading_platform" / "groww.json"
-BASE_URL   = "https://api.groww.in/v1"
-AUTH_URL   = "https://groww.in/auth/oauth"
+BASE_URL = "https://api.groww.in/v1"
+AUTH_URL = "https://groww.in/auth/oauth"
 
 
 class GrowwAPI(BrokerAPI):
@@ -49,10 +49,10 @@ class GrowwAPI(BrokerAPI):
         client_secret: str,
         redirect_uri: str = "http://localhost:8765/groww/callback",
     ) -> None:
-        self.client_id     = client_id
+        self.client_id = client_id
         self.client_secret = client_secret
-        self.redirect_uri  = redirect_uri
-        self._token: dict  = self._load_token() or {}
+        self.redirect_uri = redirect_uri
+        self._token: dict = self._load_token() or {}
 
     # ── Token management ──────────────────────────────────────
 
@@ -70,8 +70,8 @@ class GrowwAPI(BrokerAPI):
     def _headers(self) -> dict:
         return {
             "Authorization": f"Bearer {self._token.get('access_token', '')}",
-            "Content-Type":  "application/json",
-            "Accept":        "application/json",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
         }
 
     # ── HTTP helpers ──────────────────────────────────────────
@@ -109,10 +109,10 @@ class GrowwAPI(BrokerAPI):
 
     def get_login_url(self) -> str:
         params = {
-            "client_id":     self.client_id,
-            "redirect_uri":  self.redirect_uri,
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
             "response_type": "code",
-            "scope":         "portfolio orders profile",
+            "scope": "portfolio orders profile",
         }
         return f"{AUTH_URL}/authorize?{urlencode(params)}"
 
@@ -120,11 +120,11 @@ class GrowwAPI(BrokerAPI):
         r = httpx.post(
             f"{AUTH_URL}/token",
             data={
-                "grant_type":    "authorization_code",
-                "client_id":     self.client_id,
+                "grant_type": "authorization_code",
+                "client_id": self.client_id,
                 "client_secret": self.client_secret,
-                "redirect_uri":  self.redirect_uri,
-                "code":          auth_code,
+                "redirect_uri": self.redirect_uri,
+                "code": auth_code,
             },
             timeout=10,
         )
@@ -166,9 +166,9 @@ class GrowwAPI(BrokerAPI):
             httpx.post(
                 f"{AUTH_URL}/revoke",
                 data={
-                    "token":           self._token.get("access_token", ""),
-                    "client_id":       self.client_id,
-                    "client_secret":   self.client_secret,
+                    "token": self._token.get("access_token", ""),
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
                 },
                 timeout=5,
             )
@@ -182,18 +182,18 @@ class GrowwAPI(BrokerAPI):
     def get_profile(self) -> UserProfile:
         p = self._get("/user/profile")
         return UserProfile(
-            user_id = p.get("userId", p.get("user_id", "")),
-            name    = p.get("name", p.get("fullName", "")),
-            email   = p.get("email", ""),
-            broker  = "GROWW",
+            user_id=p.get("userId", p.get("user_id", "")),
+            name=p.get("name", p.get("fullName", "")),
+            email=p.get("email", ""),
+            broker="GROWW",
         )
 
     def get_funds(self) -> Funds:
         f = self._get("/funds")
         return Funds(
-            available_cash = f.get("availableBalance", f.get("available_balance", 0.0)),
-            used_margin    = f.get("usedMargin", f.get("used_margin", 0.0)),
-            total_balance  = f.get("totalBalance", f.get("total_balance", 0.0)),
+            available_cash=f.get("availableBalance", f.get("available_balance", 0.0)),
+            used_margin=f.get("usedMargin", f.get("used_margin", 0.0)),
+            total_balance=f.get("totalBalance", f.get("total_balance", 0.0)),
         )
 
     # ── Portfolio ─────────────────────────────────────────────
@@ -203,21 +203,23 @@ class GrowwAPI(BrokerAPI):
         items = data if isinstance(data, list) else data.get("holdings", [])
         holdings = []
         for h in items:
-            avg   = h.get("averagePrice", h.get("average_price", 0.0))
-            ltp   = h.get("ltp", h.get("last_price", 0.0))
-            qty   = h.get("quantity", 0)
-            pnl   = h.get("unrealisedPnl", h.get("unrealised_pnl", (ltp - avg) * qty))
+            avg = h.get("averagePrice", h.get("average_price", 0.0))
+            ltp = h.get("ltp", h.get("last_price", 0.0))
+            qty = h.get("quantity", 0)
+            pnl = h.get("unrealisedPnl", h.get("unrealised_pnl", (ltp - avg) * qty))
             invested = avg * qty
-            pnl_pct  = (pnl / invested * 100) if invested else 0.0
-            holdings.append(Holding(
-                symbol     = h.get("tradingSymbol", h.get("symbol", "")),
-                exchange   = h.get("exchange", "NSE"),
-                quantity   = qty,
-                avg_price  = avg,
-                last_price = ltp,
-                pnl        = pnl,
-                pnl_pct    = round(pnl_pct, 2),
-            ))
+            pnl_pct = (pnl / invested * 100) if invested else 0.0
+            holdings.append(
+                Holding(
+                    symbol=h.get("tradingSymbol", h.get("symbol", "")),
+                    exchange=h.get("exchange", "NSE"),
+                    quantity=qty,
+                    avg_price=avg,
+                    last_price=ltp,
+                    pnl=pnl,
+                    pnl_pct=round(pnl_pct, 2),
+                )
+            )
         return holdings
 
     def get_positions(self) -> list[Position]:
@@ -228,15 +230,17 @@ class GrowwAPI(BrokerAPI):
             qty = p.get("netQuantity", p.get("quantity", 0))
             if qty == 0:
                 continue
-            positions.append(Position(
-                symbol     = p.get("tradingSymbol", p.get("symbol", "")),
-                exchange   = p.get("exchange", "NSE"),
-                product    = p.get("productType", p.get("product", "MIS")),
-                quantity   = qty,
-                avg_price  = p.get("averagePrice", p.get("average_price", 0.0)),
-                last_price = p.get("ltp", p.get("last_price", 0.0)),
-                pnl        = p.get("unrealisedPnl", p.get("pnl", 0.0)),
-            ))
+            positions.append(
+                Position(
+                    symbol=p.get("tradingSymbol", p.get("symbol", "")),
+                    exchange=p.get("exchange", "NSE"),
+                    product=p.get("productType", p.get("product", "MIS")),
+                    quantity=qty,
+                    avg_price=p.get("averagePrice", p.get("average_price", 0.0)),
+                    last_price=p.get("ltp", p.get("last_price", 0.0)),
+                    pnl=p.get("unrealisedPnl", p.get("pnl", 0.0)),
+                )
+            )
         return positions
 
     # ── Market Data ───────────────────────────────────────────
@@ -250,27 +254,30 @@ class GrowwAPI(BrokerAPI):
             else:
                 exchange, symbol = "NSE", inst
             try:
-                q = self._get("/quotes", {
-                    "symbol":   symbol,
-                    "exchange": exchange,
-                })
-                close  = q.get("previousClose", q.get("close", q.get("ltp", 0.0)))
-                ltp    = q.get("ltp", q.get("last_price", 0.0))
+                q = self._get(
+                    "/quotes",
+                    {
+                        "symbol": symbol,
+                        "exchange": exchange,
+                    },
+                )
+                close = q.get("previousClose", q.get("close", q.get("ltp", 0.0)))
+                ltp = q.get("ltp", q.get("last_price", 0.0))
                 change = ltp - close
                 chg_pct = (change / close * 100) if close else 0.0
                 result[inst] = Quote(
-                    symbol     = symbol,
-                    last_price = ltp,
-                    open       = q.get("open", 0.0),
-                    high       = q.get("high", 0.0),
-                    low        = q.get("low", 0.0),
-                    close      = close,
-                    volume     = q.get("volume", 0),
-                    change     = round(change, 2),
-                    change_pct = round(chg_pct, 2),
+                    symbol=symbol,
+                    last_price=ltp,
+                    open=q.get("open", 0.0),
+                    high=q.get("high", 0.0),
+                    low=q.get("low", 0.0),
+                    close=close,
+                    volume=q.get("volume", 0),
+                    change=round(change, 2),
+                    change_pct=round(chg_pct, 2),
                 )
             except Exception:
-                pass    # skip if individual quote fails
+                pass  # skip if individual quote fails
         return result
 
     def get_options_chain(
@@ -285,40 +292,42 @@ class GrowwAPI(BrokerAPI):
         items = data if isinstance(data, list) else data.get("chain", [])
         contracts = []
         for c in items:
-            contracts.append(OptionsContract(
-                symbol      = c.get("tradingSymbol", c.get("symbol", "")),
-                underlying  = underlying,
-                expiry      = c.get("expiry", expiry or ""),
-                strike      = c.get("strikePrice", c.get("strike", 0.0)),
-                option_type = c.get("optionType", c.get("type", "CE")),
-                last_price  = c.get("ltp", 0.0),
-                oi          = c.get("oi", c.get("openInterest", 0)),
-                oi_change   = c.get("oiChange", 0),
-                volume      = c.get("volume", 0),
-                iv          = c.get("iv", c.get("impliedVolatility")),
-                lot_size    = c.get("lotSize", 1),
-            ))
+            contracts.append(
+                OptionsContract(
+                    symbol=c.get("tradingSymbol", c.get("symbol", "")),
+                    underlying=underlying,
+                    expiry=c.get("expiry", expiry or ""),
+                    strike=c.get("strikePrice", c.get("strike", 0.0)),
+                    option_type=c.get("optionType", c.get("type", "CE")),
+                    last_price=c.get("ltp", 0.0),
+                    oi=c.get("oi", c.get("openInterest", 0)),
+                    oi_change=c.get("oiChange", 0),
+                    volume=c.get("volume", 0),
+                    iv=c.get("iv", c.get("impliedVolatility")),
+                    lot_size=c.get("lotSize", 1),
+                )
+            )
         return sorted(contracts, key=lambda c: (c.expiry, c.strike, c.option_type))
 
     # ── Orders ────────────────────────────────────────────────
 
     def place_order(self, order: OrderRequest) -> OrderResponse:
         body = {
-            "tradingSymbol":   order.symbol,
-            "exchange":        order.exchange,
+            "tradingSymbol": order.symbol,
+            "exchange": order.exchange,
             "transactionType": order.transaction_type,
-            "quantity":        order.quantity,
-            "orderType":       order.order_type,
-            "productType":     order.product,
-            "price":           order.price or 0,
-            "triggerPrice":    order.trigger_price or 0,
-            "validity":        order.validity,
+            "quantity": order.quantity,
+            "orderType": order.order_type,
+            "productType": order.product,
+            "price": order.price or 0,
+            "triggerPrice": order.trigger_price or 0,
+            "validity": order.validity,
         }
         r = self._post("/orders", body)
         return OrderResponse(
-            order_id = str(r.get("orderId", r.get("order_id", ""))),
-            status   = r.get("status", "OPEN"),
-            message  = r.get("message", "Order placed"),
+            order_id=str(r.get("orderId", r.get("order_id", ""))),
+            status=r.get("status", "OPEN"),
+            message=r.get("message", "Order placed"),
         )
 
     def get_orders(self) -> list[Order]:
@@ -326,20 +335,22 @@ class GrowwAPI(BrokerAPI):
         items = data if isinstance(data, list) else data.get("orders", [])
         orders = []
         for o in items:
-            orders.append(Order(
-                order_id         = str(o.get("orderId", o.get("order_id", ""))),
-                symbol           = o.get("tradingSymbol", o.get("symbol", "")),
-                exchange         = o.get("exchange", "NSE"),
-                transaction_type = o.get("transactionType", o.get("transaction_type", "")),
-                quantity         = o.get("quantity", 0),
-                order_type       = o.get("orderType", o.get("order_type", "")),
-                product          = o.get("productType", o.get("product", "")),
-                status           = o.get("status", ""),
-                price            = o.get("price"),
-                average_price    = o.get("averagePrice", o.get("average_price")),
-                filled_quantity  = o.get("filledQuantity", o.get("filled_quantity", 0)),
-                placed_at        = o.get("createdAt", o.get("created_at", "")),
-            ))
+            orders.append(
+                Order(
+                    order_id=str(o.get("orderId", o.get("order_id", ""))),
+                    symbol=o.get("tradingSymbol", o.get("symbol", "")),
+                    exchange=o.get("exchange", "NSE"),
+                    transaction_type=o.get("transactionType", o.get("transaction_type", "")),
+                    quantity=o.get("quantity", 0),
+                    order_type=o.get("orderType", o.get("order_type", "")),
+                    product=o.get("productType", o.get("product", "")),
+                    status=o.get("status", ""),
+                    price=o.get("price"),
+                    average_price=o.get("averagePrice", o.get("average_price")),
+                    filled_quantity=o.get("filledQuantity", o.get("filled_quantity", 0)),
+                    placed_at=o.get("createdAt", o.get("created_at", "")),
+                )
+            )
         return orders
 
     def cancel_order(self, order_id: str) -> bool:

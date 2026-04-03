@@ -35,13 +35,15 @@ ALERTS_FILE = Path.home() / ".trading_platform" / "alerts.json"
 
 # ── Data model ────────────────────────────────────────────────
 
+
 @dataclass
 class AlertCondition:
     """A single condition within a conditional alert."""
-    condition_type: str          # "PRICE" or "TECHNICAL"
-    condition:      str          # "ABOVE" or "BELOW"
-    threshold:      float
-    indicator:      Optional[str] = None  # for TECHNICAL: "RSI", "MACD", etc.
+
+    condition_type: str  # "PRICE" or "TECHNICAL"
+    condition: str  # "ABOVE" or "BELOW"
+    threshold: float
+    indicator: Optional[str] = None  # for TECHNICAL: "RSI", "MACD", etc.
 
     def describe(self) -> str:
         if self.condition_type == "TECHNICAL":
@@ -51,21 +53,21 @@ class AlertCondition:
 
 @dataclass
 class Alert:
-    id:           str
-    alert_type:   str                 # PRICE | TECHNICAL | CONDITIONAL
-    symbol:       str                 # e.g. "RELIANCE"
-    exchange:     str                 # e.g. "NSE"
-    condition:    str                 # ABOVE | BELOW | CROSSES
-    threshold:    float               # e.g. 2800.0
-    indicator:    Optional[str] = None  # For technical: RSI, MACD_SIGNAL, etc.
-    message:      str = ""
-    created_at:   str = ""
-    triggered:    bool = False
+    id: str
+    alert_type: str  # PRICE | TECHNICAL | CONDITIONAL
+    symbol: str  # e.g. "RELIANCE"
+    exchange: str  # e.g. "NSE"
+    condition: str  # ABOVE | BELOW | CROSSES
+    threshold: float  # e.g. 2800.0
+    indicator: Optional[str] = None  # For technical: RSI, MACD_SIGNAL, etc.
+    message: str = ""
+    created_at: str = ""
+    triggered: bool = False
     triggered_at: Optional[str] = None
     # Conditional alert: multiple conditions joined by AND
-    conditions:   list[dict] = field(default_factory=list)
+    conditions: list[dict] = field(default_factory=list)
     # OpenClaw / external callback: POST alert payload here when triggered
-    webhook_url:  Optional[str] = None
+    webhook_url: Optional[str] = None
 
     def describe(self) -> str:
         if self.alert_type == "CONDITIONAL" and self.conditions:
@@ -81,6 +83,7 @@ class Alert:
 
 # ── Alert Manager ─────────────────────────────────────────────
 
+
 class AlertManager:
     """Manages alerts with persistence and background polling."""
 
@@ -94,10 +97,10 @@ class AlertManager:
 
     def add_price_alert(
         self,
-        symbol:      str,
-        condition:   str,
-        threshold:   float,
-        exchange:    str = "NSE",
+        symbol: str,
+        condition: str,
+        threshold: float,
+        exchange: str = "NSE",
         webhook_url: Optional[str] = None,
     ) -> Alert:
         """Create a price-based alert (ABOVE / BELOW / CROSSES)."""
@@ -119,11 +122,11 @@ class AlertManager:
 
     def add_technical_alert(
         self,
-        symbol:      str,
-        indicator:   str,
-        condition:   str,
-        threshold:   float,
-        exchange:    str = "NSE",
+        symbol: str,
+        indicator: str,
+        condition: str,
+        threshold: float,
+        exchange: str = "NSE",
         webhook_url: Optional[str] = None,
     ) -> Alert:
         """Create a technical-indicator alert (RSI > 70, etc.)."""
@@ -145,9 +148,9 @@ class AlertManager:
 
     def add_conditional_alert(
         self,
-        symbol:      str,
-        conditions:  list[dict],
-        exchange:    str = "NSE",
+        symbol: str,
+        conditions: list[dict],
+        exchange: str = "NSE",
         webhook_url: Optional[str] = None,
     ) -> Alert:
         """
@@ -224,12 +227,13 @@ class AlertManager:
         """
         try:
             from market.websocket import ws_manager
+
             if ws_manager.connected:
                 ws_manager.on_tick(self._on_tick)
                 # Subscribe to all alerted symbols
-                symbols = list({
-                    f"{a.exchange}:{a.symbol}" for a in self._alerts if not a.triggered
-                })
+                symbols = list(
+                    {f"{a.exchange}:{a.symbol}" for a in self._alerts if not a.triggered}
+                )
                 if symbols:
                     ws_manager.subscribe(symbols)
                 console.print("[dim]  Alerts: real-time via WebSocket[/dim]")
@@ -252,7 +256,7 @@ class AlertManager:
                 continue
 
             # Match tick symbol to alert symbol
-            tick_sym = tick.symbol if hasattr(tick, 'symbol') else ""
+            tick_sym = tick.symbol if hasattr(tick, "symbol") else ""
             alert_sym_variants = [
                 f"{alert.exchange}:{alert.symbol}-EQ",
                 f"{alert.exchange}:{alert.symbol}",
@@ -260,7 +264,7 @@ class AlertManager:
             if tick_sym not in alert_sym_variants:
                 continue
 
-            ltp = tick.ltp if hasattr(tick, 'ltp') else 0
+            ltp = tick.ltp if hasattr(tick, "ltp") else 0
             if ltp <= 0:
                 continue
 
@@ -316,6 +320,7 @@ class AlertManager:
         """Auto-subscribe the alert's symbol to WebSocket for real-time ticks."""
         try:
             from market.websocket import ws_manager
+
             if ws_manager.connected:
                 ws_manager.subscribe([f"{alert.exchange}:{alert.symbol}"])
         except Exception:
@@ -341,12 +346,14 @@ class AlertManager:
 
         # 1. Terminal
         console.print()
-        console.print(Panel(
-            f"[bold white]{desc}[/bold white]{ltp_str}\n"
-            f"[dim]Triggered at {alert.triggered_at}[/dim]",
-            title="[bold yellow]🔔 ALERT TRIGGERED[/bold yellow]",
-            border_style="yellow",
-        ))
+        console.print(
+            Panel(
+                f"[bold white]{desc}[/bold white]{ltp_str}\n"
+                f"[dim]Triggered at {alert.triggered_at}[/dim]",
+                title="[bold yellow]🔔 ALERT TRIGGERED[/bold yellow]",
+                border_style="yellow",
+            )
+        )
         print("\a", end="", flush=True)  # system bell
 
         # 2. macOS desktop notification
@@ -378,6 +385,7 @@ class AlertManager:
         # Try WebSocket first (instant)
         try:
             from market.websocket import ws_manager
+
             ws_ltp = ws_manager.get_ltp(instrument)
             if ws_ltp and ws_ltp > 0:
                 ltp = ws_ltp
@@ -387,6 +395,7 @@ class AlertManager:
             # Fall back to REST
             try:
                 from market.quotes import get_ltp
+
                 ltp = get_ltp(instrument)
             except Exception:
                 return False
@@ -407,11 +416,11 @@ class AlertManager:
 
         # Extract the indicator value from the TechnicalSnapshot
         value_map = {
-            "RSI":   getattr(snapshot, "rsi", None),
+            "RSI": getattr(snapshot, "rsi", None),
             "RSI14": getattr(snapshot, "rsi", None),
-            "MACD":  getattr(snapshot, "macd", None),
-            "ADX":   getattr(snapshot, "adx", None),
-            "ATR":   getattr(snapshot, "atr", None),
+            "MACD": getattr(snapshot, "macd", None),
+            "ADX": getattr(snapshot, "adx", None),
+            "ATR": getattr(snapshot, "atr", None),
             "SCORE": getattr(snapshot, "score", None),
         }
         value = value_map.get(indicator_key)
@@ -445,6 +454,7 @@ class AlertManager:
                 except Exception:
                     try:
                         from market.quotes import get_ltp
+
                         ltp = get_ltp(f"{alert.exchange}:{alert.symbol}")
                     except Exception:
                         return False
@@ -457,6 +467,7 @@ class AlertManager:
             elif cond.condition_type == "TECHNICAL":
                 try:
                     from analysis.technical import analyse as tech_analyse
+
                     snapshot = tech_analyse(alert.symbol, alert.exchange)
                     indicator_key = (cond.indicator or "").upper()
                     value_map = {
@@ -502,6 +513,7 @@ class AlertManager:
 
 # ── Notification Helpers ──────────────────────────────────────
 
+
 def _desktop_notify(title: str, message: str) -> None:
     """
     Send a macOS desktop notification via osascript.
@@ -520,8 +532,11 @@ def _desktop_notify(title: str, message: str) -> None:
             t = title.replace('"', '\\"')
             m = message.replace('"', '\\"')
             subprocess.run(
-                ["osascript", "-e",
-                 f'display notification "{m}" with title "{t}" sound name "Glass"'],
+                [
+                    "osascript",
+                    "-e",
+                    f'display notification "{m}" with title "{t}" sound name "Glass"',
+                ],
                 timeout=5,
                 capture_output=True,
             )
@@ -538,6 +553,7 @@ def _telegram_notify(message: str) -> None:
     """
     try:
         from bot.telegram_bot import send_push
+
         send_push(message)
     except Exception:
         pass
@@ -553,15 +569,16 @@ def _webhook_notify(alert: Alert, ltp: Optional[float] = None) -> None:
     def _send():
         try:
             import urllib.request
+
             payload = {
-                "event":        "alert_triggered",
-                "alert_id":     alert.id,
-                "alert_type":   alert.alert_type,
-                "symbol":       alert.symbol,
-                "exchange":     alert.exchange,
-                "description":  alert.describe(),
+                "event": "alert_triggered",
+                "alert_id": alert.id,
+                "alert_type": alert.alert_type,
+                "symbol": alert.symbol,
+                "exchange": alert.exchange,
+                "description": alert.describe(),
                 "triggered_at": alert.triggered_at,
-                "ltp":          ltp,
+                "ltp": ltp,
             }
             body = _json.dumps(payload).encode()
             req = urllib.request.Request(

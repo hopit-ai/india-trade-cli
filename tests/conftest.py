@@ -23,10 +23,12 @@ def ohlcv_df() -> pd.DataFrame:
     dates = pd.date_range("2025-01-01", periods=n, freq="B")
 
     # Uptrend then downtrend
-    trend = np.concatenate([
-        np.linspace(100, 150, 100),
-        np.linspace(150, 110, 100),
-    ])
+    trend = np.concatenate(
+        [
+            np.linspace(100, 150, 100),
+            np.linspace(150, 110, 100),
+        ]
+    )
     noise = np.random.randn(n) * 2
     close = trend + noise
 
@@ -35,13 +37,16 @@ def ohlcv_df() -> pd.DataFrame:
     opn = close + np.random.randn(n) * 0.5
     volume = np.random.randint(500_000, 5_000_000, n)
 
-    return pd.DataFrame({
-        "open": opn,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    }, index=dates)
+    return pd.DataFrame(
+        {
+            "open": opn,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        },
+        index=dates,
+    )
 
 
 @pytest.fixture

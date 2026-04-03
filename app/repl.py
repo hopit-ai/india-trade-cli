@@ -29,15 +29,15 @@ Available commands:
 
 from __future__ import annotations
 
-from prompt_toolkit              import PromptSession
-from prompt_toolkit.completion   import WordCompleter
+from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.formatted_text import HTML
-from prompt_toolkit.history      import FileHistory
-from prompt_toolkit.styles       import Style
-from rich.console                import Console
-from rich.table                  import Table
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.styles import Style
+from rich.console import Console
+from rich.table import Table
 
-from brokers.base    import BrokerAPI
+from brokers.base import BrokerAPI
 from brokers.session import (
     login as do_login,
     logout as do_logout,
@@ -53,32 +53,80 @@ console = Console()
 HISTORY_FILE = "~/.trading_platform/.repl_history"
 
 COMMANDS = [
-    "login", "connect", "disconnect", "brokers",
-    "logout", "profile", "funds",
-    "holdings", "positions", "orders",
-    "morning-brief", "analyze", "trade",
-    "portfolio", "paper",
-    "ai", "alert", "alerts", "audit", "backtest", "clear",
-    "deep-analyze", "drift",
-    "active", "bulk-deals", "dcf", "deals", "delta-hedge",
-    "earnings", "events", "exports", "flows", "gex", "greeks",
-    "iv-smile", "macro", "memory", "most-active",
-    "oi", "oi-profile", "scan", "smile",
+    "login",
+    "connect",
+    "disconnect",
+    "brokers",
+    "logout",
+    "profile",
+    "funds",
+    "holdings",
+    "positions",
+    "orders",
+    "morning-brief",
+    "analyze",
+    "trade",
+    "portfolio",
+    "paper",
+    "ai",
+    "alert",
+    "alerts",
+    "audit",
+    "backtest",
+    "clear",
+    "deep-analyze",
+    "drift",
+    "active",
+    "bulk-deals",
+    "dcf",
+    "deals",
+    "delta-hedge",
+    "earnings",
+    "events",
+    "exports",
+    "flows",
+    "gex",
+    "greeks",
+    "iv-smile",
+    "macro",
+    "memory",
+    "most-active",
+    "oi",
+    "oi-profile",
+    "scan",
+    "smile",
     "roll-options",
     "strategy",
-    "mtf", "pairs", "patterns", "profile", "provider", "risk-report",
-    "paper-execute", "save-pdf", "explain", "explain-save",
-    "telegram", "tui", "walkforward", "web", "whatif",
+    "mtf",
+    "pairs",
+    "patterns",
+    "profile",
+    "provider",
+    "risk-report",
+    "paper-execute",
+    "save-pdf",
+    "explain",
+    "explain-save",
+    "telegram",
+    "tui",
+    "walkforward",
+    "web",
+    "whatif",
     "credentials",
-    "help", "quit", "exit",
+    "help",
+    "quit",
+    "exit",
 ]
 
-STYLE = Style.from_dict({
-    "prompt": "bold ansicyan",
-})
+STYLE = Style.from_dict(
+    {
+        "prompt": "bold ansicyan",
+    }
+)
 
 
 # ── Command handlers ──────────────────────────────────────────
+
 
 def cmd_profile(broker: BrokerAPI) -> None:
     p = broker.get_profile()
@@ -94,8 +142,8 @@ def cmd_funds(broker: BrokerAPI) -> None:
     table.add_column(style="dim")
     table.add_column(style="bold")
     table.add_row("Available Cash", f"[green]₹{f.available_cash:,.2f}[/green]")
-    table.add_row("Used Margin",    f"[yellow]₹{f.used_margin:,.2f}[/yellow]")
-    table.add_row("Total Balance",  f"[white]₹{f.total_balance:,.2f}[/white]")
+    table.add_row("Used Margin", f"[yellow]₹{f.used_margin:,.2f}[/yellow]")
+    table.add_row("Total Balance", f"[white]₹{f.total_balance:,.2f}[/white]")
     console.print()
     console.print(table)
     console.print()
@@ -108,12 +156,12 @@ def cmd_holdings(broker: BrokerAPI) -> None:
         return
 
     table = Table(title="Holdings", show_header=True, header_style="bold cyan")
-    table.add_column("Symbol",   style="bold white")
-    table.add_column("Qty",      justify="right")
-    table.add_column("Avg",      justify="right")
-    table.add_column("LTP",      justify="right")
-    table.add_column("P&L",      justify="right")
-    table.add_column("P&L %",    justify="right")
+    table.add_column("Symbol", style="bold white")
+    table.add_column("Qty", justify="right")
+    table.add_column("Avg", justify="right")
+    table.add_column("LTP", justify="right")
+    table.add_column("P&L", justify="right")
+    table.add_column("P&L %", justify="right")
 
     for h in holdings:
         pnl_style = "green" if h.pnl >= 0 else "red"
@@ -140,16 +188,16 @@ def cmd_positions(broker: BrokerAPI) -> None:
         return
 
     table = Table(title="Open Positions", show_header=True, header_style="bold cyan")
-    table.add_column("Symbol",   style="bold white")
-    table.add_column("Product",  style="dim")
-    table.add_column("Qty",      justify="right")
-    table.add_column("Avg",      justify="right")
-    table.add_column("LTP",      justify="right")
-    table.add_column("P&L",      justify="right")
+    table.add_column("Symbol", style="bold white")
+    table.add_column("Product", style="dim")
+    table.add_column("Qty", justify="right")
+    table.add_column("Avg", justify="right")
+    table.add_column("LTP", justify="right")
+    table.add_column("P&L", justify="right")
 
     for p in positions:
         pnl_style = "green" if p.pnl >= 0 else "red"
-        qty_str   = f"+{p.quantity}" if p.quantity > 0 else str(p.quantity)
+        qty_str = f"+{p.quantity}" if p.quantity > 0 else str(p.quantity)
         table.add_row(
             p.symbol,
             p.product,
@@ -174,15 +222,17 @@ def cmd_orders(broker: BrokerAPI) -> None:
 
     table = Table(title="Today's Orders", show_header=True, header_style="bold cyan")
     table.add_column("Order ID", style="dim")
-    table.add_column("Symbol",   style="bold white")
+    table.add_column("Symbol", style="bold white")
     table.add_column("Type")
-    table.add_column("Qty",      justify="right")
-    table.add_column("Price",    justify="right")
+    table.add_column("Qty", justify="right")
+    table.add_column("Price", justify="right")
     table.add_column("Status")
 
     status_colors = {
-        "COMPLETE": "green", "OPEN": "cyan",
-        "REJECTED": "red",   "CANCELLED": "yellow",
+        "COMPLETE": "green",
+        "OPEN": "cyan",
+        "REJECTED": "red",
+        "CANCELLED": "yellow",
     }
     for o in orders:
         color = status_colors.get(o.status.upper(), "white")
@@ -239,13 +289,15 @@ def _cmd_portfolio(summary) -> None:
         for h in sorted(summary.holdings, key=lambda x: (x.broker, x.symbol)):
             if multi and h.broker != prev_broker:
                 if prev_broker is not None:
-                    ht.add_row(*[""] * len(cols))   # blank separator row
+                    ht.add_row(*[""] * len(cols))  # blank separator row
                 prev_broker = h.broker
 
             c = "green" if h.pnl >= 0 else "red"
             row = [
-                h.symbol, str(h.qty),
-                f"₹{h.avg_price:,.2f}", f"₹{h.ltp:,.2f}",
+                h.symbol,
+                str(h.qty),
+                f"₹{h.avg_price:,.2f}",
+                f"₹{h.ltp:,.2f}",
                 f"₹{h.value:,.0f}",
                 f"[{c}]₹{h.pnl:,.0f}[/{c}]",
                 f"[{c}]{h.pnl_pct:+.1f}%[/{c}]",
@@ -281,8 +333,10 @@ def _cmd_portfolio(summary) -> None:
         for p in sorted(summary.positions, key=lambda x: (x.broker, x.symbol)):
             c = "green" if p.pnl >= 0 else "red"
             row = [
-                p.symbol, str(p.qty),
-                f"₹{p.avg_price:,.2f}", f"₹{p.ltp:,.2f}",
+                p.symbol,
+                str(p.qty),
+                f"₹{p.avg_price:,.2f}",
+                f"₹{p.ltp:,.2f}",
                 f"[{c}]₹{p.pnl:,.0f}[/{c}]",
                 f"{p.delta:.3f}" if p.delta is not None else "—",
                 f"₹{p.theta:.0f}" if p.theta is not None else "—",
@@ -319,15 +373,15 @@ def _cmd_portfolio(summary) -> None:
     # ── Risk meter ─────────────────────────────────────────────
     r = summary.risk
     rating_color = {
-        "LOW":    "green",
+        "LOW": "green",
         "MEDIUM": "yellow",
-        "HIGH":   "orange3",
+        "HIGH": "orange3",
         "DANGER": "bold red",
     }.get(r.risk_rating, "white")
 
     bar_len = 20
-    filled  = int(r.deployment_pct / 100 * bar_len)
-    bar     = "█" * filled + "░" * (bar_len - filled)
+    filled = int(r.deployment_pct / 100 * bar_len)
+    bar = "█" * filled + "░" * (bar_len - filled)
 
     console.print(
         f"\n  [bold]Risk Meter:[/bold]  [{rating_color}]{r.risk_rating}[/{rating_color}]  "
@@ -342,14 +396,15 @@ def _cmd_portfolio(summary) -> None:
     console.print(
         f"  Max loss estimate: [red]₹{r.max_loss_estimate:,.0f}[/red]  "
         f"({r.max_loss_estimate / r.total_capital * 100:.1f}% of capital)\n"
-        if r.total_capital > 0 else
-        f"  Max loss estimate: [red]₹{r.max_loss_estimate:,.0f}[/red]\n"
+        if r.total_capital > 0
+        else f"  Max loss estimate: [red]₹{r.max_loss_estimate:,.0f}[/red]\n"
     )
 
 
 def _cmd_toggle_paper() -> None:
     """Show current paper / live trading mode."""
     import os
+
     current = os.environ.get("TRADING_MODE", "PAPER")
     if current == "PAPER":
         console.print(
@@ -392,6 +447,7 @@ def _cmd_web(port: int = 8765) -> None:
     # Open browser slightly after server starts
     def _open():
         import time as _time
+
         _time.sleep(1.2)
         webbrowser.open(url)
 
@@ -400,9 +456,9 @@ def _cmd_web(port: int = 8765) -> None:
     # Run uvicorn (blocks until Ctrl+C)
     uvicorn.run(
         "web.api:app",
-        host       = "0.0.0.0",
-        port       = port,
-        log_level  = "warning",   # quiet — the REPL already has UI
+        host="0.0.0.0",
+        port=port,
+        log_level="warning",  # quiet — the REPL already has UI
     )
     console.print("[dim]\nWeb server stopped. Back in REPL.[/dim]\n")
 
@@ -412,7 +468,9 @@ def _warn_if_mock(broker: BrokerAPI) -> None:
     try:
         profile = broker.get_profile()
         if profile.broker.upper() in ("MOCK", "PAPER", "DEMO"):
-            console.print("[yellow dim]  (Demo mode — data below is simulated. Run 'login' to connect a real broker.)[/yellow dim]")
+            console.print(
+                "[yellow dim]  (Demo mode — data below is simulated. Run 'login' to connect a real broker.)[/yellow dim]"
+            )
     except Exception:
         pass
 
@@ -422,75 +480,75 @@ def cmd_help() -> None:
 
     sections = {
         "Analysis (AI-powered)": [
-            ("analyze <SYM>",         "Multi-agent analysis (7 analysts + debate + trade plan)"),
-            ("deep-analyze <SYM>",    "Full LLM mode (11 calls — every analyst uses AI)"),
-            ("ai <message>",          "Chat with AI — follow-ups keep context"),
+            ("analyze <SYM>", "Multi-agent analysis (7 analysts + debate + trade plan)"),
+            ("deep-analyze <SYM>", "Full LLM mode (11 calls — every analyst uses AI)"),
+            ("ai <message>", "Chat with AI — follow-ups keep context"),
             ("strategy new [--simple]", "Build a strategy from plain English"),
-            ("strategy list",         "List saved strategies"),
-            ("morning-brief",         "Daily market context + AI narrative"),
+            ("strategy list", "List saved strategies"),
+            ("morning-brief", "Daily market context + AI narrative"),
         ],
         "Market Data": [
-            ("earnings [SYM...]",     "Upcoming quarterly results calendar"),
-            ("flows",                 "FII/DII flow intelligence with signals"),
-            ("events [days]",         "Event-driven strategy recommendations"),
-            ("patterns",              "Active India-specific market patterns"),
-            ("macro [SYM]",           "USD/INR, crude, gold + stock linkages"),
+            ("earnings [SYM...]", "Upcoming quarterly results calendar"),
+            ("flows", "FII/DII flow intelligence with signals"),
+            ("events [days]", "Event-driven strategy recommendations"),
+            ("patterns", "Active India-specific market patterns"),
+            ("macro [SYM]", "USD/INR, crude, gold + stock linkages"),
         ],
         "Backtest & Simulation": [
-            ("backtest SYM rsi",      "RSI strategy backtest"),
+            ("backtest SYM rsi", "RSI strategy backtest"),
             ("backtest SYM ma 20 50", "EMA crossover backtest"),
-            ("backtest SYM macd|bb",  "MACD or Bollinger backtest"),
-            ("backtest NIFTY straddle",    "Options: ATM straddle before expiry"),
+            ("backtest SYM macd|bb", "MACD or Bollinger backtest"),
+            ("backtest NIFTY straddle", "Options: ATM straddle before expiry"),
             ("backtest NIFTY iron-condor", "Options: sell iron condor"),
-            ("walkforward SYM rsi",   "Walk-forward test (rolling windows)"),
-            ("whatif nifty -3",       "What if NIFTY drops 3%? (real beta)"),
-            ("whatif SYM -10",        "Single stock scenario"),
-            ("pairs [A B]",           "Pair trading scan or specific pair"),
+            ("walkforward SYM rsi", "Walk-forward test (rolling windows)"),
+            ("whatif nifty -3", "What if NIFTY drops 3%? (real beta)"),
+            ("whatif SYM -10", "Single stock scenario"),
+            ("pairs [A B]", "Pair trading scan or specific pair"),
         ],
         "Risk & Portfolio": [
-            ("funds",                 "Cash and margin"),
-            ("holdings",              "Delivery holdings"),
-            ("positions",             "Open intraday / F&O positions"),
-            ("portfolio",             "Combined view: all brokers + risk"),
-            ("greeks",                "Portfolio Greeks with warnings + actions"),
-            ("delta-hedge",           "Suggest trades to neutralize delta"),
-            ("roll-options",          "Find expiring positions, suggest rolls"),
-            ("risk-report",           "VaR/CVaR portfolio risk analysis"),
-            ("orders",                "Today's orders"),
+            ("funds", "Cash and margin"),
+            ("holdings", "Delivery holdings"),
+            ("positions", "Open intraday / F&O positions"),
+            ("portfolio", "Combined view: all brokers + risk"),
+            ("greeks", "Portfolio Greeks with warnings + actions"),
+            ("delta-hedge", "Suggest trades to neutralize delta"),
+            ("roll-options", "Find expiring positions, suggest rolls"),
+            ("risk-report", "VaR/CVaR portfolio risk analysis"),
+            ("orders", "Today's orders"),
         ],
         "Memory & Learning": [
-            ("memory",                "Recent trade analyses"),
-            ("memory stats",          "Performance statistics"),
-            ("memory <SYM>",          "Past analyses for a symbol"),
+            ("memory", "Recent trade analyses"),
+            ("memory stats", "Performance statistics"),
+            ("memory <SYM>", "Past analyses for a symbol"),
             ("memory outcome ID WIN [pnl]", "Record trade outcome"),
-            ("profile",               "Your personal trading style"),
-            ("drift",                 "Model drift detection"),
-            ("audit <ID>",            "Post-mortem on a specific trade"),
+            ("profile", "Your personal trading style"),
+            ("drift", "Model drift detection"),
+            ("audit <ID>", "Post-mortem on a specific trade"),
         ],
         "Alerts": [
-            ("alert SYM above 2800",          "Price alert"),
-            ("alert SYM RSI above 70",        "Technical alert"),
+            ("alert SYM above 2800", "Price alert"),
+            ("alert SYM RSI above 70", "Technical alert"),
             ("alert SYM above 2800 AND RSI above 70", "Conditional (AND)"),
-            ("alerts",                         "List active alerts"),
-            ("alert remove <ID>",              "Remove an alert"),
+            ("alerts", "List active alerts"),
+            ("alert remove <ID>", "Remove an alert"),
         ],
         "Output & Exports": [
-            ("save-pdf",              "Save previous output as PDF"),
-            ("explain",               "Explain previous output simply"),
-            ("explain-save",          "Explain + save as PDF"),
-            ("--pdf",                 "Flag: append to any command"),
-            ("--explain",             "Flag: append to any command"),
-            ("exports",               "List all saved PDF exports"),
-            ("exports open <file>",   "Open a saved export"),
+            ("save-pdf", "Save previous output as PDF"),
+            ("explain", "Explain previous output simply"),
+            ("explain-save", "Explain + save as PDF"),
+            ("--pdf", "Flag: append to any command"),
+            ("--explain", "Flag: append to any command"),
+            ("exports", "List all saved PDF exports"),
+            ("exports open <file>", "Open a saved export"),
             ("exports clear --older-than 30d", "Delete old exports"),
         ],
         "Session": [
-            ("login",                 "Connect to a broker"),
-            ("provider [name]",       "Show/switch AI provider"),
-            ("telegram [setup]",      "Start bot / run guided setup wizard"),
-            ("clear",                 "Start fresh AI conversation (reset context)"),
-            ("credentials",           "Manage API keys"),
-            ("quit / exit",           "Exit"),
+            ("login", "Connect to a broker"),
+            ("provider [name]", "Show/switch AI provider"),
+            ("telegram [setup]", "Start bot / run guided setup wizard"),
+            ("clear", "Start fresh AI conversation (reset context)"),
+            ("credentials", "Manage API keys"),
+            ("quit / exit", "Exit"),
         ],
     }
 
@@ -498,15 +556,18 @@ def cmd_help() -> None:
         lines = []
         for cmd, desc in commands:
             lines.append(f"  [cyan]{cmd:34s}[/cyan] {desc}")
-        console.print(Panel(
-            "\n".join(lines),
-            title=f"[bold]{section}[/bold]",
-            border_style="dim",
-            padding=(0, 1),
-        ))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"[bold]{section}[/bold]",
+                border_style="dim",
+                padding=(0, 1),
+            )
+        )
 
 
 # ── Alert command handler ──────────────────────────────────────
+
 
 def _handle_backtest_command(args: list[str]) -> None:
     """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain]"""
@@ -559,10 +620,10 @@ def _handle_backtest_command(args: list[str]) -> None:
         result.print_summary()
         result.print_trades(num_trades)
         # Capture for post-processing — handle both equity and options results
-        result_symbol = getattr(result, 'symbol', None) or getattr(result, 'underlying', symbol)
-        buy_hold = getattr(result, 'buy_hold_return', None)
-        profit_factor = getattr(result, 'profit_factor', None)
-        total_pnl = getattr(result, 'total_pnl', None)
+        result_symbol = getattr(result, "symbol", None) or getattr(result, "underlying", symbol)
+        buy_hold = getattr(result, "buy_hold_return", None)
+        profit_factor = getattr(result, "profit_factor", None)
+        total_pnl = getattr(result, "total_pnl", None)
 
         lines = [f"Backtest: {result.strategy_name} on {result_symbol}"]
         lines.append(f"Period: {result.start_date} to {result.end_date}")
@@ -580,11 +641,14 @@ def _handle_backtest_command(args: list[str]) -> None:
         _last_output = _bt_summary
         _last_command = f"Backtest {symbol} {strategy_name}"
         if wants_pdf or wants_explain:
-            handle_output_flags(_bt_summary, f"Backtest {symbol} {strategy_name}",
-                                wants_pdf, wants_explain)
+            handle_output_flags(
+                _bt_summary, f"Backtest {symbol} {strategy_name}", wants_pdf, wants_explain
+            )
     except Exception as e:
         console.print(f"[red]Backtest failed:[/red] {e}")
-        console.print("[dim]Check that the symbol exists and you have market data access (broker login or yfinance).[/dim]")
+        console.print(
+            "[dim]Check that the symbol exists and you have market data access (broker login or yfinance).[/dim]"
+        )
 
 
 def _handle_whatif_command(args: list[str]) -> None:
@@ -599,6 +663,7 @@ def _handle_whatif_command(args: list[str]) -> None:
         return
 
     from engine.simulator import Simulator
+
     sim = Simulator()
 
     first = args[0].upper()
@@ -657,8 +722,10 @@ def _handle_memory_command(args: list[str]) -> None:
     elif sub == "clear":
         console.print("[yellow]This will delete all trade memory. Type 'yes' to confirm:[/yellow]")
         from rich.prompt import Prompt
+
         if Prompt.ask("[bold]Confirm[/bold]", default="no") == "yes":
             from pathlib import Path
+
             p = Path.home() / ".trading_platform" / "trade_memory.json"
             if p.exists():
                 p.unlink()
@@ -672,8 +739,12 @@ def _handle_memory_command(args: list[str]) -> None:
         if records:
             console.print(f"\n[bold]Past analyses for {symbol}:[/bold]")
             for r in records:
-                verdict_style = {"BUY": "green", "STRONG_BUY": "bold green",
-                                 "SELL": "red", "STRONG_SELL": "bold red"}.get(r.verdict, "yellow")
+                verdict_style = {
+                    "BUY": "green",
+                    "STRONG_BUY": "bold green",
+                    "SELL": "red",
+                    "STRONG_SELL": "bold red",
+                }.get(r.verdict, "yellow")
                 outcome_str = f" → {r.outcome}" if r.outcome else ""
                 console.print(
                     f"  [{r.id}] {r.timestamp[:10]}  "
@@ -697,8 +768,10 @@ def _handle_patterns_command() -> None:
     console.print(f"\n[bold]Active Market Patterns ({len(patterns)}):[/bold]\n")
     for p in patterns:
         impact_style = {
-            "BULLISH": "green", "BEARISH": "red",
-            "VOLATILE": "yellow", "NEUTRAL": "white",
+            "BULLISH": "green",
+            "BEARISH": "red",
+            "VOLATILE": "yellow",
+            "NEUTRAL": "white",
         }.get(p.impact, "white")
 
         console.print(
@@ -761,20 +834,26 @@ def _handle_alert_command(args: list[str]) -> None:
             tokens = part.strip().split()
             if len(tokens) >= 3 and tokens[0] in indicators:
                 # TECHNICAL: RSI above 70
-                conditions.append({
-                    "condition_type": "TECHNICAL",
-                    "indicator": tokens[0],
-                    "condition": tokens[1],
-                    "threshold": float(tokens[2]),
-                })
+                conditions.append(
+                    {
+                        "condition_type": "TECHNICAL",
+                        "indicator": tokens[0],
+                        "condition": tokens[1],
+                        "threshold": float(tokens[2]),
+                    }
+                )
             elif len(tokens) >= 2:
                 # PRICE: above 2800
                 cond = tokens[0] if tokens[0] in ("ABOVE", "BELOW") else tokens[0]
-                conditions.append({
-                    "condition_type": "PRICE",
-                    "condition": cond,
-                    "threshold": float(tokens[1] if tokens[0] in ("ABOVE", "BELOW") else tokens[-1]),
-                })
+                conditions.append(
+                    {
+                        "condition_type": "PRICE",
+                        "condition": cond,
+                        "threshold": float(
+                            tokens[1] if tokens[0] in ("ABOVE", "BELOW") else tokens[-1]
+                        ),
+                    }
+                )
 
         if conditions:
             alert = alert_manager.add_conditional_alert(symbol, conditions)
@@ -796,7 +875,10 @@ def _handle_alert_command(args: list[str]) -> None:
             console.print("[red]Invalid threshold value.[/red]")
             return
         alert = alert_manager.add_technical_alert(
-            symbol, indicator, condition, threshold,
+            symbol,
+            indicator,
+            condition,
+            threshold,
         )
     else:
         # Price alert: SYMBOL CONDITION THRESHOLD
@@ -818,30 +900,29 @@ def _handle_alert_command(args: list[str]) -> None:
 
 # ── Main REPL loop ────────────────────────────────────────────
 
+
 def run_repl(broker: BrokerAPI) -> None:
     """Start the interactive command loop."""
     import os
+
     history_path = os.path.expanduser(HISTORY_FILE)
     os.makedirs(os.path.dirname(history_path), exist_ok=True)
 
     session: PromptSession = PromptSession(
-        history    = FileHistory(history_path),
-        completer  = WordCompleter(COMMANDS, ignore_case=True),
-        style      = STYLE,
+        history=FileHistory(history_path),
+        completer=WordCompleter(COMMANDS, ignore_case=True),
+        style=STYLE,
     )
 
     # Start background alert poller (daemon thread, checks every 60s)
     from engine.alerts import alert_manager
+
     alert_manager.start_realtime()  # WebSocket ticks → instant alerts (falls back to 60s polling)
 
-    console.print(
-        "\n[dim]Type [bold]help[/bold] for commands, "
-        "[bold]quit[/bold] to exit.[/dim]"
-    )
+    console.print("\n[dim]Type [bold]help[/bold] for commands, [bold]quit[/bold] to exit.[/dim]")
     if is_multi_broker():
         console.print(
-            "[dim]Multiple brokers connected. "
-            "Use [bold]portfolio[/bold] for combined view.[/dim]"
+            "[dim]Multiple brokers connected. Use [bold]portfolio[/bold] for combined view.[/dim]"
         )
     console.print()
 
@@ -854,6 +935,7 @@ def run_repl(broker: BrokerAPI) -> None:
         """Dynamic prompt — shows 📩 badge when Telegram commands are in-flight."""
         try:
             from bot.status import get_badge
+
             badge = get_badge()
         except Exception:
             badge = ""
@@ -871,9 +953,9 @@ def run_repl(broker: BrokerAPI) -> None:
         if not raw:
             continue
 
-        parts   = raw.split()
+        parts = raw.split()
         command = parts[0].lower()
-        args    = parts[1:]
+        args = parts[1:]
 
         # ── Global --pdf / --save-pdf flag ─────────────────────
         # Strip the flag before any command sees it, so every
@@ -892,6 +974,7 @@ def run_repl(broker: BrokerAPI) -> None:
                 # process alive indefinitely.  os._exit() is the only reliable
                 # way to terminate without waiting for them.
                 import os as _os
+
                 _os._exit(0)
 
             elif command == "help":
@@ -927,7 +1010,9 @@ def run_repl(broker: BrokerAPI) -> None:
                 try:
                     cmd_funds(broker)
                 except Exception as e:
-                    console.print(f"[red]Error: {e}[/red]\n[dim]Broker API may be slow. Try again during market hours.[/dim]")
+                    console.print(
+                        f"[red]Error: {e}[/red]\n[dim]Broker API may be slow. Try again during market hours.[/dim]"
+                    )
 
             # ── Portfolio (single-broker raw views) ───────────
             elif command == "holdings":
@@ -936,7 +1021,9 @@ def run_repl(broker: BrokerAPI) -> None:
                     cmd_holdings(broker)
                 except Exception as e:
                     console.print(f"[red]Holdings fetch failed:[/red] {e}")
-                    console.print("[dim]Your broker session may have expired. Try: logout → login[/dim]")
+                    console.print(
+                        "[dim]Your broker session may have expired. Try: logout → login[/dim]"
+                    )
 
             elif command == "positions":
                 _warn_if_mock(broker)
@@ -944,7 +1031,9 @@ def run_repl(broker: BrokerAPI) -> None:
                     cmd_positions(broker)
                 except Exception as e:
                     console.print(f"[red]Positions fetch failed:[/red] {e}")
-                    console.print("[dim]Your broker session may have expired. Try: logout → login[/dim]")
+                    console.print(
+                        "[dim]Your broker session may have expired. Try: logout → login[/dim]"
+                    )
 
             elif command == "orders":
                 _warn_if_mock(broker)
@@ -952,25 +1041,32 @@ def run_repl(broker: BrokerAPI) -> None:
                     cmd_orders(broker)
                 except Exception as e:
                     console.print(f"[red]Orders fetch failed:[/red] {e}")
-                    console.print("[dim]Your broker session may have expired. Try: logout → login[/dim]")
+                    console.print(
+                        "[dim]Your broker session may have expired. Try: logout → login[/dim]"
+                    )
 
             # ── Portfolio (unified multi-broker view) ─────────
             elif command == "portfolio":
                 _warn_if_mock(broker)
                 try:
                     from engine.portfolio import get_multi_broker_summary
+
                     _cmd_portfolio(get_multi_broker_summary())
                 except Exception as e:
                     console.print(f"[red]Portfolio fetch failed:[/red] {e}")
-                    console.print("[dim]One or more broker sessions may have expired. Try: logout → login[/dim]")
+                    console.print(
+                        "[dim]One or more broker sessions may have expired. Try: logout → login[/dim]"
+                    )
 
             # ── AI-powered commands ───────────────────────────
             elif command == "morning-brief":
                 from app.commands.morning_brief import run as brief_run
+
                 brief_run(use_agent=True)
 
             elif command == "analyze":
                 from engine.output import parse_output_flags, handle_output_flags
+
                 clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
                 symbol = clean_args[0].upper() if clean_args else ""
                 if not symbol:
@@ -980,11 +1076,13 @@ def run_repl(broker: BrokerAPI) -> None:
                     output = agent.run_multi_agent_analysis(symbol)
                     _last_output = output or ""
                     _last_command = f"Analysis {symbol}"
-                    _last_trade_plans = getattr(agent, '_last_trade_plans', {})
+                    _last_trade_plans = getattr(agent, "_last_trade_plans", {})
                     if wants_pdf or wants_explain:
                         handle_output_flags(
-                            output or "", f"Analysis {symbol}",
-                            wants_pdf, wants_explain,
+                            output or "",
+                            f"Analysis {symbol}",
+                            wants_pdf,
+                            wants_explain,
                             llm_provider=agent._provider if wants_explain else None,
                         )
 
@@ -1003,36 +1101,43 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "earnings":
                 from market.earnings import print_earnings_calendar
+
                 syms = [a.upper() for a in args] if args else None
                 print_earnings_calendar(syms)
 
             elif command in ("most-active", "active"):
                 from market.active_stocks import print_most_active
+
                 by = "value" if "--value" in args else "volume"
                 print_most_active(by=by)
 
             elif command in ("bulk-deals", "block-deals", "deals"):
                 from market.bulk_deals import print_deals
+
                 sym = args[0].upper() if args and not args[0].startswith("-") else None
                 print_deals(symbol=sym)
 
             elif command in ("oi-profile", "oi"):
                 from market.oi_profile import print_oi_profile
+
                 sym = args[0].upper() if args else "NIFTY"
                 print_oi_profile(sym)
 
             elif command in ("iv-smile", "smile"):
                 from analysis.volatility_surface import print_iv_smile
+
                 sym = args[0].upper() if args else "NIFTY"
                 print_iv_smile(sym)
 
             elif command == "gex":
                 from analysis.gex import print_gex
+
                 sym = args[0].upper() if args else "NIFTY"
                 print_gex(sym)
 
             elif command == "scan":
                 from market.options_scanner import print_scan_results
+
                 quick = "--quick" in args
                 syms = [a.upper() for a in args if not a.startswith("-")] or None
                 print_scan_results(symbols=syms, quick=quick)
@@ -1042,28 +1147,35 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[red]Usage: dcf SYMBOL [--growth 15] [--wacc 12][/red]")
                 else:
                     from analysis.dcf import print_dcf
+
                     sym = args[0].upper()
                     growth = None
                     wacc_val = None
                     if "--growth" in args:
                         idx = args.index("--growth")
                         if idx + 1 < len(args):
-                            try: growth = float(args[idx + 1])
-                            except ValueError: pass
+                            try:
+                                growth = float(args[idx + 1])
+                            except ValueError:
+                                pass
                     if "--wacc" in args:
                         idx = args.index("--wacc")
                         if idx + 1 < len(args):
-                            try: wacc_val = float(args[idx + 1])
-                            except ValueError: pass
+                            try:
+                                wacc_val = float(args[idx + 1])
+                            except ValueError:
+                                pass
                     print_dcf(sym, growth_rate=growth, wacc=wacc_val)
 
             elif command == "flows":
                 from market.flow_intel import print_flow_report
+
                 print_flow_report()
 
             elif command == "greeks":
                 from engine.portfolio import print_portfolio_greeks, get_position_greeks
                 from engine.greeks_manager import build_dashboard, print_dashboard
+
                 print_portfolio_greeks()
                 # Enhanced dashboard with warnings
                 pg = get_position_greeks()
@@ -1074,14 +1186,20 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "delta-hedge":
                 from engine.portfolio import get_position_greeks
                 from engine.greeks_manager import compute_delta_hedge, print_delta_hedge
+
                 pg = get_position_greeks()
-                target = float(args[0]) if args and args[0].replace("-", "").replace("+", "").isdigit() else 0.0
+                target = (
+                    float(args[0])
+                    if args and args[0].replace("-", "").replace("+", "").isdigit()
+                    else 0.0
+                )
                 suggestion = compute_delta_hedge(pg.net_delta, target_delta=target)
                 print_delta_hedge(suggestion)
 
             elif command == "roll-options":
                 from engine.portfolio import get_position_greeks
                 from engine.greeks_manager import compute_roll_suggestions, print_roll_suggestions
+
                 pg = get_position_greeks()
                 dte = 3
                 if "--dte" in args:
@@ -1096,19 +1214,23 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "macro":
                 from market.macro import print_macro_snapshot
+
                 sym = args[0].upper() if args else None
                 print_macro_snapshot(sym)
 
             elif command == "risk-report":
                 from engine.risk_metrics import print_risk_report
+
                 print_risk_report()
 
             elif command == "drift":
                 from engine.drift import print_drift_report
+
                 print_drift_report()
 
             elif command == "pairs":
                 from engine.pairs import print_pairs_scan, analyze_pair
+
                 if len(args) >= 2:
                     result = analyze_pair(args[0].upper(), args[1].upper())
                     result.print_analysis()
@@ -1121,14 +1243,17 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[red]Usage: audit <trade_id>[/red]")
                 else:
                     from engine.audit import print_audit
+
                     print_audit(args[0])
 
             elif command == "profile":
                 from engine.profile import print_profile
+
                 print_profile()
 
             elif command == "deep-analyze":
                 from engine.output import parse_output_flags, handle_output_flags
+
                 clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
                 symbol = clean_args[0].upper() if clean_args else ""
                 if not symbol:
@@ -1137,6 +1262,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     agent = get_agent()
                     try:
                         from agent.deep_agent import DeepAnalyzer
+
                         deep = DeepAnalyzer(
                             registry=agent._registry,
                             llm_provider=agent._provider,
@@ -1146,13 +1272,17 @@ def run_repl(broker: BrokerAPI) -> None:
                         _last_command = f"Deep Analysis {symbol}"
                         if wants_pdf or wants_explain:
                             handle_output_flags(
-                                output or "", f"Deep Analysis {symbol}",
-                                wants_pdf, wants_explain,
+                                output or "",
+                                f"Deep Analysis {symbol}",
+                                wants_pdf,
+                                wants_explain,
                                 llm_provider=agent._provider if wants_explain else None,
                             )
                     except Exception as e:
                         console.print(f"[red]Deep analysis failed:[/red] {e}")
-                        console.print("[dim]This usually means the AI provider hit a rate limit or the symbol wasn't found.[/dim]")
+                        console.print(
+                            "[dim]This usually means the AI provider hit a rate limit or the symbol wasn't found.[/dim]"
+                        )
                         console.print("[dim]Falling back to standard analysis...[/dim]")
                         agent.run_multi_agent_analysis(symbol)
 
@@ -1163,10 +1293,13 @@ def run_repl(broker: BrokerAPI) -> None:
                 if sub == "setup":
                     try:
                         from bot.telegram_bot import run_setup_wizard
+
                         run_setup_wizard()
                     except Exception as e:
                         console.print(f"[red]Telegram setup failed:[/red] {e}")
-                        console.print("[dim]Make sure you have a bot token from @BotFather on Telegram.[/dim]")
+                        console.print(
+                            "[dim]Make sure you have a bot token from @BotFather on Telegram.[/dim]"
+                        )
                         console.print("[dim]Run: credentials set TELEGRAM_BOT_TOKEN[/dim]")
                     continue
 
@@ -1182,6 +1315,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
                 try:
                     from bot.telegram_bot import _get_bot_token
+
                     _get_bot_token()
                 except RuntimeError as e:
                     console.print(
@@ -1192,6 +1326,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
                 try:
                     from bot.telegram_bot import run_bot_background, _load_chat_id
+
                     run_bot_background()
                     chat_id = _load_chat_id()
                     if not chat_id:
@@ -1208,27 +1343,37 @@ def run_repl(broker: BrokerAPI) -> None:
                         )
                 except Exception as e:
                     console.print(f"[red]Telegram bot failed:[/red] {e}")
-                    console.print("[dim]Run 'telegram setup' for guided configuration, or check your bot token.[/dim]")
+                    console.print(
+                        "[dim]Run 'telegram setup' for guided configuration, or check your bot token.[/dim]"
+                    )
 
             # ── Paper execution ──────────────────────────────────
             elif command == "paper-execute":
                 if not _last_trade_plans:
-                    console.print("[dim]No trade plans available. Run 'analyze <SYMBOL>' first.[/dim]")
+                    console.print(
+                        "[dim]No trade plans available. Run 'analyze <SYMBOL>' first.[/dim]"
+                    )
                 else:
                     profile_name = args[0].lower() if args else "neutral"
                     if profile_name not in ("aggressive", "neutral", "conservative"):
-                        console.print("[red]Usage: paper-execute [aggressive|neutral|conservative][/red]")
+                        console.print(
+                            "[red]Usage: paper-execute [aggressive|neutral|conservative][/red]"
+                        )
                     else:
                         plan = _last_trade_plans.get(profile_name)
                         if plan:
                             from engine.paper_execute import execute_trade_plan
+
                             execute_trade_plan(plan, broker)
                         else:
-                            console.print(f"[dim]No {profile_name} plan available (verdict may be HOLD).[/dim]")
+                            console.print(
+                                f"[dim]No {profile_name} plan available (verdict may be HOLD).[/dim]"
+                            )
 
             # ── Exports management ────────────────────────────────
             elif command == "exports":
                 from engine.output import list_exports, open_export, clear_exports
+
                 sub = args[0].lower() if args else ""
 
                 if sub == "open" and len(args) >= 2:
@@ -1256,6 +1401,7 @@ def run_repl(broker: BrokerAPI) -> None:
                         console.print("[dim]No saved exports yet. Use --pdf on any command.[/dim]")
                     else:
                         from rich.table import Table as RichTable
+
                         tbl = RichTable(
                             title="Saved Exports",
                             caption="~/.trading_platform/exports/",
@@ -1268,11 +1414,17 @@ def run_repl(broker: BrokerAPI) -> None:
                         total_kb = 0.0
                         for ex in exports:
                             total_kb += ex["size_kb"]
-                            size_str = f"{ex['size_kb']:.0f} KB" if ex["size_kb"] < 1024 else f"{ex['size_kb']/1024:.1f} MB"
+                            size_str = (
+                                f"{ex['size_kb']:.0f} KB"
+                                if ex["size_kb"] < 1024
+                                else f"{ex['size_kb'] / 1024:.1f} MB"
+                            )
                             date_str = ex["modified"].strftime("%d %b %Y, %I:%M %p")
                             tbl.add_row(ex["name"], size_str, date_str)
 
-                        total_str = f"{total_kb:.0f} KB" if total_kb < 1024 else f"{total_kb/1024:.1f} MB"
+                        total_str = (
+                            f"{total_kb:.0f} KB" if total_kb < 1024 else f"{total_kb / 1024:.1f} MB"
+                        )
                         tbl.caption = f"{len(exports)} files | {total_str} total | ~/.trading_platform/exports/"
                         console.print(tbl)
 
@@ -1282,17 +1434,21 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[dim]No previous output to save. Run a command first.[/dim]")
                 else:
                     from engine.output import export_to_pdf, _archive_filename
+
                     _pdf_title = _last_command or "Trade CLI Output"
                     filepath = export_to_pdf(_last_output, title=_pdf_title)
                     if filepath:
                         console.print(f"[green]PDF saved:[/green] {filepath}")
-                        console.print(f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}")
+                        console.print(
+                            f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}"
+                        )
 
             elif command == "explain":
                 if not _last_output:
                     console.print("[dim]No previous output to explain. Run a command first.[/dim]")
                 else:
                     from engine.output import explain_simply
+
                     console.print()
                     console.rule("[bold green]Simple Explanation[/bold green]", style="green")
                     try:
@@ -1309,6 +1465,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[dim]No previous output. Run a command first.[/dim]")
                 else:
                     from engine.output import explain_simply, export_to_pdf, _archive_filename
+
                     # Step 1: Explain
                     console.print()
                     console.rule("[bold green]Simple Explanation[/bold green]", style="green")
@@ -1325,7 +1482,9 @@ def run_repl(broker: BrokerAPI) -> None:
                     filepath = export_to_pdf(combined, title=_pdf_title)
                     if filepath:
                         console.print(f"\n[green]PDF saved (with explanation):[/green] {filepath}")
-                        console.print(f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}")
+                        console.print(
+                            f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}"
+                        )
                     _last_output = combined
 
             elif command == "mtf":
@@ -1333,6 +1492,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[red]Usage: mtf <SYMBOL>   e.g. mtf RELIANCE[/red]")
                 else:
                     from analysis.multi_timeframe import multi_timeframe_analysis
+
                     result = multi_timeframe_analysis(args[0].upper())
                     result.print_analysis()
 
@@ -1341,6 +1501,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[red]Usage: walkforward SYMBOL [strategy] [--period 3y][/red]")
                 else:
                     from engine.backtest import walk_forward_test
+
                     sym = args[0].upper()
                     strat = args[1].lower() if len(args) > 1 else "rsi"
                     period = "3y"
@@ -1354,10 +1515,13 @@ def run_repl(broker: BrokerAPI) -> None:
                         result.print_summary()
                     except Exception as e:
                         console.print(f"[red]Walk-forward failed:[/red] {e}")
-                        console.print("[dim]Ensure the symbol has enough historical data for the requested period.[/dim]")
+                        console.print(
+                            "[dim]Ensure the symbol has enough historical data for the requested period.[/dim]"
+                        )
 
             elif command == "events":
                 from engine.event_strategies import print_event_strategies
+
                 days = int(args[0]) if args else 7
                 print_event_strategies(days)
 
@@ -1366,6 +1530,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "strategy":
                 from app.commands.strategy import run as strategy_run
+
                 strategy_run(args)
 
             elif command == "whatif":
@@ -1373,6 +1538,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "ai":
                 from engine.output import parse_output_flags, handle_output_flags
+
                 clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
                 message = " ".join(clean_args).strip()
                 if not message:
@@ -1387,15 +1553,17 @@ def run_repl(broker: BrokerAPI) -> None:
                     _last_command = f"AI: {message[:40]}"
                     if wants_pdf or wants_explain:
                         handle_output_flags(
-                            output or "", "AI Chat",
-                            wants_pdf, wants_explain,
+                            output or "",
+                            "AI Chat",
+                            wants_pdf,
+                            wants_explain,
                             llm_provider=agent._provider if wants_explain else None,
                         )
 
             elif command == "provider":
                 if args:
                     new_provider = args[0].lower()
-                    new_model    = args[1] if len(args) > 1 else None
+                    new_model = args[1] if len(args) > 1 else None
                     if new_provider not in ALL_PROVIDERS:
                         console.print(
                             f"[red]Unknown provider '{new_provider}'.[/red] "
@@ -1409,16 +1577,19 @@ def run_repl(broker: BrokerAPI) -> None:
                     agent.list_providers()
 
             elif command == "trade":
-                sym  = args[0].upper() if args else None
+                sym = args[0].upper() if args else None
                 view = args[1].upper() if len(args) > 1 else None
                 try:
                     from app.commands.trade import run as trade_run
+
                     trade_run(symbol=sym, view=view)
                 except KeyboardInterrupt:
                     console.print("\n[dim]Trade cancelled.[/dim]")
                 except Exception as e:
                     console.print(f"[red]Trade builder error:[/red] {e}")
-                    console.print("[dim]Make sure you're logged in to a broker. Try: logout → login[/dim]")
+                    console.print(
+                        "[dim]Make sure you're logged in to a broker. Try: logout → login[/dim]"
+                    )
 
             elif command == "paper":
                 _cmd_toggle_paper()
@@ -1426,6 +1597,7 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "tui":
                 console.print("[dim]Launching TUI...[/dim]")
                 from ui.app import run_tui
+
                 run_tui()
                 console.print("[dim]Back in REPL mode.[/dim]")
 
@@ -1435,6 +1607,7 @@ def run_repl(broker: BrokerAPI) -> None:
 
             elif command == "credentials":
                 from config.credentials import cmd_credentials
+
                 cmd_credentials(args)
 
             else:
@@ -1447,10 +1620,14 @@ def run_repl(broker: BrokerAPI) -> None:
             console.print("\n[dim]Command interrupted.[/dim]")
         except Exception as exc:
             console.print(f"[red]Error:[/red] {exc}")
-            console.print("[dim]If this keeps happening, try: logout → login, or run with DEBUG=1 for details.[/dim]")
+            console.print(
+                "[dim]If this keeps happening, try: logout → login, or run with DEBUG=1 for details.[/dim]"
+            )
             import os
+
             if os.environ.get("DEBUG"):
                 import traceback
+
                 console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
         # ── Global PDF export (runs after every command) ─────
@@ -1476,20 +1653,26 @@ def run_repl(broker: BrokerAPI) -> None:
                             cmd_positions(broker)
                         elif exec_cmd == "orders" and broker:
                             cmd_orders(broker)
-                        elif exec_cmd in ("alerts",) or (exec_cmd == "alert" and (not exec_args or exec_args[0] == "list")):
+                        elif exec_cmd in ("alerts",) or (
+                            exec_cmd == "alert" and (not exec_args or exec_args[0] == "list")
+                        ):
                             from engine.alerts import alert_manager
+
                             alert_manager.list_alerts()
                         elif exec_cmd == "memory":
                             from engine.memory import trade_memory
+
                             if not exec_args:
                                 trade_memory.print_recent()
                             elif exec_args[0] == "stats":
                                 trade_memory.print_stats()
                         elif exec_cmd == "flows":
                             from market.flow_intel import get_flow_intel
+
                             get_flow_intel()
                         elif exec_cmd == "macro":
                             from market.macro import print_macro_snapshot
+
                             if exec_args:
                                 print_macro_snapshot(exec_args[0].upper())
                             else:
@@ -1501,9 +1684,12 @@ def run_repl(broker: BrokerAPI) -> None:
 
             if pdf_content.strip():
                 from engine.output import export_to_pdf, _archive_filename
+
                 filepath = export_to_pdf(pdf_content, title=_pdf_title)
                 if filepath:
                     console.print(f"\n[green]PDF saved:[/green] {filepath}")
-                    console.print(f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}")
+                    console.print(
+                        f"[dim]Archived:[/dim] ~/.trading_platform/exports/{_archive_filename(_pdf_title)}"
+                    )
             else:
                 console.print("[dim]No output to save as PDF.[/dim]")

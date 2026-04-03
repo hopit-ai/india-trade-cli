@@ -4,18 +4,29 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from agent.core import (
-    _default_model, _user_msg, _assistant_msg, _auto_detect_provider,
-    PROVIDER_OPENAI, PROVIDER_GEMINI, PROVIDER_ANTHROPIC,
-    PROVIDER_CLAUDE_CLI, PROVIDER_OLLAMA, PROVIDER_GEMINI_SUB,
-    OPENAI_DEFAULT_MODEL, GEMINI_DEFAULT_MODEL, ANTHROPIC_DEFAULT_MODEL,
+    _default_model,
+    _user_msg,
+    _assistant_msg,
+    _auto_detect_provider,
+    PROVIDER_OPENAI,
+    PROVIDER_GEMINI,
+    PROVIDER_ANTHROPIC,
+    PROVIDER_CLAUDE_CLI,
+    PROVIDER_OLLAMA,
+    PROVIDER_GEMINI_SUB,
+    OPENAI_DEFAULT_MODEL,
+    GEMINI_DEFAULT_MODEL,
+    ANTHROPIC_DEFAULT_MODEL,
     OLLAMA_DEFAULT_MODEL,
     ClaudeCLIProvider,
-    MAX_TOOL_ROUNDS, ALL_PROVIDERS,
+    MAX_TOOL_ROUNDS,
+    ALL_PROVIDERS,
     _print_tool_call,
 )
 
 
 # ── Default model selection ──────────────────────────────────
+
 
 class TestDefaultModel:
     def test_openai(self):
@@ -42,6 +53,7 @@ class TestDefaultModel:
 
 # ── Auto-detect provider ────────────────────────────────────
 
+
 class TestAutoDetectProvider:
     def test_openai_key_detected(self, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -60,6 +72,7 @@ class TestAutoDetectProvider:
 
 
 # ── Message helpers ──────────────────────────────────────────
+
 
 class TestMessageHelpers:
     def test_user_msg(self):
@@ -83,6 +96,7 @@ class TestMessageHelpers:
 
 # ── Provider constants ───────────────────────────────────────
 
+
 class TestProviderConstants:
     def test_all_providers_list(self):
         assert PROVIDER_ANTHROPIC in ALL_PROVIDERS
@@ -98,6 +112,7 @@ class TestProviderConstants:
 
 # ── OpenAI provider (mocked) ────────────────────────────────
 
+
 class TestOpenAIProvider:
     def test_construction_with_env_key(self, monkeypatch):
         """OpenAIProvider should construct when OPENAI_API_KEY is set."""
@@ -108,6 +123,7 @@ class TestOpenAIProvider:
         with patch.dict("sys.modules", {"openai": mock_sdk}):
             from agent.core import OpenAIProvider
             from agent.tools import build_registry
+
             reg = build_registry()
             p = OpenAIProvider(
                 model="gpt-4o",
@@ -123,6 +139,7 @@ class TestOpenAIProvider:
         with patch.dict("sys.modules", {"openai": mock_sdk}):
             from agent.core import OpenAIProvider
             from agent.tools import build_registry
+
             reg = build_registry()
             p = OpenAIProvider(
                 model="llama3",
@@ -135,16 +152,20 @@ class TestOpenAIProvider:
 
 # ── Anthropic provider (mocked) ──────────────────────────────
 
+
 class TestAnthropicProvider:
     def test_missing_key_raises(self, monkeypatch):
         """AnthropicProvider should raise when no API key available."""
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("_CLI_BATCH_MODE", "1")  # prevent interactive prompt
         mock_sdk = MagicMock()
-        with patch.dict("sys.modules", {"anthropic": mock_sdk}), \
-             patch("config.credentials._kr_get", return_value=None):
+        with (
+            patch.dict("sys.modules", {"anthropic": mock_sdk}),
+            patch("config.credentials._kr_get", return_value=None),
+        ):
             from agent.core import AnthropicProvider
             from agent.tools import build_registry
+
             reg = build_registry()
             with pytest.raises(RuntimeError):
                 AnthropicProvider(
@@ -156,12 +177,15 @@ class TestAnthropicProvider:
 
 # ── Claude CLI provider ─────────────────────────────────────
 
+
 class TestClaudeCLIProvider:
     def test_missing_cli_raises(self, monkeypatch):
         """ClaudeCLIProvider should raise if claude CLI is not found."""
         import shutil
+
         with patch.object(shutil, "which", return_value=None):
             from agent.tools import build_registry
+
             reg = build_registry()
             with pytest.raises(RuntimeError, match="Claude CLI not found"):
                 ClaudeCLIProvider(
@@ -174,6 +198,7 @@ class TestClaudeCLIProvider:
         """Provider name should mention subscription."""
         with patch("shutil.which", return_value="/usr/bin/claude"):
             from agent.tools import build_registry
+
             reg = build_registry()
             p = ClaudeCLIProvider(
                 model="claude-opus-4-5",
@@ -184,6 +209,7 @@ class TestClaudeCLIProvider:
 
 
 # ── Print tool call ──────────────────────────────────────────
+
 
 class TestPrintToolCall:
     def test_does_not_raise(self):

@@ -71,23 +71,23 @@ console = Console()
 # ── Constants ──────────────────────────────────────────────────
 
 ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-5"
-OPENAI_DEFAULT_MODEL    = "gpt-4o"
+OPENAI_DEFAULT_MODEL = "gpt-4o"
 
-MAX_TOOL_ROUNDS = 10   # agentic loop safety cap
+MAX_TOOL_ROUNDS = 10  # agentic loop safety cap
 
 
 # ── Provider names ─────────────────────────────────────────────
 
-PROVIDER_ANTHROPIC    = "anthropic"
-PROVIDER_OPENAI       = "openai"
-PROVIDER_GEMINI       = "gemini"
-PROVIDER_CLAUDE_CLI   = "claude_subscription"
-PROVIDER_OPENAI_SUB   = "openai_subscription"
-PROVIDER_GEMINI_SUB   = "gemini_subscription"
-PROVIDER_OLLAMA       = "ollama"
+PROVIDER_ANTHROPIC = "anthropic"
+PROVIDER_OPENAI = "openai"
+PROVIDER_GEMINI = "gemini"
+PROVIDER_CLAUDE_CLI = "claude_subscription"
+PROVIDER_OPENAI_SUB = "openai_subscription"
+PROVIDER_GEMINI_SUB = "gemini_subscription"
+PROVIDER_OLLAMA = "ollama"
 
-GEMINI_DEFAULT_MODEL  = "gemini-2.5-pro"
-OLLAMA_DEFAULT_MODEL  = "llama3.1"
+GEMINI_DEFAULT_MODEL = "gemini-2.5-pro"
+OLLAMA_DEFAULT_MODEL = "llama3.1"
 
 ALL_PROVIDERS = [
     PROVIDER_ANTHROPIC,
@@ -102,8 +102,10 @@ ALL_PROVIDERS = [
 
 # ── Message helpers ────────────────────────────────────────────
 
+
 def _user_msg(content: str) -> dict:
     return {"role": "user", "content": content}
+
 
 def _assistant_msg(content: str) -> dict:
     return {"role": "assistant", "content": content}
@@ -111,12 +113,13 @@ def _assistant_msg(content: str) -> dict:
 
 # ── Abstract provider ──────────────────────────────────────────
 
+
 class LLMProvider(ABC):
     """Common interface for all LLM providers."""
 
     def __init__(self, model: str, registry: ToolRegistry, system_prompt: str) -> None:
-        self.model         = model
-        self.registry      = registry
+        self.model = model
+        self.registry = registry
         self.system_prompt = system_prompt
 
     @abstractmethod
@@ -134,6 +137,7 @@ class LLMProvider(ABC):
 
 # ── Anthropic provider (API key) ───────────────────────────────
 
+
 class AnthropicProvider(LLMProvider):
     """
     Anthropic Claude via official `anthropic` SDK.
@@ -149,6 +153,7 @@ class AnthropicProvider(LLMProvider):
         super().__init__(model, registry, system_prompt)
         try:
             import anthropic as _sdk
+
             self._sdk = _sdk
             # Use required=False so we never prompt interactively inside a command
             api_key = get_credential(
@@ -174,14 +179,13 @@ class AnthropicProvider(LLMProvider):
         return f"Anthropic / {self.model}"
 
     def chat(self, messages: list[dict], stream: bool = True) -> str:
-        local  = list(messages)
-        tools  = self.registry.anthropic_schema()
-        final  = ""
+        local = list(messages)
+        tools = self.registry.anthropic_schema()
+        final = ""
 
         for _ in range(MAX_TOOL_ROUNDS):
             text, tool_calls = (
-                self._stream_round(local, tools) if stream
-                else self._call_round(local, tools)
+                self._stream_round(local, tools) if stream else self._call_round(local, tools)
             )
 
             if tool_calls:
@@ -190,8 +194,14 @@ class AnthropicProvider(LLMProvider):
                 if text:
                     content.append({"type": "text", "text": text})
                 for tc in tool_calls:
-                    content.append({"type": "tool_use", "id": tc["id"],
-                                    "name": tc["name"], "input": tc["input"]})
+                    content.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc["id"],
+                            "name": tc["name"],
+                            "input": tc["input"],
+                        }
+                    )
                 local.append({"role": "assistant", "content": content})
 
                 # Execute tools → tool_result blocks
@@ -199,8 +209,13 @@ class AnthropicProvider(LLMProvider):
                 for tc in tool_calls:
                     _print_tool_call(tc["name"], tc["input"])
                     result = self.registry.execute(tc["name"], tc["input"])
-                    results.append({"type": "tool_result", "tool_use_id": tc["id"],
-                                    "content": json.dumps(result)})
+                    results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tc["id"],
+                            "content": json.dumps(result),
+                        }
+                    )
                 local.append({"role": "user", "content": results})
             else:
                 final = text
@@ -214,8 +229,11 @@ class AnthropicProvider(LLMProvider):
 
     def _call_round(self, messages, tools):
         r = self._client.messages.create(
-            model=self.model, max_tokens=4096,
-            system=self.system_prompt, tools=tools, messages=messages,
+            model=self.model,
+            max_tokens=4096,
+            system=self.system_prompt,
+            tools=tools,
+            messages=messages,
         )
         text, tcs = "", []
         for blk in r.content:
@@ -228,20 +246,23 @@ class AnthropicProvider(LLMProvider):
     def _stream_round(self, messages, tools):
         text = ""
         tcs: list[dict] = []
-        cur_tool: dict  = {}
-        cur_json        = ""
-        in_tool         = False
+        cur_tool: dict = {}
+        cur_json = ""
+        in_tool = False
 
         with self._client.messages.stream(
-            model=self.model, max_tokens=4096,
-            system=self.system_prompt, tools=tools, messages=messages,
+            model=self.model,
+            max_tokens=4096,
+            system=self.system_prompt,
+            tools=tools,
+            messages=messages,
         ) as s:
             for ev in s:
                 et = ev.type
                 if et == "content_block_start":
                     blk = ev.content_block
                     if blk.type == "tool_use":
-                        in_tool  = True
+                        in_tool = True
                         cur_tool = {"id": blk.id, "name": blk.name}
                         cur_json = ""
                     else:
@@ -263,7 +284,7 @@ class AnthropicProvider(LLMProvider):
                     tcs.append(cur_tool)
                     cur_tool = {}
                     cur_json = ""
-                    in_tool  = False
+                    in_tool = False
 
         if text:
             console.print()
@@ -271,6 +292,7 @@ class AnthropicProvider(LLMProvider):
 
 
 # ── OpenAI provider (API key) ──────────────────────────────────
+
 
 class OpenAIProvider(LLMProvider):
     """
@@ -290,17 +312,18 @@ class OpenAIProvider(LLMProvider):
 
     def __init__(
         self,
-        model:         str,
-        registry:      ToolRegistry,
+        model: str,
+        registry: ToolRegistry,
         system_prompt: str,
-        base_url:      str | None = None,
-        api_key:       str | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ) -> None:
         # Resolve model: env var wins over passed-in default (allows runtime override)
         resolved_model = os.environ.get("OPENAI_MODEL") or model
         super().__init__(resolved_model, registry, system_prompt)
         try:
             import openai as _sdk
+
             self._sdk = _sdk
 
             # Resolve base_url: explicit arg > env var > None (default OpenAI)
@@ -342,26 +365,32 @@ class OpenAIProvider(LLMProvider):
         final = ""
 
         for _ in range(MAX_TOOL_ROUNDS):
-            text, tcs = (
-                self._stream_round(oai, tools) if stream
-                else self._call_round(oai, tools)
-            )
+            text, tcs = self._stream_round(oai, tools) if stream else self._call_round(oai, tools)
 
             if tcs:
-                oai.append({
-                    "role": "assistant",
-                    "content": text or None,
-                    "tool_calls": [
-                        {"id": tc["id"], "type": "function",
-                         "function": {"name": tc["name"], "arguments": json.dumps(tc["input"])}}
-                        for tc in tcs
-                    ],
-                })
+                oai.append(
+                    {
+                        "role": "assistant",
+                        "content": text or None,
+                        "tool_calls": [
+                            {
+                                "id": tc["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tc["name"],
+                                    "arguments": json.dumps(tc["input"]),
+                                },
+                            }
+                            for tc in tcs
+                        ],
+                    }
+                )
                 for tc in tcs:
                     _print_tool_call(tc["name"], tc["input"])
                     result = self.registry.execute(tc["name"], tc["input"])
-                    oai.append({"role": "tool", "tool_call_id": tc["id"],
-                                "content": json.dumps(result)})
+                    oai.append(
+                        {"role": "tool", "tool_call_id": tc["id"], "content": json.dumps(result)}
+                    )
             else:
                 final = text
                 break
@@ -373,7 +402,7 @@ class OpenAIProvider(LLMProvider):
     # ── Private ───────────────────────────────────────────────
 
     def _call_round(self, messages, tools):
-        r   = self._client.chat.completions.create(model=self.model, messages=messages, tools=tools)
+        r = self._client.chat.completions.create(model=self.model, messages=messages, tools=tools)
         msg = r.choices[0].message
         tcs = []
         if msg.tool_calls:
@@ -386,7 +415,7 @@ class OpenAIProvider(LLMProvider):
         return msg.content or "", tcs
 
     def _stream_round(self, messages, tools):
-        text     = ""
+        text = ""
         tc_acc: dict[int, dict] = {}
 
         stream = self._client.chat.completions.create(
@@ -428,6 +457,7 @@ class OpenAIProvider(LLMProvider):
 
 # ── Claude CLI provider (subscription) ────────────────────────
 
+
 class ClaudeCLIProvider(LLMProvider):
     """
     Uses the `claude` CLI tool (Claude Code) to interact with Claude.
@@ -461,6 +491,7 @@ class ClaudeCLIProvider(LLMProvider):
     @staticmethod
     def _find_claude_cli() -> str:
         import shutil
+
         for name in ("claude", "claude-code"):
             path = shutil.which(name)
             if path:
@@ -501,8 +532,7 @@ class ClaudeCLIProvider(LLMProvider):
         for m in reversed(messages):
             if m["role"] == "user":
                 last_user_msg = (
-                    m["content"] if isinstance(m["content"], str)
-                    else json.dumps(m["content"])
+                    m["content"] if isinstance(m["content"], str) else json.dumps(m["content"])
                 )
                 break
 
@@ -513,8 +543,9 @@ class ClaudeCLIProvider(LLMProvider):
         # names that exist in our registry.  This is instant and reliable.
         tool_plan = self._match_tools_in_text(last_user_msg)
         if tool_plan:
-            console.print(f"[dim]  Matched {len(tool_plan)} tools: "
-                           f"{[t[0] for t in tool_plan]}[/dim]")
+            console.print(
+                f"[dim]  Matched {len(tool_plan)} tools: {[t[0] for t in tool_plan]}[/dim]"
+            )
 
         # ── Phase 2: execute matched tools locally (fast) ─────────
         # Suppress interactive credential prompts during batch tool execution.
@@ -527,9 +558,7 @@ class ClaudeCLIProvider(LLMProvider):
             try:
                 result = self.registry.execute(name, args)
                 collected.append(
-                    f'<tool_result name="{name}">\n'
-                    f"{json.dumps(result, indent=2)}\n"
-                    f"</tool_result>"
+                    f'<tool_result name="{name}">\n{json.dumps(result, indent=2)}\n</tool_result>'
                 )
                 pass  # tool executed OK
             except Exception as exc:
@@ -544,27 +573,62 @@ class ClaudeCLIProvider(LLMProvider):
         # AND the user is asking a simple data question (not seeking advice),
         # format the results directly — no need for a 30s LLM call.
         data_only_tools = {
-            "get_quote", "get_market_snapshot", "get_vix",
-            "get_sector_snapshot", "get_funds", "get_holdings",
-            "get_positions", "get_orders", "get_market_breadth",
-            "get_fii_dii_data", "list_alerts",
+            "get_quote",
+            "get_market_snapshot",
+            "get_vix",
+            "get_sector_snapshot",
+            "get_funds",
+            "get_holdings",
+            "get_positions",
+            "get_orders",
+            "get_market_breadth",
+            "get_fii_dii_data",
+            "list_alerts",
         }
         # Detect if user wants reasoning (not just data)
         _reasoning_keywords = {
-            "should", "buy", "sell", "hold", "recommend", "opinion",
-            "think", "suggest", "advise", "compare", "better", "best", "worst",
-            "analysis", "analyze", "analyse", "why", "how", "which",
-            "strategy", "invest", "good time", "right time",
-            "worth", "bullish", "bearish", "outlook", "view",
-            "performing", "performance", "top", "bottom", "rank",
+            "should",
+            "buy",
+            "sell",
+            "hold",
+            "recommend",
+            "opinion",
+            "think",
+            "suggest",
+            "advise",
+            "compare",
+            "better",
+            "best",
+            "worst",
+            "analysis",
+            "analyze",
+            "analyse",
+            "why",
+            "how",
+            "which",
+            "strategy",
+            "invest",
+            "good time",
+            "right time",
+            "worth",
+            "bullish",
+            "bearish",
+            "outlook",
+            "view",
+            "performing",
+            "performance",
+            "top",
+            "bottom",
+            "rank",
         }
-        needs_reasoning = any(
-            kw in last_user_msg.lower() for kw in _reasoning_keywords
-        )
+        needs_reasoning = any(kw in last_user_msg.lower() for kw in _reasoning_keywords)
         matched_names = {t[0] for t in tool_plan}
-        if (collected and matched_names and
-                matched_names.issubset(data_only_tools) and
-                not needs_reasoning):
+        if (
+            collected
+            and matched_names
+            and matched_names.issubset(data_only_tools)
+            and not needs_reasoning
+        ):
             # Format data directly — no LLM needed
             response = _format_tool_results_directly(collected, last_user_msg)
             console.print(response, highlight=False)
@@ -592,7 +656,9 @@ class ClaudeCLIProvider(LLMProvider):
         history_parts: list[str] = []
         for msg in messages[:-1]:  # all messages except the last (already in last_user_msg)
             role = msg["role"].upper()
-            content = msg["content"] if isinstance(msg["content"], str) else json.dumps(msg["content"])
+            content = (
+                msg["content"] if isinstance(msg["content"], str) else json.dumps(msg["content"])
+            )
             # Truncate very long assistant messages to keep prompt manageable
             if role == "ASSISTANT" and len(content) > 1500:
                 content = content[:1500] + "\n[...truncated...]"
@@ -604,14 +670,9 @@ class ClaudeCLIProvider(LLMProvider):
             parts.append("\n--- CONVERSATION HISTORY ---\n" + "\n\n".join(history_parts))
 
         if collected:
-            parts.append(
-                "\n--- DATA COLLECTED FROM MARKET TOOLS ---\n"
-                + "\n\n".join(collected)
-            )
+            parts.append("\n--- DATA COLLECTED FROM MARKET TOOLS ---\n" + "\n\n".join(collected))
 
-        parts.append(
-            "\n--- CURRENT USER MESSAGE ---\n" + last_user_msg
-        )
+        parts.append("\n--- CURRENT USER MESSAGE ---\n" + last_user_msg)
 
         if collected:
             parts.append(
@@ -634,9 +695,9 @@ class ClaudeCLIProvider(LLMProvider):
 
     def _call_cli(
         self,
-        prompt:  str,
-        timeout: int  = 300,
-        label:   str  = "Claude is thinking",
+        prompt: str,
+        timeout: int = 300,
+        label: str = "Claude is thinking",
     ) -> str:
         """
         Invoke `claude -p` non-interactively, sending the prompt via **stdin**.
@@ -656,7 +717,7 @@ class ClaudeCLIProvider(LLMProvider):
         Read, Edit, etc.) so it can ONLY respond with text.
         """
         import threading
-        from rich.live    import Live
+        from rich.live import Live
         from rich.spinner import Spinner
 
         # Whitelist: ONLY allow WebSearch + WebFetch (for market data lookups).
@@ -664,19 +725,23 @@ class ClaudeCLIProvider(LLMProvider):
         # Each tool must be a separate --allowedTools flag (space-separated
         # in a single string is treated as one tool name by the CLI parser).
         cmd = [
-            self._cli, "-p",
-            "--output-format", "text",
-            "--allowedTools", "WebSearch",
-            "--allowedTools", "WebFetch",
+            self._cli,
+            "-p",
+            "--output-format",
+            "text",
+            "--allowedTools",
+            "WebSearch",
+            "--allowedTools",
+            "WebFetch",
         ]
 
         try:
             proc = subprocess.Popen(
                 cmd,
-                stdin  = subprocess.PIPE,
-                stdout = subprocess.PIPE,
-                stderr = subprocess.PIPE,
-                text   = True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
             )
             # Write prompt via stdin then close so the CLI knows input is done
             proc.stdin.write(prompt)
@@ -738,147 +803,188 @@ class ClaudeCLIProvider(LLMProvider):
 
     _KEYWORD_TOOL_MAP: dict[str, list[str]] = {
         # Market overview
-        "market":       ["get_market_snapshot", "get_vix"],
-        "nifty":        ["get_market_snapshot"],
-        "banknifty":    ["get_market_snapshot"],
-        "sensex":       ["get_market_snapshot"],
-        "vix":          ["get_vix"],
-        "sector":       ["get_sector_snapshot"],
-        "sectors":      ["get_sector_snapshot"],
+        "market": ["get_market_snapshot", "get_vix"],
+        "nifty": ["get_market_snapshot"],
+        "banknifty": ["get_market_snapshot"],
+        "sensex": ["get_market_snapshot"],
+        "vix": ["get_vix"],
+        "sector": ["get_sector_snapshot"],
+        "sectors": ["get_sector_snapshot"],
         # Stock analysis
-        "price":        ["get_quote"],
-        "quote":        ["get_quote"],
-        "doing":        ["get_quote"],
-        "trading at":   ["get_quote"],
-        "ltp":          ["get_quote"],
-        "news":         ["get_market_news"],
-        "headlines":    ["get_market_news"],
-        "technical":    ["technical_analyse"],
-        "rsi":          ["technical_analyse"],
-        "macd":         ["technical_analyse"],
-        "chart":        ["technical_analyse"],
-        "support":      ["technical_analyse", "get_oi_profile"],
-        "resistance":   ["technical_analyse", "get_oi_profile"],
-        "fundamental":  ["fundamental_analyse"],
-        "pe ratio":     ["fundamental_analyse"],
-        "roe":          ["fundamental_analyse"],
-        "financials":   ["fundamental_analyse"],
+        "price": ["get_quote"],
+        "quote": ["get_quote"],
+        "doing": ["get_quote"],
+        "trading at": ["get_quote"],
+        "ltp": ["get_quote"],
+        "news": ["get_market_news"],
+        "headlines": ["get_market_news"],
+        "technical": ["technical_analyse"],
+        "rsi": ["technical_analyse"],
+        "macd": ["technical_analyse"],
+        "chart": ["technical_analyse"],
+        "support": ["technical_analyse", "get_oi_profile"],
+        "resistance": ["technical_analyse", "get_oi_profile"],
+        "fundamental": ["fundamental_analyse"],
+        "pe ratio": ["fundamental_analyse"],
+        "roe": ["fundamental_analyse"],
+        "financials": ["fundamental_analyse"],
         "balance sheet": ["fundamental_analyse"],
-        "analyze":      ["get_quote", "technical_analyse", "fundamental_analyse"],
-        "analyse":      ["get_quote", "technical_analyse", "fundamental_analyse"],
-        "analysis":     ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "analyze": ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "analyse": ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "analysis": ["get_quote", "technical_analyse", "fundamental_analyse"],
         # Advisory — needs analysis tools for proper reasoning
-        "should":       ["get_quote", "technical_analyse", "fundamental_analyse"],
-        "buy":          ["get_quote", "technical_analyse", "fundamental_analyse"],
-        "sell":         ["get_quote", "technical_analyse"],
-        "invest":       ["get_quote", "technical_analyse", "fundamental_analyse"],
-        "recommend":    ["get_quote", "technical_analyse", "fundamental_analyse"],
-        "outlook":      ["get_quote", "technical_analyse", "get_market_snapshot"],
-        "compare":      ["get_quote", "technical_analyse", "fundamental_analyse"],
-        "good time":    ["get_quote", "technical_analyse", "get_market_snapshot"],
+        "should": ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "buy": ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "sell": ["get_quote", "technical_analyse"],
+        "invest": ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "recommend": ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "outlook": ["get_quote", "technical_analyse", "get_market_snapshot"],
+        "compare": ["get_quote", "technical_analyse", "fundamental_analyse"],
+        "good time": ["get_quote", "technical_analyse", "get_market_snapshot"],
         # Options
-        "option":       ["get_options_chain"],
-        "options":      ["get_options_chain"],
-        "chain":        ["get_options_chain"],
-        "pcr":          ["get_pcr"],
-        "put call":     ["get_pcr"],
-        "max pain":     ["get_max_pain"],
-        "greeks":       ["compute_greeks", "get_portfolio_greeks", "get_greeks_dashboard"],
-        "iv rank":      ["get_iv_rank"],
-        "straddle":     ["get_options_chain"],
-        "strangle":     ["get_options_chain"],
-        "iron condor":  ["get_options_chain"],
+        "option": ["get_options_chain"],
+        "options": ["get_options_chain"],
+        "chain": ["get_options_chain"],
+        "pcr": ["get_pcr"],
+        "put call": ["get_pcr"],
+        "max pain": ["get_max_pain"],
+        "greeks": ["compute_greeks", "get_portfolio_greeks", "get_greeks_dashboard"],
+        "iv rank": ["get_iv_rank"],
+        "straddle": ["get_options_chain"],
+        "strangle": ["get_options_chain"],
+        "iron condor": ["get_options_chain"],
         # Portfolio
-        "holdings":     ["get_holdings"],
-        "portfolio":    ["get_holdings", "get_positions"],
-        "positions":    ["get_positions"],
-        "orders":       ["get_orders"],
-        "funds":        ["get_funds"],
-        "balance":      ["get_funds"],
+        "holdings": ["get_holdings"],
+        "portfolio": ["get_holdings", "get_positions"],
+        "positions": ["get_positions"],
+        "orders": ["get_orders"],
+        "funds": ["get_funds"],
+        "balance": ["get_funds"],
         # Flows & breadth
-        "fii":          ["get_shareholding_pattern", "get_fii_dii_data"],
-        "dii":          ["get_shareholding_pattern", "get_fii_dii_data"],
-        "breadth":      ["get_market_breadth"],
-        "advance":      ["get_market_breadth"],
-        "decline":      ["get_market_breadth"],
+        "fii": ["get_shareholding_pattern", "get_fii_dii_data"],
+        "dii": ["get_shareholding_pattern", "get_fii_dii_data"],
+        "breadth": ["get_market_breadth"],
+        "advance": ["get_market_breadth"],
+        "decline": ["get_market_breadth"],
         # Events
-        "expiry":       ["get_upcoming_events"],
-        "earnings":     ["get_upcoming_events"],
-        "events":       ["get_upcoming_events"],
-        "rbi":          ["get_upcoming_events"],
+        "expiry": ["get_upcoming_events"],
+        "earnings": ["get_upcoming_events"],
+        "events": ["get_upcoming_events"],
+        "rbi": ["get_upcoming_events"],
         # Alerts
-        "alert":        ["set_price_alert", "set_technical_alert"],
-        "notify":       ["set_price_alert"],
-        "alerts":       ["list_alerts"],
+        "alert": ["set_price_alert", "set_technical_alert"],
+        "notify": ["set_price_alert"],
+        "alerts": ["list_alerts"],
         # Morning brief (catch "brief" / "morning" without full command)
-        "brief":        ["get_market_snapshot", "get_market_news",
-                         "get_fii_dii_data", "get_market_breadth",
-                         "get_upcoming_events"],
-        "morning":      ["get_market_snapshot", "get_market_news",
-                         "get_fii_dii_data", "get_market_breadth",
-                         "get_upcoming_events"],
+        "brief": [
+            "get_market_snapshot",
+            "get_market_news",
+            "get_fii_dii_data",
+            "get_market_breadth",
+            "get_upcoming_events",
+        ],
+        "morning": [
+            "get_market_snapshot",
+            "get_market_news",
+            "get_fii_dii_data",
+            "get_market_breadth",
+            "get_upcoming_events",
+        ],
         # Shareholding & institutional
         "shareholding": ["get_shareholding_pattern", "fundamental_analyse"],
-        "holding":      ["get_shareholding_pattern", "fundamental_analyse"],
-        "promoter":     ["get_shareholding_pattern", "fundamental_analyse"],
-        "institutional":["get_shareholding_pattern"],
-        "pledge":       ["get_shareholding_pattern"],
+        "holding": ["get_shareholding_pattern", "fundamental_analyse"],
+        "promoter": ["get_shareholding_pattern", "fundamental_analyse"],
+        "institutional": ["get_shareholding_pattern"],
+        "pledge": ["get_shareholding_pattern"],
         # Most active stocks
-        "active":       ["get_most_active_stocks"],
-        "most active":  ["get_most_active_stocks"],
-        "trending":     ["get_most_active_stocks"],
-        "volume":       ["get_most_active_stocks"],
+        "active": ["get_most_active_stocks"],
+        "most active": ["get_most_active_stocks"],
+        "trending": ["get_most_active_stocks"],
+        "volume": ["get_most_active_stocks"],
         # Greeks & hedging
-        "delta":        ["get_greeks_dashboard", "suggest_delta_hedge"],
-        "hedge":        ["suggest_delta_hedge"],
-        "theta":        ["get_greeks_dashboard"],
-        "gamma":        ["get_gex_analysis"],
+        "delta": ["get_greeks_dashboard", "suggest_delta_hedge"],
+        "hedge": ["suggest_delta_hedge"],
+        "theta": ["get_greeks_dashboard"],
+        "gamma": ["get_gex_analysis"],
         # Options analytics
-        "oi":           ["get_oi_profile"],
-        "open interest":["get_oi_profile"],
-        "gex":          ["get_gex_analysis"],
-        "gamma exposure":["get_gex_analysis"],
-        "scan":         ["scan_options"],
-        "scanner":      ["scan_options"],
-        "high iv":      ["scan_options"],
-        "unusual oi":   ["scan_options"],
-        "skew":         ["get_options_chain"],
-        "bulk deal":    ["get_bulk_block_deals"],
-        "block deal":   ["get_bulk_block_deals"],
+        "oi": ["get_oi_profile"],
+        "open interest": ["get_oi_profile"],
+        "gex": ["get_gex_analysis"],
+        "gamma exposure": ["get_gex_analysis"],
+        "scan": ["scan_options"],
+        "scanner": ["scan_options"],
+        "high iv": ["scan_options"],
+        "unusual oi": ["scan_options"],
+        "skew": ["get_options_chain"],
+        "bulk deal": ["get_bulk_block_deals"],
+        "block deal": ["get_bulk_block_deals"],
         # DCF / Valuation
-        "dcf":          ["compute_dcf"],
-        "valuation":    ["compute_dcf", "fundamental_analyse"],
-        "intrinsic":    ["compute_dcf"],
-        "fair value":   ["compute_dcf"],
-        "undervalued":  ["compute_dcf", "fundamental_analyse"],
-        "overvalued":   ["compute_dcf", "fundamental_analyse"],    }
+        "dcf": ["compute_dcf"],
+        "valuation": ["compute_dcf", "fundamental_analyse"],
+        "intrinsic": ["compute_dcf"],
+        "fair value": ["compute_dcf"],
+        "undervalued": ["compute_dcf", "fundamental_analyse"],
+        "overvalued": ["compute_dcf", "fundamental_analyse"],
+    }
 
     # Common stock name → NSE symbol (case-insensitive lookup)
     _STOCK_NAMES: dict[str, str] = {
-        "reliance": "RELIANCE", "hdfc": "HDFCBANK", "hdfc bank": "HDFCBANK",
-        "infosys": "INFY", "infy": "INFY", "tcs": "TCS", "wipro": "WIPRO",
-        "icici": "ICICIBANK", "icici bank": "ICICIBANK",
-        "sbi": "SBIN", "state bank": "SBIN",
-        "bharti": "BHARTIARTL", "airtel": "BHARTIARTL",
-        "kotak": "KOTAKBANK", "kotak bank": "KOTAKBANK",
-        "axis": "AXISBANK", "axis bank": "AXISBANK",
-        "maruti": "MARUTI", "tata motors": "TATAMOTORS", "tatamotors": "TATAMOTORS",
-        "tata steel": "TATASTEEL", "tatasteel": "TATASTEEL",
-        "tata power": "TATAPOWER", "adani": "ADANIENT",
-        "adani ports": "ADANIPORTS", "adani ent": "ADANIENT",
-        "lt": "LT", "larsen": "LT", "bajaj finance": "BAJFINANCE",
-        "bajaj finserv": "BAJFINSV", "bajaj": "BAJFINANCE",
-        "hul": "HINDUNILVR", "hindustan unilever": "HINDUNILVR",
-        "itc": "ITC", "ongc": "ONGC", "coal india": "COALINDIA",
-        "power grid": "POWERGRID", "ntpc": "NTPC", "sun pharma": "SUNPHARMA",
-        "dr reddy": "DRREDDY", "divi": "DIVISLAB", "cipla": "CIPLA",
-        "titan": "TITAN", "asian paints": "ASIANPAINT",
-        "ultra cement": "ULTRACEMCO", "ultratech": "ULTRACEMCO",
-        "m&m": "M&M", "mahindra": "M&M",
-        "indusind": "INDUSINDBK", "bandhan": "BANDHANBNK",
-        "zomato": "ZOMATO", "paytm": "PAYTM",
-        "shakti": "SHAKTIPUMP", "shakti pumps": "SHAKTIPUMP",
-        "muthoot": "MUTHOOTFIN", "muthoot finance": "MUTHOOTFIN",
+        "reliance": "RELIANCE",
+        "hdfc": "HDFCBANK",
+        "hdfc bank": "HDFCBANK",
+        "infosys": "INFY",
+        "infy": "INFY",
+        "tcs": "TCS",
+        "wipro": "WIPRO",
+        "icici": "ICICIBANK",
+        "icici bank": "ICICIBANK",
+        "sbi": "SBIN",
+        "state bank": "SBIN",
+        "bharti": "BHARTIARTL",
+        "airtel": "BHARTIARTL",
+        "kotak": "KOTAKBANK",
+        "kotak bank": "KOTAKBANK",
+        "axis": "AXISBANK",
+        "axis bank": "AXISBANK",
+        "maruti": "MARUTI",
+        "tata motors": "TATAMOTORS",
+        "tatamotors": "TATAMOTORS",
+        "tata steel": "TATASTEEL",
+        "tatasteel": "TATASTEEL",
+        "tata power": "TATAPOWER",
+        "adani": "ADANIENT",
+        "adani ports": "ADANIPORTS",
+        "adani ent": "ADANIENT",
+        "lt": "LT",
+        "larsen": "LT",
+        "bajaj finance": "BAJFINANCE",
+        "bajaj finserv": "BAJFINSV",
+        "bajaj": "BAJFINANCE",
+        "hul": "HINDUNILVR",
+        "hindustan unilever": "HINDUNILVR",
+        "itc": "ITC",
+        "ongc": "ONGC",
+        "coal india": "COALINDIA",
+        "power grid": "POWERGRID",
+        "ntpc": "NTPC",
+        "sun pharma": "SUNPHARMA",
+        "dr reddy": "DRREDDY",
+        "divi": "DIVISLAB",
+        "cipla": "CIPLA",
+        "titan": "TITAN",
+        "asian paints": "ASIANPAINT",
+        "ultra cement": "ULTRACEMCO",
+        "ultratech": "ULTRACEMCO",
+        "m&m": "M&M",
+        "mahindra": "M&M",
+        "indusind": "INDUSINDBK",
+        "bandhan": "BANDHANBNK",
+        "zomato": "ZOMATO",
+        "paytm": "PAYTM",
+        "shakti": "SHAKTIPUMP",
+        "shakti pumps": "SHAKTIPUMP",
+        "muthoot": "MUTHOOTFIN",
+        "muthoot finance": "MUTHOOTFIN",
         "oil india": "OIL",
     }
 
@@ -900,8 +1006,8 @@ class ClaudeCLIProvider(LLMProvider):
         Returns list of (tool_name, arguments_dict) tuples.
         """
         known = {t["name"] for t in self.registry.anthropic_schema()}
-        seen:    set[str]                = set()
-        matched: list[tuple[str, dict]]  = []
+        seen: set[str] = set()
+        matched: list[tuple[str, dict]] = []
 
         # ── Extract stock symbol ──────────────────────────────────
         symbol = self._extract_symbol(text)
@@ -920,10 +1026,14 @@ class ClaudeCLIProvider(LLMProvider):
                         seen.add(t)
 
         # ── Auto-add stock-specific tools if symbol detected ──────
-        if symbol and not seen.intersection({
-            "get_quote", "technical_analyse", "get_stock_news",
-            "fundamental_analyse",
-        }):
+        if symbol and not seen.intersection(
+            {
+                "get_quote",
+                "technical_analyse",
+                "get_stock_news",
+                "fundamental_analyse",
+            }
+        ):
             for default in ("get_quote",):
                 if default in known:
                     seen.add(default)
@@ -932,7 +1042,7 @@ class ClaudeCLIProvider(LLMProvider):
         for name in seen:
             args: dict = {}
             schema = self.registry._tools[name].get("parameters", {})
-            props  = schema.get("properties", {})
+            props = schema.get("properties", {})
             if symbol:
                 if "symbol" in props:
                     args["symbol"] = symbol
@@ -959,37 +1069,121 @@ class ClaudeCLIProvider(LLMProvider):
         # 1. Try the stock-name dictionary first (longest match wins)
         text_lower = text.lower()
         best_name = ""
-        best_sym  = ""
+        best_sym = ""
         for name, sym in self._STOCK_NAMES.items():
             if name in text_lower and len(name) > len(best_name):
                 best_name = name
-                best_sym  = sym
+                best_sym = sym
         if best_sym:
             return best_sym
 
         # 2. Fall back to uppercase regex: "NSE:RELIANCE" or standalone "RELIANCE"
         _noise = {
-            "NIFTY", "BANKNIFTY", "VIX", "SYSTEM", "USER", "ASSISTANT",
-            "JSON", "NSE", "BSE", "IST", "RSI", "MACD", "PE", "CE", "PUT",
-            "CALL", "BUY", "SELL", "STT", "GST", "RBI", "FII", "DII",
-            "NOT", "USE", "THE", "FOR", "AND", "NFO", "CNC", "MIS",
-            "NRML", "SL", "AM", "PM", "EMA", "SMA", "ATR",
+            "NIFTY",
+            "BANKNIFTY",
+            "VIX",
+            "SYSTEM",
+            "USER",
+            "ASSISTANT",
+            "JSON",
+            "NSE",
+            "BSE",
+            "IST",
+            "RSI",
+            "MACD",
+            "PE",
+            "CE",
+            "PUT",
+            "CALL",
+            "BUY",
+            "SELL",
+            "STT",
+            "GST",
+            "RBI",
+            "FII",
+            "DII",
+            "NOT",
+            "USE",
+            "THE",
+            "FOR",
+            "AND",
+            "NFO",
+            "CNC",
+            "MIS",
+            "NRML",
+            "SL",
+            "AM",
+            "PM",
+            "EMA",
+            "SMA",
+            "ATR",
             # Debate/analysis terms (not stock symbols)
-            "BULLISH", "BEARISH", "NEUTRAL", "DEBATE", "BULL", "BEAR",
-            "VERDICT", "HOLD", "STRONG", "ANALYSIS", "TRADE", "RISK",
-            "FUND", "MANAGER", "RESEARCHER", "FACILITATOR", "ROUND",
-            "TARGET", "ENTRY", "EXIT", "STOP", "LOSS", "PROFIT",
-            "MARGIN", "CAPITAL", "PORTFOLIO", "SCORE", "CONFIDENCE",
-            "HIGH", "LOW", "OPEN", "CLOSE", "ABOVE", "BELOW",
-            "MARKET", "INDEX", "SECTOR", "IMPORTANT", "DATA",
-            "OPTIONS", "OPTION", "FUTURES", "SPREAD", "STRADDLE",
-            "STRANGLE", "CONDOR", "BUTTERFLY", "PREMIUM", "STRIKE",
-            "EXPIRY", "SENTIMENT", "TECHNICAL", "FUNDAMENTAL",
-            "EARNINGS", "RESULTS", "GROWTH", "REVENUE", "VOLUME",
-            "SUPPORT", "RESISTANCE", "TREND", "SIGNAL", "PATTERN",
+            "BULLISH",
+            "BEARISH",
+            "NEUTRAL",
+            "DEBATE",
+            "BULL",
+            "BEAR",
+            "VERDICT",
+            "HOLD",
+            "STRONG",
+            "ANALYSIS",
+            "TRADE",
+            "RISK",
+            "FUND",
+            "MANAGER",
+            "RESEARCHER",
+            "FACILITATOR",
+            "ROUND",
+            "TARGET",
+            "ENTRY",
+            "EXIT",
+            "STOP",
+            "LOSS",
+            "PROFIT",
+            "MARGIN",
+            "CAPITAL",
+            "PORTFOLIO",
+            "SCORE",
+            "CONFIDENCE",
+            "HIGH",
+            "LOW",
+            "OPEN",
+            "CLOSE",
+            "ABOVE",
+            "BELOW",
+            "MARKET",
+            "INDEX",
+            "SECTOR",
+            "IMPORTANT",
+            "DATA",
+            "OPTIONS",
+            "OPTION",
+            "FUTURES",
+            "SPREAD",
+            "STRADDLE",
+            "STRANGLE",
+            "CONDOR",
+            "BUTTERFLY",
+            "PREMIUM",
+            "STRIKE",
+            "EXPIRY",
+            "SENTIMENT",
+            "TECHNICAL",
+            "FUNDAMENTAL",
+            "EARNINGS",
+            "RESULTS",
+            "GROWTH",
+            "REVENUE",
+            "VOLUME",
+            "SUPPORT",
+            "RESISTANCE",
+            "TREND",
+            "SIGNAL",
+            "PATTERN",
         }
         m = re.search(
-            r'(?:NSE:|BSE:)?([A-Z][A-Z0-9&]{1,19})'
+            r"(?:NSE:|BSE:)?([A-Z][A-Z0-9&]{1,19})"
             r'(?=[\s"\'.,;:\]\)—?!]|$)',
             text,
         )
@@ -1000,6 +1194,7 @@ class ClaudeCLIProvider(LLMProvider):
 
 
 # ── OpenAI subscription provider (session token) ───────────────
+
 
 class OpenAISubscriptionProvider(LLMProvider):
     """
@@ -1028,18 +1223,22 @@ class OpenAISubscriptionProvider(LLMProvider):
     """
 
     BACKEND_URL = "https://chat.openai.com/backend-api/conversation"
-    AUTH_URL    = "https://chat.openai.com/api/auth/session"
+    AUTH_URL = "https://chat.openai.com/api/auth/session"
 
     def __init__(self, model: str, registry: ToolRegistry, system_prompt: str) -> None:
         super().__init__(model, registry, system_prompt)
         try:
             import httpx
+
             self._httpx = httpx
         except ImportError:
             raise RuntimeError("httpx not installed. Run: pip install httpx")
 
         self._session_token = get_credential(
-            "OPENAI_SESSION_TOKEN", "OpenAI Session Token (ChatGPT Plus)", secret=True, required=False
+            "OPENAI_SESSION_TOKEN",
+            "OpenAI Session Token (ChatGPT Plus)",
+            secret=True,
+            required=False,
         )
         if not self._session_token:
             raise RuntimeError(
@@ -1080,8 +1279,7 @@ class OpenAISubscriptionProvider(LLMProvider):
         """
         # Build payload — simplified, no tool calling
         user_text = "\n\n".join(
-            msg["content"] for msg in messages
-            if isinstance(msg.get("content"), str)
+            msg["content"] for msg in messages if isinstance(msg.get("content"), str)
         )
 
         combined = (
@@ -1093,24 +1291,24 @@ class OpenAISubscriptionProvider(LLMProvider):
 
         headers = {
             "Authorization": f"Bearer {self._access_token}",
-            "Content-Type":  "application/json",
-            "User-Agent":    "Mozilla/5.0",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0",
         }
 
         payload = {
-            "action":          "next",
-            "messages": [{
-                "id":      "msg-001",
-                "role":    "user",
-                "content": {"content_type": "text", "parts": [combined]},
-            }],
-            "model":           self.model or "gpt-4o",
+            "action": "next",
+            "messages": [
+                {
+                    "id": "msg-001",
+                    "role": "user",
+                    "content": {"content_type": "text", "parts": [combined]},
+                }
+            ],
+            "model": self.model or "gpt-4o",
             "parent_message_id": "00000000-0000-0000-0000-000000000000",
         }
 
-        console.print(
-            "[yellow]⚠  Running in subscription mode — tool calls unavailable.[/yellow]"
-        )
+        console.print("[yellow]⚠  Running in subscription mode — tool calls unavailable.[/yellow]")
 
         try:
             r = self._httpx.post(
@@ -1127,9 +1325,7 @@ class OpenAISubscriptionProvider(LLMProvider):
                 if line.startswith("data: ") and line != "data: [DONE]":
                     try:
                         chunk = json.loads(line[6:])
-                        parts = (chunk.get("message", {})
-                                      .get("content", {})
-                                      .get("parts", []))
+                        parts = chunk.get("message", {}).get("content", {}).get("parts", [])
                         if parts:
                             text = parts[-1]
                     except json.JSONDecodeError:
@@ -1145,6 +1341,7 @@ class OpenAISubscriptionProvider(LLMProvider):
 
 
 # ── Gemini provider (API key) ──────────────────────────────────
+
 
 class GeminiProvider(LLMProvider):
     """
@@ -1166,12 +1363,12 @@ class GeminiProvider(LLMProvider):
         try:
             from google import genai
             from google.genai import types as genai_types
+
             self._genai = genai
             self._genai_types = genai_types
-            api_key = (
-                get_credential("GEMINI_API_KEY", "Google Gemini API Key", secret=True, required=False)
-                or os.environ.get("GOOGLE_API_KEY", "")
-            )
+            api_key = get_credential(
+                "GEMINI_API_KEY", "Google Gemini API Key", secret=True, required=False
+            ) or os.environ.get("GOOGLE_API_KEY", "")
             if not api_key:
                 raise RuntimeError(
                     "GEMINI_API_KEY not set.\n"
@@ -1198,11 +1395,13 @@ class GeminiProvider(LLMProvider):
             declarations = []
             for t in self.registry.anthropic_schema():
                 params = t.get("input_schema", {})
-                declarations.append(types.FunctionDeclaration(
-                    name        = t["name"],
-                    description = t["description"],
-                    parameters  = params,
-                ))
+                declarations.append(
+                    types.FunctionDeclaration(
+                        name=t["name"],
+                        description=t["description"],
+                        parameters=params,
+                    )
+                )
             return [types.Tool(function_declarations=declarations)]
         except Exception:
             return []
@@ -1213,21 +1412,21 @@ class GeminiProvider(LLMProvider):
 
         # Build chat config with tools and system instruction
         config = types.GenerateContentConfig(
-            system_instruction = self.system_prompt,
-            tools              = self._tools_schema or None,
-            automatic_function_calling = types.AutomaticFunctionCallingConfig(disable=True),
+            system_instruction=self.system_prompt,
+            tools=self._tools_schema or None,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
         # Convert history to Gemini format
         gemini_history = self._to_gemini_history(messages[:-1]) if len(messages) > 1 else []
-        last_msg       = messages[-1]["content"] if messages else ""
+        last_msg = messages[-1]["content"] if messages else ""
 
         chat_session = self._client.chats.create(
-            model   = self.model or GEMINI_DEFAULT_MODEL,
-            config  = config,
-            history = gemini_history or None,
+            model=self.model or GEMINI_DEFAULT_MODEL,
+            config=config,
+            history=gemini_history or None,
         )
-        final_text   = ""
+        final_text = ""
 
         # Send the last user message
         current_input = last_msg
@@ -1245,10 +1444,12 @@ class GeminiProvider(LLMProvider):
             for part in response.candidates[0].content.parts:
                 if part.function_call:
                     fc = part.function_call
-                    tool_calls.append({
-                        "name":  fc.name,
-                        "input": dict(fc.args) if fc.args else {},
-                    })
+                    tool_calls.append(
+                        {
+                            "name": fc.name,
+                            "input": dict(fc.args) if fc.args else {},
+                        }
+                    )
                 elif part.text:
                     text_parts.append(part.text)
 
@@ -1266,8 +1467,8 @@ class GeminiProvider(LLMProvider):
                     fn_responses.append(
                         types.Part(
                             function_response=types.FunctionResponse(
-                                name     = tc["name"],
-                                response = {"result": result},
+                                name=tc["name"],
+                                response={"result": result},
                             )
                         )
                     )
@@ -1291,13 +1492,14 @@ class GeminiProvider(LLMProvider):
         """Convert our message format to Gemini history format."""
         history = []
         for msg in messages:
-            role    = "user" if msg["role"] == "user" else "model"
+            role = "user" if msg["role"] == "user" else "model"
             content = msg["content"] if isinstance(msg["content"], str) else str(msg["content"])
             history.append({"role": role, "parts": [{"text": content}]})
         return history
 
 
 # ── Gemini Vertex AI provider (subscription / GCP) ────────────
+
 
 class GeminiVertexProvider(LLMProvider):
     """
@@ -1320,17 +1522,16 @@ class GeminiVertexProvider(LLMProvider):
 
     def __init__(self, model: str, registry: ToolRegistry, system_prompt: str) -> None:
         super().__init__(model, registry, system_prompt)
-        self._project  = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+        self._project = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
         self._location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 
         try:
             import vertexai
-            from vertexai.generative_models import (
-                GenerativeModel, FunctionDeclaration, Tool
-            )
-            self._GenerativeModel    = GenerativeModel
+            from vertexai.generative_models import GenerativeModel, FunctionDeclaration, Tool
+
+            self._GenerativeModel = GenerativeModel
             self._FunctionDeclaration = FunctionDeclaration
-            self._Tool               = Tool
+            self._Tool = Tool
 
             if not self._project:
                 raise RuntimeError(
@@ -1343,15 +1544,14 @@ class GeminiVertexProvider(LLMProvider):
 
             tools = self._build_vertex_tools()
             self._model_obj = GenerativeModel(
-                model_name         = self.model or "gemini-2.5-pro",
-                system_instruction = self.system_prompt,
-                tools              = [tools] if tools else [],
+                model_name=self.model or "gemini-2.5-pro",
+                system_instruction=self.system_prompt,
+                tools=[tools] if tools else [],
             )
 
         except ImportError:
             raise RuntimeError(
-                "google-cloud-aiplatform not installed.\n"
-                "Run: pip install google-cloud-aiplatform"
+                "google-cloud-aiplatform not installed.\nRun: pip install google-cloud-aiplatform"
             )
 
     @property
@@ -1361,21 +1561,25 @@ class GeminiVertexProvider(LLMProvider):
     def _build_vertex_tools(self):
         declarations = []
         for t in self.registry.anthropic_schema():
-            declarations.append(self._FunctionDeclaration(
-                name        = t["name"],
-                description = t["description"],
-                parameters  = t.get("input_schema", {}),
-            ))
+            declarations.append(
+                self._FunctionDeclaration(
+                    name=t["name"],
+                    description=t["description"],
+                    parameters=t.get("input_schema", {}),
+                )
+            )
         return self._Tool(function_declarations=declarations) if declarations else None
 
     def chat(self, messages: list[dict], stream: bool = True) -> str:
         """Same agentic loop as GeminiProvider, using Vertex AI client."""
-        gemini_history = GeminiProvider._to_gemini_history(messages[:-1]) if len(messages) > 1 else []
-        last_msg       = messages[-1]["content"] if messages else ""
+        gemini_history = (
+            GeminiProvider._to_gemini_history(messages[:-1]) if len(messages) > 1 else []
+        )
+        last_msg = messages[-1]["content"] if messages else ""
 
-        chat_session   = self._model_obj.start_chat(history=gemini_history)
-        current_input  = last_msg
-        final_text     = ""
+        chat_session = self._model_obj.start_chat(history=gemini_history)
+        current_input = last_msg
+        final_text = ""
 
         for _ in range(MAX_TOOL_ROUNDS):
             try:
@@ -1398,14 +1602,17 @@ class GeminiVertexProvider(LLMProvider):
                     console.print(text, highlight=False)
 
                 from vertexai.generative_models import Part
+
                 fn_responses = []
                 for tc in tool_calls:
                     _print_tool_call(tc["name"], tc["input"])
                     result = self.registry.execute(tc["name"], tc["input"])
-                    fn_responses.append(Part.from_function_response(
-                        name     = tc["name"],
-                        response = {"result": result},
-                    ))
+                    fn_responses.append(
+                        Part.from_function_response(
+                            name=tc["name"],
+                            response={"result": result},
+                        )
+                    )
                 current_input = fn_responses
             else:
                 final_text = text
@@ -1420,9 +1627,10 @@ class GeminiVertexProvider(LLMProvider):
 
 # ── Provider factory ───────────────────────────────────────────
 
+
 def get_provider(
     provider: str | None = None,
-    model:    str | None = None,
+    model: str | None = None,
     registry: ToolRegistry | None = None,
 ) -> LLMProvider:
     """
@@ -1444,22 +1652,14 @@ def get_provider(
     # whether to propagate construction failures or silently recover.
     explicit_provider = bool(provider)
 
-    chosen = (
-        provider
-        or os.environ.get("AI_PROVIDER", "").lower()
-        or _auto_detect_provider()
-    )
+    chosen = provider or os.environ.get("AI_PROVIDER", "").lower() or _auto_detect_provider()
 
     # If auto-detect fell back to anthropic but no key is available,
     # run the first-time setup instead of prompting for a key mid-command.
     if chosen == PROVIDER_ANTHROPIC and not _has_anthropic_key():
         chosen = _first_time_provider_setup()
 
-    chosen_model = (
-        model
-        or os.environ.get("AI_MODEL", "")
-        or _default_model(chosen)
-    )
+    chosen_model = model or os.environ.get("AI_MODEL", "") or _default_model(chosen)
 
     system = build_system_prompt()
 
@@ -1470,13 +1670,13 @@ def get_provider(
         )
 
     dispatch = {
-        PROVIDER_ANTHROPIC:  AnthropicProvider,
-        PROVIDER_OPENAI:     OpenAIProvider,
-        PROVIDER_GEMINI:     GeminiProvider,
+        PROVIDER_ANTHROPIC: AnthropicProvider,
+        PROVIDER_OPENAI: OpenAIProvider,
+        PROVIDER_GEMINI: GeminiProvider,
         PROVIDER_CLAUDE_CLI: ClaudeCLIProvider,
         PROVIDER_OPENAI_SUB: OpenAISubscriptionProvider,
         PROVIDER_GEMINI_SUB: GeminiVertexProvider,
-        PROVIDER_OLLAMA:     None,  # handled specially below
+        PROVIDER_OLLAMA: None,  # handled specially below
     }
 
     def _build_provider(prov_name, model, registry, sys_prompt):
@@ -1484,8 +1684,7 @@ def get_provider(
         if prov_name == PROVIDER_OLLAMA:
             base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
             mdl = model or os.environ.get("OLLAMA_MODEL", OLLAMA_DEFAULT_MODEL)
-            return OpenAIProvider(mdl, registry, sys_prompt,
-                                 base_url=base, api_key="ollama")
+            return OpenAIProvider(mdl, registry, sys_prompt, base_url=base, api_key="ollama")
         prov_cls = dispatch.get(prov_name, AnthropicProvider)
         return prov_cls(model, registry, sys_prompt)
 
@@ -1516,6 +1715,7 @@ def get_provider(
 def _has_anthropic_key() -> bool:
     """Check whether an Anthropic API key is available without prompting."""
     from config.credentials import _kr_get
+
     return bool(os.environ.get("ANTHROPIC_API_KEY") or _kr_get("ANTHROPIC_API_KEY"))
 
 
@@ -1529,7 +1729,8 @@ def _clear_saved_provider() -> None:
     """
     try:
         from config.credentials import _kr_set
-        _kr_set("AI_PROVIDER", "")   # blank it — falsy, so load_all() won't set os.environ
+
+        _kr_set("AI_PROVIDER", "")  # blank it — falsy, so load_all() won't set os.environ
     except Exception:
         pass
     os.environ.pop("AI_PROVIDER", None)
@@ -1544,8 +1745,8 @@ def _first_time_provider_setup() -> str:
     """
     import shutil
     from rich.console import Console
-    from rich.panel   import Panel
-    from rich.prompt  import Prompt
+    from rich.panel import Panel
+    from rich.prompt import Prompt
     from config.credentials import _kr_set
 
     _c = Console()
@@ -1555,29 +1756,31 @@ def _first_time_provider_setup() -> str:
 
     subscription_hint = (
         "[bold green]✓ claude CLI detected[/bold green]"
-        if has_claude_cli else
-        "[dim](install: npm i -g @anthropic-ai/claude-code)[/dim]"
+        if has_claude_cli
+        else "[dim](install: npm i -g @anthropic-ai/claude-code)[/dim]"
     )
 
     _c.print()
-    _c.print(Panel(
-        "\n"
-        "  No AI provider configured yet. Pick one to continue:\n\n"
-        f"  [cyan][1][/cyan] [bold]Claude subscription[/bold]  {subscription_hint}\n"
-        "       Use your Claude Pro or Max plan — no API costs.\n\n"
-        "  [cyan][2][/cyan] [bold]Claude API key[/bold]  [dim](console.anthropic.com)[/dim]\n"
-        "       Pay-per-use. Claude Haiku is very cheap for trading analysis.\n\n"
-        "  [cyan][3][/cyan] [bold]Gemini (Google)[/bold]  [dim][green]Free tier available — aistudio.google.com[/green][/dim]\n"
-        "       Gemini 2.5 Pro is free with generous rate limits.\n\n"
-        "  [cyan][4][/cyan] [bold]OpenAI (GPT-4o)[/bold]  [dim](platform.openai.com)[/dim]\n"
-        "       Pay-per-use API key.\n\n"
-        "  [cyan][5][/cyan] ChatGPT Plus subscription  "
-        "[dim](session token, unofficial)[/dim]\n\n"
-        "  [cyan][6][/cyan] Skip AI for now\n",
-        title="[bold yellow]🤖  AI Provider Setup[/bold yellow]",
-        border_style="yellow",
-        padding=(0, 2),
-    ))
+    _c.print(
+        Panel(
+            "\n"
+            "  No AI provider configured yet. Pick one to continue:\n\n"
+            f"  [cyan][1][/cyan] [bold]Claude subscription[/bold]  {subscription_hint}\n"
+            "       Use your Claude Pro or Max plan — no API costs.\n\n"
+            "  [cyan][2][/cyan] [bold]Claude API key[/bold]  [dim](console.anthropic.com)[/dim]\n"
+            "       Pay-per-use. Claude Haiku is very cheap for trading analysis.\n\n"
+            "  [cyan][3][/cyan] [bold]Gemini (Google)[/bold]  [dim][green]Free tier available — aistudio.google.com[/green][/dim]\n"
+            "       Gemini 2.5 Pro is free with generous rate limits.\n\n"
+            "  [cyan][4][/cyan] [bold]OpenAI (GPT-4o)[/bold]  [dim](platform.openai.com)[/dim]\n"
+            "       Pay-per-use API key.\n\n"
+            "  [cyan][5][/cyan] ChatGPT Plus subscription  "
+            "[dim](session token, unofficial)[/dim]\n\n"
+            "  [cyan][6][/cyan] Skip AI for now\n",
+            title="[bold yellow]🤖  AI Provider Setup[/bold yellow]",
+            border_style="yellow",
+            padding=(0, 2),
+        )
+    )
 
     choice = Prompt.ask(
         "  [bold]Choose[/bold]",
@@ -1605,7 +1808,10 @@ def _first_time_provider_setup() -> str:
 
     elif choice == "2":
         from config.credentials import get_credential
-        api_key = get_credential("ANTHROPIC_API_KEY", "Anthropic API Key", secret=True, required=False)
+
+        api_key = get_credential(
+            "ANTHROPIC_API_KEY", "Anthropic API Key", secret=True, required=False
+        )
         if api_key:
             _save("AI_PROVIDER", PROVIDER_ANTHROPIC)
             _c.print("  [green]✓ Using Anthropic API[/green]\n")
@@ -1616,6 +1822,7 @@ def _first_time_provider_setup() -> str:
 
     elif choice == "3":
         from config.credentials import get_credential
+
         api_key = get_credential(
             "GEMINI_API_KEY", "Google Gemini API Key", secret=True, required=False
         )
@@ -1632,6 +1839,7 @@ def _first_time_provider_setup() -> str:
 
     elif choice == "4":
         from config.credentials import get_credential
+
         api_key = get_credential("OPENAI_API_KEY", "OpenAI API Key", secret=True, required=False)
         if api_key:
             _save("AI_PROVIDER", PROVIDER_OPENAI)
@@ -1647,6 +1855,7 @@ def _first_time_provider_setup() -> str:
             "  [dim]→ __Secure-next-auth.session-token[/dim]\n"
         )
         from config.credentials import get_credential
+
         token = get_credential(
             "OPENAI_SESSION_TOKEN", "ChatGPT Session Token", secret=True, required=False
         )
@@ -1690,6 +1899,7 @@ def _auto_detect_provider() -> str:
 
     # claude CLI binary — most reliable signal of subscription intent
     import shutil
+
     if shutil.which("claude") or shutil.which("claude-code"):
         return PROVIDER_CLAUDE_CLI
 
@@ -1702,7 +1912,7 @@ def _auto_detect_provider() -> str:
     if env.get("GOOGLE_CLOUD_PROJECT") and env.get("GOOGLE_APPLICATION_CREDENTIALS"):
         return PROVIDER_GEMINI_SUB
 
-    return PROVIDER_ANTHROPIC   # triggers first-time setup via _first_time_provider_setup
+    return PROVIDER_ANTHROPIC  # triggers first-time setup via _first_time_provider_setup
 
 
 def _default_model(provider: str) -> str:
@@ -1716,6 +1926,7 @@ def _default_model(provider: str) -> str:
 
 
 # ── Trading Agent ──────────────────────────────────────────────
+
 
 class TradingAgent:
     """
@@ -1734,17 +1945,15 @@ class TradingAgent:
 
     def __init__(
         self,
-        provider:  str | None = None,
-        model:     str | None = None,
-        stream:    bool       = True,
+        provider: str | None = None,
+        model: str | None = None,
+        stream: bool = True,
     ) -> None:
         self._registry = build_registry()
-        self._stream   = stream
+        self._stream = stream
         self._history: list[dict] = []
 
-        self._provider = get_provider(
-            provider=provider, model=model, registry=self._registry
-        )
+        self._provider = get_provider(provider=provider, model=model, registry=self._registry)
 
         console.print(
             f"\n[dim]🤖  AI: {self._provider.provider_name}[/dim]",
@@ -1784,11 +1993,11 @@ class TradingAgent:
 
         templates = {
             "morning_brief": MORNING_BRIEF_PROMPT,
-            "analyze":       ANALYZE_STOCK_PROMPT,
-            "strategy":      STRATEGY_PROMPT,
+            "analyze": ANALYZE_STOCK_PROMPT,
+            "strategy": STRATEGY_PROMPT,
         }
 
-        tmpl   = templates.get(command, command)
+        tmpl = templates.get(command, command)
         prompt = tmpl.format(**template_vars) if template_vars else tmpl
 
         console.print()
@@ -1823,7 +2032,7 @@ class TradingAgent:
                 verbose=True,
             )
             result = analyzer.analyze(symbol, exchange)
-            self._last_trade_plans = getattr(analyzer, 'last_trade_plans', {})
+            self._last_trade_plans = getattr(analyzer, "last_trade_plans", {})
             return result
         except Exception as exc:
             console.print(
@@ -1837,12 +2046,8 @@ class TradingAgent:
         Hot-switch LLM provider mid-session.
         Conversation history is preserved; new provider picks up context.
         """
-        self._provider = get_provider(
-            provider=provider, model=model, registry=self._registry
-        )
-        console.print(
-            f"[dim]Switched provider → {self._provider.provider_name}[/dim]"
-        )
+        self._provider = get_provider(provider=provider, model=model, registry=self._registry)
+        console.print(f"[dim]Switched provider → {self._provider.provider_name}[/dim]")
 
     def clear_history(self) -> None:
         """Start a fresh conversation (clear history)."""
@@ -1853,13 +2058,13 @@ class TradingAgent:
         """Print available providers and how to configure them."""
         console.print("\n[bold]Available AI providers:[/bold]")
         rows = [
-            ("anthropic",           "ANTHROPIC_API_KEY",      "Claude API key"),
-            ("claude_subscription", "claude CLI installed",    "Claude Pro/Max subscription"),
-            ("openai",              "OPENAI_API_KEY",          "OpenAI API key"),
-            ("gemini",              "GEMINI_API_KEY",          "Google AI Studio key (free tier)"),
-            ("ollama",              "ollama running locally",  "Local models (free, no key needed)"),
-            ("openai_subscription", "OPENAI_SESSION_TOKEN",   "ChatGPT Plus/Team (unofficial)"),
-            ("gemini_subscription", "GOOGLE_CLOUD_PROJECT",   "Vertex AI / GCP"),
+            ("anthropic", "ANTHROPIC_API_KEY", "Claude API key"),
+            ("claude_subscription", "claude CLI installed", "Claude Pro/Max subscription"),
+            ("openai", "OPENAI_API_KEY", "OpenAI API key"),
+            ("gemini", "GEMINI_API_KEY", "Google AI Studio key (free tier)"),
+            ("ollama", "ollama running locally", "Local models (free, no key needed)"),
+            ("openai_subscription", "OPENAI_SESSION_TOKEN", "ChatGPT Plus/Team (unofficial)"),
+            ("gemini_subscription", "GOOGLE_CLOUD_PROJECT", "Vertex AI / GCP"),
         ]
         for name, cred, note in rows:
             active = "✓" if name == _infer_current_name(self._provider) else " "
@@ -1890,6 +2095,7 @@ class TradingAgent:
 
 
 # ── Helpers ────────────────────────────────────────────────────
+
 
 def _infer_current_name(provider: LLMProvider) -> str:
     if isinstance(provider, AnthropicProvider):
@@ -1923,7 +2129,7 @@ def _format_tool_results_directly(collected: list[str], user_msg: str) -> str:
         tool_name = name_match.group(1) if name_match else "data"
 
         # Extract JSON between tags
-        json_match = re.search(r'>\n(.*?)\n</tool_result>', result_xml, re.DOTALL)
+        json_match = re.search(r">\n(.*?)\n</tool_result>", result_xml, re.DOTALL)
         if not json_match:
             continue
 
@@ -1978,9 +2184,7 @@ def _format_tool_results_directly(collected: list[str], user_msg: str) -> str:
 
 def _print_tool_call(name: str, args: dict) -> None:
     """Subtle tool-call indicator in the terminal."""
-    args_str = ", ".join(
-        f"{k}={json.dumps(v)}" for k, v in args.items()
-    ) if args else ""
+    args_str = ", ".join(f"{k}={json.dumps(v)}" for k, v in args.items()) if args else ""
     console.print(
         f"  [dim cyan]⚙  {name}({args_str})[/dim cyan]",
         highlight=False,
@@ -1993,9 +2197,9 @@ _agent_instance: TradingAgent | None = None
 
 
 def get_agent(
-    provider:  str | None = None,
-    model:     str | None = None,
-    force_new: bool       = False,
+    provider: str | None = None,
+    model: str | None = None,
+    force_new: bool = False,
 ) -> TradingAgent:
     """
     Return the shared TradingAgent singleton (creates it on first call).

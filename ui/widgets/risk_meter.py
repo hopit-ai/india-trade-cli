@@ -7,7 +7,7 @@ Shows % capital deployed, free cash, unrealised P&L, and risk rating.
 
 from __future__ import annotations
 
-from textual.app     import ComposeResult
+from textual.app import ComposeResult
 from textual.widgets import Static, Label
 
 
@@ -38,6 +38,7 @@ class RiskMeterWidget(Static):
     def refresh_data(self) -> None:
         try:
             from engine.portfolio import risk_meter
+
             r = risk_meter()
             self._render(r)
         except Exception:
@@ -45,17 +46,17 @@ class RiskMeterWidget(Static):
 
     def _render(self, r) -> None:
         rating_color = {
-            "LOW":    "green",
+            "LOW": "green",
             "MEDIUM": "yellow",
-            "HIGH":   "dark_orange",
+            "HIGH": "dark_orange",
             "DANGER": "bold red",
         }.get(r.risk_rating, "white")
 
-        bar_len   = 20
-        filled    = int(r.deployment_pct / 100 * bar_len)
-        bar       = "█" * filled + "░" * (bar_len - filled)
+        bar_len = 20
+        filled = int(r.deployment_pct / 100 * bar_len)
+        bar = "█" * filled + "░" * (bar_len - filled)
         pnl_color = "green" if r.unrealised_pnl >= 0 else "red"
-        pnl_sign  = "+" if r.unrealised_pnl >= 0 else ""
+        pnl_sign = "+" if r.unrealised_pnl >= 0 else ""
 
         lines = [
             f"[{rating_color}]{r.risk_rating:<8}[/{rating_color}]  [{rating_color}]{bar}[/{rating_color}]  {r.deployment_pct:.1f}%",

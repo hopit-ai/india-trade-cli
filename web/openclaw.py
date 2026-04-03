@@ -22,7 +22,7 @@ MANIFEST: dict = {
         "all focused on NSE/BSE listed instruments."
     ),
     "version": "1.0.0",
-    "base_url": "",          # filled in at runtime from request host
+    "base_url": "",  # filled in at runtime from request host
     "auth": {
         "type": "none",
         # NOTE: skills server is intended for local use (127.0.0.1) only.
@@ -37,8 +37,15 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "symbol":   {"type": "string", "description": "Stock symbol, e.g. RELIANCE or NSE:RELIANCE"},
-                    "exchange": {"type": "string", "description": "Exchange: NSE (default) or BSE", "default": "NSE"},
+                    "symbol": {
+                        "type": "string",
+                        "description": "Stock symbol, e.g. RELIANCE or NSE:RELIANCE",
+                    },
+                    "exchange": {
+                        "type": "string",
+                        "description": "Exchange: NSE (default) or BSE",
+                        "default": "NSE",
+                    },
                 },
                 "required": ["symbol"],
             },
@@ -52,7 +59,10 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "symbol":   {"type": "string", "description": "Underlying symbol, e.g. NIFTY or RELIANCE"},
+                    "symbol": {
+                        "type": "string",
+                        "description": "Underlying symbol, e.g. NIFTY or RELIANCE",
+                    },
                     "exchange": {"type": "string", "default": "NSE"},
                 },
                 "required": ["symbol"],
@@ -114,8 +124,15 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "symbol": {"type": "string", "description": "Optional stock symbol to filter deals."},
-                    "days":   {"type": "integer", "description": "Number of days to look back (default: 5)", "default": 5},
+                    "symbol": {
+                        "type": "string",
+                        "description": "Optional stock symbol to filter deals.",
+                    },
+                    "days": {
+                        "type": "integer",
+                        "description": "Number of days to look back (default: 5)",
+                        "default": 5,
+                    },
                 },
                 "required": [],
             },
@@ -129,14 +146,18 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "symbol":   {"type": "string", "description": "Stock symbol, e.g. INFY"},
+                    "symbol": {"type": "string", "description": "Stock symbol, e.g. INFY"},
                     "strategy": {
                         "type": "string",
                         "description": "Strategy name: rsi, ma, ema, macd, or bb (Bollinger Bands)",
                         "enum": ["rsi", "ma", "ema", "macd", "bb"],
                         "default": "rsi",
                     },
-                    "period":   {"type": "string", "description": "History period: 6mo, 1y, 2y, 5y", "default": "1y"},
+                    "period": {
+                        "type": "string",
+                        "description": "History period: 6mo, 1y, 2y, 5y",
+                        "default": "1y",
+                    },
                     "exchange": {"type": "string", "default": "NSE"},
                 },
                 "required": ["symbol"],
@@ -151,8 +172,14 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "stock_a": {"type": "string", "description": "First stock symbol, e.g. HDFCBANK"},
-                    "stock_b": {"type": "string", "description": "Second stock symbol, e.g. ICICIBANK"},
+                    "stock_a": {
+                        "type": "string",
+                        "description": "First stock symbol, e.g. HDFCBANK",
+                    },
+                    "stock_b": {
+                        "type": "string",
+                        "description": "Second stock symbol, e.g. ICICIBANK",
+                    },
                 },
                 "required": ["stock_a", "stock_b"],
             },
@@ -172,7 +199,7 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "symbol":   {"type": "string", "description": "Stock symbol, e.g. RELIANCE"},
+                    "symbol": {"type": "string", "description": "Stock symbol, e.g. RELIANCE"},
                     "exchange": {"type": "string", "default": "NSE"},
                 },
                 "required": ["symbol"],
@@ -191,7 +218,7 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "symbol":   {"type": "string", "description": "Stock symbol, e.g. INFY"},
+                    "symbol": {"type": "string", "description": "Stock symbol, e.g. INFY"},
                     "exchange": {"type": "string", "default": "NSE"},
                 },
                 "required": ["symbol"],
@@ -211,8 +238,15 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "message":    {"type": "string", "description": "Your message or question to the trading agent."},
-                    "session_id": {"type": "string", "description": "Session identifier for multi-turn context (default: 'default')", "default": "default"},
+                    "message": {
+                        "type": "string",
+                        "description": "Your message or question to the trading agent.",
+                    },
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session identifier for multi-turn context (default: 'default')",
+                        "default": "default",
+                    },
                 },
                 "required": ["message"],
             },
@@ -230,13 +264,30 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "symbol":      {"type": "string", "description": "Stock symbol, e.g. RELIANCE"},
-                    "exchange":    {"type": "string", "default": "NSE"},
-                    "condition":   {"type": "string", "description": "ABOVE | BELOW | CROSSES (price/technical alerts)", "enum": ["ABOVE", "BELOW", "CROSSES"]},
-                    "threshold":   {"type": "number", "description": "Price or indicator level to trigger at"},
-                    "indicator":   {"type": "string", "description": "Technical indicator: RSI, MACD, ADX, ATR, SCORE (omit for price alert)"},
-                    "conditions":  {"type": "array",  "description": "List of conditions for AND logic (conditional alert)", "items": {"type": "object"}},
-                    "webhook_url": {"type": "string", "description": "Optional URL to POST when alert triggers"},
+                    "symbol": {"type": "string", "description": "Stock symbol, e.g. RELIANCE"},
+                    "exchange": {"type": "string", "default": "NSE"},
+                    "condition": {
+                        "type": "string",
+                        "description": "ABOVE | BELOW | CROSSES (price/technical alerts)",
+                        "enum": ["ABOVE", "BELOW", "CROSSES"],
+                    },
+                    "threshold": {
+                        "type": "number",
+                        "description": "Price or indicator level to trigger at",
+                    },
+                    "indicator": {
+                        "type": "string",
+                        "description": "Technical indicator: RSI, MACD, ADX, ATR, SCORE (omit for price alert)",
+                    },
+                    "conditions": {
+                        "type": "array",
+                        "description": "List of conditions for AND logic (conditional alert)",
+                        "items": {"type": "object"},
+                    },
+                    "webhook_url": {
+                        "type": "string",
+                        "description": "Optional URL to POST when alert triggers",
+                    },
                 },
                 "required": ["symbol"],
             },
@@ -258,7 +309,10 @@ MANIFEST: dict = {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "alert_id": {"type": "string", "description": "Alert ID returned when the alert was created"},
+                    "alert_id": {
+                        "type": "string",
+                        "description": "Alert ID returned when the alert was created",
+                    },
                 },
                 "required": ["alert_id"],
             },

@@ -58,16 +58,18 @@ console = Console()
 
 # ── Data Models ──────────────────────────────────────────────
 
+
 @dataclass
 class AnalystReport:
     """Structured output from each analyst agent."""
-    analyst:    str                       # e.g. "Technical", "Fundamental"
-    verdict:    str                       # BULLISH / BEARISH / NEUTRAL
-    confidence: int                       # 0-100
-    score:      float                     # raw score from analysis
+
+    analyst: str  # e.g. "Technical", "Fundamental"
+    verdict: str  # BULLISH / BEARISH / NEUTRAL
+    confidence: int  # 0-100
+    score: float  # raw score from analysis
     key_points: list[str] = field(default_factory=list)
-    data:       dict = field(default_factory=dict)   # raw data for LLM context
-    error:      str = ""                  # non-empty if analyst failed
+    data: dict = field(default_factory=dict)  # raw data for LLM context
+    error: str = ""  # non-empty if analyst failed
 
     def summary_text(self) -> str:
         """One-paragraph summary for feeding into LLM debate prompts."""
@@ -84,15 +86,20 @@ class AnalystReport:
 @dataclass
 class AnalystScorecard:
     """Weighted composite score from all analysts."""
-    scores:         dict[str, float]     # analyst_name → raw score
-    weights:        dict[str, float]     # analyst_name → weight (0-1)
-    weighted_total: float                # sum(score * weight)
-    verdict:        str                  # derived from total
-    agreement:      float                # 0-100, how much analysts agree
-    conflicts:      list[str] = field(default_factory=list)  # e.g. "Technical BULLISH vs Fundamental BEARISH"
+
+    scores: dict[str, float]  # analyst_name → raw score
+    weights: dict[str, float]  # analyst_name → weight (0-1)
+    weighted_total: float  # sum(score * weight)
+    verdict: str  # derived from total
+    agreement: float  # 0-100, how much analysts agree
+    conflicts: list[str] = field(
+        default_factory=list
+    )  # e.g. "Technical BULLISH vs Fundamental BEARISH"
 
     def summary(self) -> str:
-        parts = [f"Scorecard: {self.verdict} (total: {self.weighted_total:+.1f}, agreement: {self.agreement:.0f}%)"]
+        parts = [
+            f"Scorecard: {self.verdict} (total: {self.weighted_total:+.1f}, agreement: {self.agreement:.0f}%)"
+        ]
         for name, score in self.scores.items():
             w = self.weights.get(name, 0)
             parts.append(f"  {name:20s}: {score:+6.1f} (weight: {w:.0%})")
@@ -103,13 +110,13 @@ class AnalystScorecard:
 
 # Default weights for the scorecard (customizable)
 DEFAULT_ANALYST_WEIGHTS = {
-    "Technical":        0.25,
-    "Fundamental":      0.20,
-    "Options":          0.15,
-    "News & Macro":     0.10,
-    "Sentiment":        0.10,
-    "Sector Rotation":  0.05,
-    "Risk Manager":     0.15,
+    "Technical": 0.25,
+    "Fundamental": 0.20,
+    "Options": 0.15,
+    "News & Macro": 0.10,
+    "Sentiment": 0.10,
+    "Sector Rotation": 0.05,
+    "Risk Manager": 0.15,
 }
 
 
@@ -148,10 +155,10 @@ def compute_scorecard(reports: list[AnalystReport]) -> AnalystScorecard:
         verdict = "HOLD"
 
     # Agreement: how many analysts agree on direction? (exclude unavailable)
-    verdicts = [r.verdict for r in reports
-                if not r.error and r.verdict not in _EXCLUDED_VERDICTS]
+    verdicts = [r.verdict for r in reports if not r.error and r.verdict not in _EXCLUDED_VERDICTS]
     if verdicts:
         from collections import Counter
+
         most_common = Counter(verdicts).most_common(1)[0]
         agreement = most_common[1] / len(verdicts) * 100
     else:
@@ -165,43 +172,50 @@ def compute_scorecard(reports: list[AnalystReport]) -> AnalystScorecard:
         conflicts.append(f"{', '.join(bulls)} BULLISH vs {', '.join(bears)} BEARISH")
 
     return AnalystScorecard(
-        scores=scores, weights=weights, weighted_total=round(weighted_total, 1),
-        verdict=verdict, agreement=round(agreement, 1), conflicts=conflicts,
+        scores=scores,
+        weights=weights,
+        weighted_total=round(weighted_total, 1),
+        verdict=verdict,
+        agreement=round(agreement, 1),
+        conflicts=conflicts,
     )
 
 
 @dataclass
 class DebateResult:
     """Output from the multi-round bull/bear debate phase."""
-    bull_argument:  str          # Round 1: bull case
-    bear_argument:  str          # Round 1: bear counter
-    bull_rebuttal:  str = ""     # Round 2: bull responds to bear
-    bear_rebuttal:  str = ""     # Round 2: bear responds to bull rebuttal
-    facilitator:    str = ""     # Facilitator summary: key agreements/disagreements
-    winner:         str = ""     # "BULL" or "BEAR" (determined by facilitator)
-    rounds:         int = 1      # how many rounds were run
+
+    bull_argument: str  # Round 1: bull case
+    bear_argument: str  # Round 1: bear counter
+    bull_rebuttal: str = ""  # Round 2: bull responds to bear
+    bear_rebuttal: str = ""  # Round 2: bear responds to bull rebuttal
+    facilitator: str = ""  # Facilitator summary: key agreements/disagreements
+    winner: str = ""  # "BULL" or "BEAR" (determined by facilitator)
+    rounds: int = 1  # how many rounds were run
 
 
 @dataclass
 class TradeRecommendation:
     """Final output from the multi-agent pipeline."""
-    symbol:           str
-    exchange:         str
-    overall_verdict:  str            # STRONG_BUY / BUY / HOLD / SELL / STRONG_SELL
-    confidence:       int            # 0-100
-    strategy:         str            # e.g. "Buy on dip", "Bull call spread"
-    entry:            str
-    stop_loss:        str
-    target:           str
-    risk_reward:      str
-    rationale:        list[str]
-    risks:            list[str]
-    analyst_reports:  list[AnalystReport]
-    debate:           DebateResult
-    raw_synthesis:    str            # full LLM output
+
+    symbol: str
+    exchange: str
+    overall_verdict: str  # STRONG_BUY / BUY / HOLD / SELL / STRONG_SELL
+    confidence: int  # 0-100
+    strategy: str  # e.g. "Buy on dip", "Bull call spread"
+    entry: str
+    stop_loss: str
+    target: str
+    risk_reward: str
+    rationale: list[str]
+    risks: list[str]
+    analyst_reports: list[AnalystReport]
+    debate: DebateResult
+    raw_synthesis: str  # full LLM output
 
 
 # ── Analyst Agents (pure Python, no LLM) ─────────────────────
+
 
 class BaseAnalyst:
     """Base class for all analyst agents. Each runs tool(s) and returns structured data."""
@@ -222,13 +236,16 @@ class TechnicalAnalyst(BaseAnalyst):
 
     def analyze(self, symbol: str, exchange: str = "NSE") -> AnalystReport:
         try:
-            result = self.registry.execute("technical_analyse", {
-                "symbol": symbol, "exchange": exchange
-            })
+            result = self.registry.execute(
+                "technical_analyse", {"symbol": symbol, "exchange": exchange}
+            )
             if isinstance(result, dict) and "error" in result:
                 return AnalystReport(
-                    analyst=self.name, verdict="UNKNOWN", confidence=0,
-                    score=0, error=result["error"],
+                    analyst=self.name,
+                    verdict="UNKNOWN",
+                    confidence=0,
+                    score=0,
+                    error=result["error"],
                 )
 
             score = result.get("score", 0)
@@ -238,13 +255,17 @@ class TechnicalAnalyst(BaseAnalyst):
             points = []
             if result.get("rsi") is not None:
                 rsi = result["rsi"]
-                points.append(f"RSI: {rsi:.1f} ({'overbought' if rsi > 70 else 'oversold' if rsi < 30 else 'neutral'})")
+                points.append(
+                    f"RSI: {rsi:.1f} ({'overbought' if rsi > 70 else 'oversold' if rsi < 30 else 'neutral'})"
+                )
             if result.get("macd") is not None:
                 macd_signal = "bullish" if result.get("macd_signal") == "BUY" else "bearish"
                 points.append(f"MACD: {macd_signal} crossover")
             if result.get("ema20") and result.get("ema50"):
                 trend = "above" if result["ema20"] > result["ema50"] else "below"
-                points.append(f"EMA20 {trend} EMA50 (short-term trend {'up' if trend == 'above' else 'down'})")
+                points.append(
+                    f"EMA20 {trend} EMA50 (short-term trend {'up' if trend == 'above' else 'down'})"
+                )
             if result.get("support"):
                 points.append(f"Support: {result['support']}")
             if result.get("resistance"):
@@ -255,13 +276,20 @@ class TechnicalAnalyst(BaseAnalyst):
                 points.append(f"Bollinger: {result['bollinger_position']}")
 
             return AnalystReport(
-                analyst=self.name, verdict=verdict, confidence=confidence,
-                score=score, key_points=points, data=result,
+                analyst=self.name,
+                verdict=verdict,
+                confidence=confidence,
+                score=score,
+                key_points=points,
+                data=result,
             )
         except Exception as e:
             return AnalystReport(
-                analyst=self.name, verdict="UNKNOWN", confidence=0,
-                score=0, error=str(e),
+                analyst=self.name,
+                verdict="UNKNOWN",
+                confidence=0,
+                score=0,
+                error=str(e),
             )
 
 
@@ -275,8 +303,11 @@ class FundamentalAnalyst(BaseAnalyst):
             result = self.registry.execute("fundamental_analyse", {"symbol": symbol})
             if isinstance(result, dict) and "error" in result:
                 return AnalystReport(
-                    analyst=self.name, verdict="UNKNOWN", confidence=0,
-                    score=0, error=result["error"],
+                    analyst=self.name,
+                    verdict="UNKNOWN",
+                    confidence=0,
+                    score=0,
+                    error=result["error"],
                 )
 
             score = result.get("score", 50)
@@ -306,13 +337,20 @@ class FundamentalAnalyst(BaseAnalyst):
                 points.append(f"Overall: {result['verdict']}")
 
             return AnalystReport(
-                analyst=self.name, verdict=verdict, confidence=min(score, 100),
-                score=score, key_points=points, data=result,
+                analyst=self.name,
+                verdict=verdict,
+                confidence=min(score, 100),
+                score=score,
+                key_points=points,
+                data=result,
             )
         except Exception as e:
             return AnalystReport(
-                analyst=self.name, verdict="UNKNOWN", confidence=0,
-                score=0, error=str(e),
+                analyst=self.name,
+                verdict="UNKNOWN",
+                confidence=0,
+                score=0,
+                error=str(e),
             )
 
 
@@ -325,7 +363,7 @@ class OptionsAnalyst(BaseAnalyst):
         try:
             points = []
             data: dict[str, Any] = {}
-            has_data = False   # track if we got any real options data
+            has_data = False  # track if we got any real options data
 
             # PCR
             pcr_result = self.registry.execute("get_pcr", {"underlying": symbol})
@@ -363,8 +401,13 @@ class OptionsAnalyst(BaseAnalyst):
             # If no options data was available, report clearly
             if not has_data:
                 return AnalystReport(
-                    analyst=self.name, verdict="UNAVAILABLE", confidence=0,
-                    score=0, key_points=["Options data unavailable for this symbol (no broker or no F&O segment)"],
+                    analyst=self.name,
+                    verdict="UNAVAILABLE",
+                    confidence=0,
+                    score=0,
+                    key_points=[
+                        "Options data unavailable for this symbol (no broker or no F&O segment)"
+                    ],
                     data={"options_available": False},
                 )
 
@@ -381,14 +424,20 @@ class OptionsAnalyst(BaseAnalyst):
                 verdict, score = "NEUTRAL", 0
 
             return AnalystReport(
-                analyst=self.name, verdict=verdict,
+                analyst=self.name,
+                verdict=verdict,
                 confidence=min(abs(score) + 30, 100),
-                score=score, key_points=points, data=data,
+                score=score,
+                key_points=points,
+                data=data,
             )
         except Exception as e:
             return AnalystReport(
-                analyst=self.name, verdict="UNKNOWN", confidence=0,
-                score=0, error=str(e),
+                analyst=self.name,
+                verdict="UNKNOWN",
+                confidence=0,
+                score=0,
+                error=str(e),
             )
 
 
@@ -487,9 +536,7 @@ class NewsMacroAnalyst(BaseAnalyst):
 
             if self._llm and (data.get("news") or data.get("market_news")):
                 # LLM mode: real sentiment analysis
-                verdict, score, confidence, llm_points = self._llm_sentiment(
-                    symbol, exchange, data
-                )
+                verdict, score, confidence, llm_points = self._llm_sentiment(symbol, exchange, data)
                 points.extend(llm_points)
                 data["sentiment_mode"] = "llm"
             else:
@@ -498,18 +545,27 @@ class NewsMacroAnalyst(BaseAnalyst):
                 data["sentiment_mode"] = "keyword"
 
             return AnalystReport(
-                analyst=self.name, verdict=verdict,
-                confidence=confidence, score=score,
-                key_points=points, data=data,
+                analyst=self.name,
+                verdict=verdict,
+                confidence=confidence,
+                score=score,
+                key_points=points,
+                data=data,
             )
         except Exception as e:
             return AnalystReport(
-                analyst=self.name, verdict="UNKNOWN", confidence=0,
-                score=0, error=str(e),
+                analyst=self.name,
+                verdict="UNKNOWN",
+                confidence=0,
+                score=0,
+                error=str(e),
             )
 
     def _llm_sentiment(
-        self, symbol: str, exchange: str, data: dict,
+        self,
+        symbol: str,
+        exchange: str,
+        data: dict,
     ) -> tuple[str, float, int, list[str]]:
         """
         Use the LLM to analyze news sentiment. Returns (verdict, score, confidence, points).
@@ -550,7 +606,7 @@ class NewsMacroAnalyst(BaseAnalyst):
         if deals:
             deal_lines = []
             for d in deals[:10]:
-                dl = f"{d.get('date','')} {d.get('symbol','')} {d.get('client','')[:30]} {d.get('deal_type','')} {d.get('quantity',0):,} @ ₹{d.get('price',0):,.1f} [{d.get('entity_type','')}]"
+                dl = f"{d.get('date', '')} {d.get('symbol', '')} {d.get('client', '')[:30]} {d.get('deal_type', '')} {d.get('quantity', 0):,} @ ₹{d.get('price', 0):,.1f} [{d.get('entity_type', '')}]"
                 deal_lines.append(dl)
             macro_parts.append("Bulk/block deals:\n" + "\n".join(deal_lines))
         events = data.get("events")
@@ -571,7 +627,9 @@ class NewsMacroAnalyst(BaseAnalyst):
 
         try:
             if self._llm:
-                console.print(f"  [dim cyan]Analyzing news sentiment for {symbol} via LLM...[/dim cyan]")
+                console.print(
+                    f"  [dim cyan]Analyzing news sentiment for {symbol} via LLM...[/dim cyan]"
+                )
             response = self._llm.chat(
                 messages=[{"role": "user", "content": prompt}],
                 stream=False,
@@ -579,7 +637,9 @@ class NewsMacroAnalyst(BaseAnalyst):
             return self._parse_sentiment_response(response)
         except Exception as e:
             # LLM failed — fall back to keyword sentiment
-            console.print(f"  [dim yellow]LLM sentiment failed: {e} — using keyword fallback[/dim yellow]")
+            console.print(
+                f"  [dim yellow]LLM sentiment failed: {e} — using keyword fallback[/dim yellow]"
+            )
             return self._keyword_sentiment([]) + ([f"LLM sentiment unavailable: {e}"],)
 
     def _parse_sentiment_response(self, response: str) -> tuple[str, float, int, list[str]]:
@@ -629,11 +689,11 @@ class NewsMacroAnalyst(BaseAnalyst):
     def _keyword_sentiment(points: list[str]) -> tuple[str, float, int]:
         """Fallback: count bullish/bearish keywords in existing points."""
         bullish_signals = sum(
-            1 for p in points
-            if any(w in p.lower() for w in ["buying", "strong", "rally", "surge"])
+            1 for p in points if any(w in p.lower() for w in ["buying", "strong", "rally", "surge"])
         )
         bearish_signals = sum(
-            1 for p in points
+            1
+            for p in points
             if any(w in p.lower() for w in ["selling", "weak", "decline", "crash", "fall"])
         )
 
@@ -662,6 +722,7 @@ class SentimentAnalyst(BaseAnalyst):
             # FII/DII flows
             try:
                 from market.flow_intel import get_flow_analysis
+
                 flow = get_flow_analysis()
                 data["flow_signal"] = flow.signal
                 data["fii_5d"] = flow.fii_5d_net
@@ -713,14 +774,20 @@ class SentimentAnalyst(BaseAnalyst):
             confidence = min(abs(int(score)) + 30, 100)
 
             return AnalystReport(
-                analyst=self.name, verdict=verdict,
-                confidence=confidence, score=score,
-                key_points=points, data=data,
+                analyst=self.name,
+                verdict=verdict,
+                confidence=confidence,
+                score=score,
+                key_points=points,
+                data=data,
             )
         except Exception as e:
             return AnalystReport(
-                analyst=self.name, verdict="UNKNOWN", confidence=0,
-                score=0, error=str(e),
+                analyst=self.name,
+                verdict="UNKNOWN",
+                confidence=0,
+                score=0,
+                error=str(e),
             )
 
 
@@ -735,16 +802,42 @@ class SectorRotationAnalyst(BaseAnalyst):
 
     # Map stocks to their primary sector index
     _SECTOR_MAP = {
-        "INFY": "IT", "TCS": "IT", "WIPRO": "IT", "HCLTECH": "IT", "TECHM": "IT",
-        "HDFCBANK": "BANK", "ICICIBANK": "BANK", "SBIN": "BANK", "KOTAKBANK": "BANK",
-        "AXISBANK": "BANK", "INDUSINDBK": "BANK", "BANDHANBNK": "BANK",
-        "SUNPHARMA": "PHARMA", "DRREDDY": "PHARMA", "CIPLA": "PHARMA", "DIVISLAB": "PHARMA",
-        "MARUTI": "AUTO", "TATAMOTORS": "AUTO", "M&M": "AUTO", "BAJAJ-AUTO": "AUTO",
-        "ITC": "FMCG", "HINDUNILVR": "FMCG", "NESTLEIND": "FMCG", "BRITANNIA": "FMCG",
-        "RELIANCE": "ENERGY", "ONGC": "ENERGY", "NTPC": "ENERGY", "POWERGRID": "ENERGY",
-        "TATASTEEL": "METAL", "JSWSTEEL": "METAL", "HINDALCO": "METAL",
-        "DLF": "REALTY", "GODREJPROP": "REALTY",
-        "BAJFINANCE": "FINANCE", "BAJFINSV": "FINANCE", "HDFCLIFE": "FINANCE",
+        "INFY": "IT",
+        "TCS": "IT",
+        "WIPRO": "IT",
+        "HCLTECH": "IT",
+        "TECHM": "IT",
+        "HDFCBANK": "BANK",
+        "ICICIBANK": "BANK",
+        "SBIN": "BANK",
+        "KOTAKBANK": "BANK",
+        "AXISBANK": "BANK",
+        "INDUSINDBK": "BANK",
+        "BANDHANBNK": "BANK",
+        "SUNPHARMA": "PHARMA",
+        "DRREDDY": "PHARMA",
+        "CIPLA": "PHARMA",
+        "DIVISLAB": "PHARMA",
+        "MARUTI": "AUTO",
+        "TATAMOTORS": "AUTO",
+        "M&M": "AUTO",
+        "BAJAJ-AUTO": "AUTO",
+        "ITC": "FMCG",
+        "HINDUNILVR": "FMCG",
+        "NESTLEIND": "FMCG",
+        "BRITANNIA": "FMCG",
+        "RELIANCE": "ENERGY",
+        "ONGC": "ENERGY",
+        "NTPC": "ENERGY",
+        "POWERGRID": "ENERGY",
+        "TATASTEEL": "METAL",
+        "JSWSTEEL": "METAL",
+        "HINDALCO": "METAL",
+        "DLF": "REALTY",
+        "GODREJPROP": "REALTY",
+        "BAJFINANCE": "FINANCE",
+        "BAJFINSV": "FINANCE",
+        "HDFCLIFE": "FINANCE",
     }
 
     def analyze(self, symbol: str, exchange: str = "NSE") -> AnalystReport:
@@ -767,8 +860,12 @@ class SectorRotationAnalyst(BaseAnalyst):
                     if sorted_sectors:
                         top = sorted_sectors[0]
                         bottom = sorted_sectors[-1]
-                        points.append(f"Strongest sector: {top.get('name', '?')} ({top.get('change_pct', 0):+.1f}%)")
-                        points.append(f"Weakest sector: {bottom.get('name', '?')} ({bottom.get('change_pct', 0):+.1f}%)")
+                        points.append(
+                            f"Strongest sector: {top.get('name', '?')} ({top.get('change_pct', 0):+.1f}%)"
+                        )
+                        points.append(
+                            f"Weakest sector: {bottom.get('name', '?')} ({bottom.get('change_pct', 0):+.1f}%)"
+                        )
             except Exception:
                 pass
 
@@ -782,10 +879,14 @@ class SectorRotationAnalyst(BaseAnalyst):
                         data["stock_sector"] = sector
                         data["sector_change"] = chg
                         if chg > 0.5:
-                            points.append(f"{symbol}'s sector ({sector}) is outperforming: {chg:+.1f}%")
+                            points.append(
+                                f"{symbol}'s sector ({sector}) is outperforming: {chg:+.1f}%"
+                            )
                             score += 20
                         elif chg < -0.5:
-                            points.append(f"{symbol}'s sector ({sector}) is underperforming: {chg:+.1f}%")
+                            points.append(
+                                f"{symbol}'s sector ({sector}) is underperforming: {chg:+.1f}%"
+                            )
                             score -= 20
                         else:
                             points.append(f"{symbol}'s sector ({sector}) is flat: {chg:+.1f}%")
@@ -798,14 +899,20 @@ class SectorRotationAnalyst(BaseAnalyst):
             confidence = min(abs(int(score)) + 30, 80)
 
             return AnalystReport(
-                analyst=self.name, verdict=verdict,
-                confidence=confidence, score=score,
-                key_points=points, data=data,
+                analyst=self.name,
+                verdict=verdict,
+                confidence=confidence,
+                score=score,
+                key_points=points,
+                data=data,
             )
         except Exception as e:
             return AnalystReport(
-                analyst=self.name, verdict="UNKNOWN", confidence=0,
-                score=0, error=str(e),
+                analyst=self.name,
+                verdict="UNKNOWN",
+                confidence=0,
+                score=0,
+                error=str(e),
             )
 
 
@@ -817,6 +924,7 @@ class RiskAnalyst(BaseAnalyst):
     def analyze(self, symbol: str, exchange: str = "NSE") -> AnalystReport:
         try:
             import os
+
             points = []
             data: dict[str, Any] = {}
 
@@ -848,8 +956,11 @@ class RiskAnalyst(BaseAnalyst):
             try:
                 holdings = self.registry.execute("get_holdings", {})
                 if isinstance(holdings, list):
-                    existing = [h for h in holdings
-                                if isinstance(h, dict) and h.get("symbol", "").upper() == symbol.upper()]
+                    existing = [
+                        h
+                        for h in holdings
+                        if isinstance(h, dict) and h.get("symbol", "").upper() == symbol.upper()
+                    ]
                     if existing:
                         points.append(f"Already holding {symbol} — check concentration risk")
                     data["has_existing_position"] = bool(existing)
@@ -876,18 +987,25 @@ class RiskAnalyst(BaseAnalyst):
                 points.append("RECOMMENDATION: Normal position sizing OK")
 
             return AnalystReport(
-                analyst=self.name, verdict=verdict,
-                confidence=70, score=score,
-                key_points=points, data=data,
+                analyst=self.name,
+                verdict=verdict,
+                confidence=70,
+                score=score,
+                key_points=points,
+                data=data,
             )
         except Exception as e:
             return AnalystReport(
-                analyst=self.name, verdict="UNKNOWN", confidence=0,
-                score=0, error=str(e),
+                analyst=self.name,
+                verdict="UNKNOWN",
+                confidence=0,
+                score=0,
+                error=str(e),
             )
 
 
 # ── Multi-Agent Orchestrator ─────────────────────────────────
+
 
 class MultiAgentAnalyzer:
     """
@@ -971,7 +1089,9 @@ class MultiAgentAnalyzer:
         # ── Phase 2: Bull/Bear Debate ────────────────────────
         if self.verbose:
             console.print()
-            console.rule("[bold yellow]Researcher Team — Bull vs Bear Debate[/bold yellow]", style="yellow")
+            console.rule(
+                "[bold yellow]Researcher Team — Bull vs Bear Debate[/bold yellow]", style="yellow"
+            )
 
         t1 = time.time()
         debate = self._run_debate(symbol, exchange, reports)
@@ -992,6 +1112,7 @@ class MultiAgentAnalyzer:
         # ── Phase 4: Store to Memory ─────────────────────────
         try:
             from engine.memory import trade_memory
+
             record = trade_memory.store_from_analysis(
                 symbol=symbol,
                 exchange=exchange,
@@ -1008,6 +1129,7 @@ class MultiAgentAnalyzer:
         self.last_trade_plans = {}
         try:
             from engine.trader import TraderAgent
+
             trader = TraderAgent()
             all_plans = trader.generate_all_plans(
                 symbol=symbol,
@@ -1048,45 +1170,55 @@ class MultiAgentAnalyzer:
 
         full_report_parts.append(f"\nSCORECARD: {scorecard.summary()}\n")
 
-        full_report_parts.extend([
-            "=" * 60,
-            "BULL/BEAR DEBATE",
-            "=" * 60,
-            "",
-            "--- BULL CASE (Round 1) ---",
-            debate.bull_argument,
-            "",
-            "--- BEAR CASE (Round 1) ---",
-            debate.bear_argument,
-            "",
-        ])
+        full_report_parts.extend(
+            [
+                "=" * 60,
+                "BULL/BEAR DEBATE",
+                "=" * 60,
+                "",
+                "--- BULL CASE (Round 1) ---",
+                debate.bull_argument,
+                "",
+                "--- BEAR CASE (Round 1) ---",
+                debate.bear_argument,
+                "",
+            ]
+        )
         if debate.bull_rebuttal:
-            full_report_parts.extend([
-                "--- BULL REBUTTAL (Round 2) ---",
-                debate.bull_rebuttal,
-                "",
-            ])
+            full_report_parts.extend(
+                [
+                    "--- BULL REBUTTAL (Round 2) ---",
+                    debate.bull_rebuttal,
+                    "",
+                ]
+            )
         if debate.bear_rebuttal:
-            full_report_parts.extend([
-                "--- BEAR REBUTTAL (Round 2) ---",
-                debate.bear_rebuttal,
-                "",
-            ])
+            full_report_parts.extend(
+                [
+                    "--- BEAR REBUTTAL (Round 2) ---",
+                    debate.bear_rebuttal,
+                    "",
+                ]
+            )
         if debate.facilitator:
-            full_report_parts.extend([
-                "--- FACILITATOR SUMMARY ---",
-                debate.facilitator,
-                f"Debate Winner: {debate.winner}",
-                "",
-            ])
+            full_report_parts.extend(
+                [
+                    "--- FACILITATOR SUMMARY ---",
+                    debate.facilitator,
+                    f"Debate Winner: {debate.winner}",
+                    "",
+                ]
+            )
 
-        full_report_parts.extend([
-            "=" * 60,
-            "FUND MANAGER SYNTHESIS",
-            "=" * 60,
-            "",
-            synthesis,
-        ])
+        full_report_parts.extend(
+            [
+                "=" * 60,
+                "FUND MANAGER SYNTHESIS",
+                "=" * 60,
+                "",
+                synthesis,
+            ]
+        )
 
         self.last_full_report = "\n".join(full_report_parts)
         return self.last_full_report
@@ -1096,6 +1228,7 @@ class MultiAgentAnalyzer:
     def _run_analysts(self, symbol: str, exchange: str) -> list[AnalystReport]:
         """Run all analyst agents. Parallel by default."""
         import os
+
         os.environ["_CLI_BATCH_MODE"] = "1"
 
         if self.parallel:
@@ -1115,23 +1248,29 @@ class MultiAgentAnalyzer:
             console.print("[bold]Analyst Team[/bold] — running 5 analysts in parallel...")
 
         with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {
-                executor.submit(a.analyze, symbol, exchange): a
-                for a in self.analysts
-            }
+            futures = {executor.submit(a.analyze, symbol, exchange): a for a in self.analysts}
             for future in as_completed(futures):
                 analyst = futures[future]
                 try:
                     report = future.result(timeout=30)
                     reports.append(report)
                     if self.verbose:
-                        status = "[green]OK[/green]" if not report.error else f"[red]FAIL: {report.error[:50]}[/red]"
+                        status = (
+                            "[green]OK[/green]"
+                            if not report.error
+                            else f"[red]FAIL: {report.error[:50]}[/red]"
+                        )
                         console.print(f"  [dim]{analyst.name:<15}[/dim] {status}")
                 except Exception as e:
-                    reports.append(AnalystReport(
-                        analyst=analyst.name, verdict="UNKNOWN",
-                        confidence=0, score=0, error=str(e),
-                    ))
+                    reports.append(
+                        AnalystReport(
+                            analyst=analyst.name,
+                            verdict="UNKNOWN",
+                            confidence=0,
+                            score=0,
+                            error=str(e),
+                        )
+                    )
                     if self.verbose:
                         console.print(f"  [dim]{analyst.name:<15}[/dim] [red]FAIL: {e}[/red]")
 
@@ -1150,13 +1289,22 @@ class MultiAgentAnalyzer:
                 report = analyst.analyze(symbol, exchange)
                 reports.append(report)
                 if self.verbose:
-                    status = "[green]OK[/green]" if not report.error else f"[red]FAIL: {report.error[:50]}[/red]"
+                    status = (
+                        "[green]OK[/green]"
+                        if not report.error
+                        else f"[red]FAIL: {report.error[:50]}[/red]"
+                    )
                     console.print(f"  [dim]{analyst.name:<15}[/dim] {status}")
             except Exception as e:
-                reports.append(AnalystReport(
-                    analyst=analyst.name, verdict="UNKNOWN",
-                    confidence=0, score=0, error=str(e),
-                ))
+                reports.append(
+                    AnalystReport(
+                        analyst=analyst.name,
+                        verdict="UNKNOWN",
+                        confidence=0,
+                        score=0,
+                        error=str(e),
+                    )
+                )
 
         return reports
 
@@ -1178,12 +1326,17 @@ class MultiAgentAnalyzer:
         for r in reports:
             if r.error:
                 table.add_row(
-                    r.analyst, "[red]ERROR[/red]", "-", "-",
+                    r.analyst,
+                    "[red]ERROR[/red]",
+                    "-",
+                    "-",
                     f"[red]{r.error[:60]}[/red]",
                 )
             else:
                 verdict_style = {
-                    "BULLISH": "green", "BEARISH": "red", "NEUTRAL": "yellow",
+                    "BULLISH": "green",
+                    "BEARISH": "red",
+                    "NEUTRAL": "yellow",
                 }.get(r.verdict, "white")
                 points_text = "\n".join(r.key_points[:4]) if r.key_points else "-"
                 table.add_row(
@@ -1198,9 +1351,7 @@ class MultiAgentAnalyzer:
 
     # ── Phase 2: Bull/Bear Debate ────────────────────────────
 
-    def _run_debate(
-        self, symbol: str, exchange: str, reports: list[AnalystReport]
-    ) -> DebateResult:
+    def _run_debate(self, symbol: str, exchange: str, reports: list[AnalystReport]) -> DebateResult:
         """
         Run multi-round bull/bear debate with facilitator.
 
@@ -1218,7 +1369,9 @@ class MultiAgentAnalyzer:
 
         # Bull opening
         bull_prompt = BULL_RESEARCHER_PROMPT.format(
-            symbol=symbol, exchange=exchange, analyst_data=analyst_context,
+            symbol=symbol,
+            exchange=exchange,
+            analyst_data=analyst_context,
         )
         if self.verbose:
             console.print("[green]Bull Researcher[/green] building investment case...")
@@ -1230,7 +1383,9 @@ class MultiAgentAnalyzer:
 
         # Bear counter
         bear_prompt = BEAR_RESEARCHER_PROMPT.format(
-            symbol=symbol, exchange=exchange, analyst_data=analyst_context,
+            symbol=symbol,
+            exchange=exchange,
+            analyst_data=analyst_context,
             bull_case=bull_argument,
         )
         if self.verbose:
@@ -1247,7 +1402,8 @@ class MultiAgentAnalyzer:
 
         # Bull rebuttal
         bull_rebuttal_prompt = BULL_REBUTTAL_PROMPT.format(
-            symbol=symbol, exchange=exchange,
+            symbol=symbol,
+            exchange=exchange,
             bull_case=bull_argument,
             bear_case=bear_argument,
         )
@@ -1261,7 +1417,8 @@ class MultiAgentAnalyzer:
 
         # Bear rebuttal
         bear_rebuttal_prompt = BEAR_REBUTTAL_PROMPT.format(
-            symbol=symbol, exchange=exchange,
+            symbol=symbol,
+            exchange=exchange,
             bear_case=bear_argument,
             bull_rebuttal=bull_rebuttal,
         )
@@ -1275,7 +1432,8 @@ class MultiAgentAnalyzer:
 
         # ── Facilitator: Summarize & pick winner ─────────────
         facilitator_prompt = FACILITATOR_PROMPT.format(
-            symbol=symbol, exchange=exchange,
+            symbol=symbol,
+            exchange=exchange,
             bull_r1=bull_argument,
             bear_r1=bear_argument,
             bull_r2=bull_rebuttal,
@@ -1343,6 +1501,7 @@ class MultiAgentAnalyzer:
         memory_context = ""
         try:
             from engine.memory import trade_memory
+
             memory_context = trade_memory.get_context_for_symbol(symbol)
         except Exception:
             pass
@@ -1351,6 +1510,7 @@ class MultiAgentAnalyzer:
         pattern_context = ""
         try:
             from engine.patterns import get_pattern_context
+
             pattern_context = get_pattern_context()
         except Exception:
             pass

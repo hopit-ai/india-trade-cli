@@ -23,16 +23,17 @@ console = Console()
 
 # ── OI Change Classification ────────────────────────────────
 
+
 def classify_oi_change(price_up: bool, oi_up: bool) -> str:
     """Classify futures/options OI change using 4-quadrant model."""
     if price_up and oi_up:
-        return "LONG_BUILDUP"      # Bullish — new longs entering
+        return "LONG_BUILDUP"  # Bullish — new longs entering
     elif price_up and not oi_up:
-        return "SHORT_COVERING"    # Bullish but weak — shorts exiting
+        return "SHORT_COVERING"  # Bullish but weak — shorts exiting
     elif not price_up and oi_up:
-        return "SHORT_BUILDUP"     # Bearish — new shorts entering
+        return "SHORT_BUILDUP"  # Bearish — new shorts entering
     else:
-        return "LONG_UNWINDING"    # Bearish but weak — longs exiting
+        return "LONG_UNWINDING"  # Bearish but weak — longs exiting
 
 
 def find_max_oi_strikes(chain_data: list[dict]) -> tuple[float, float]:
@@ -138,13 +139,15 @@ def print_oi_profile(underlying: str, expiry: Optional[str] = None) -> None:
         table.add_row(
             f"[{strike_style}]{strike:,.0f}[/{strike_style}]" if strike_style else f"{strike:,.0f}",
             f"{ce_oi:,}" if ce_oi else "—",
-            f"{row['ce_oi_chg']:+,}" if row['ce_oi_chg'] else "—",
+            f"{row['ce_oi_chg']:+,}" if row["ce_oi_chg"] else "—",
             f"{pe_oi:,}" if pe_oi else "—",
-            f"{row['pe_oi_chg']:+,}" if row['pe_oi_chg'] else "—",
+            f"{row['pe_oi_chg']:+,}" if row["pe_oi_chg"] else "—",
             signal,
         )
 
     console.print(table)
-    console.print(f"  Resistance: {data['max_call_oi_strike']:,.0f} | "
-                  f"Support: {data['max_put_oi_strike']:,.0f} | "
-                  f"PCR: {data.get('pcr', 0):.2f}")
+    console.print(
+        f"  Resistance: {data['max_call_oi_strike']:,.0f} | "
+        f"Support: {data['max_put_oi_strike']:,.0f} | "
+        f"PCR: {data.get('pcr', 0):.2f}"
+    )

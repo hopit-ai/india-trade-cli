@@ -6,17 +6,17 @@ Options chain and expiry utilities — broker-agnostic.
 
 from __future__ import annotations
 
-from typing   import Optional
+from typing import Optional
 
 import pandas as pd
 
-from brokers.base    import OptionsContract
+from brokers.base import OptionsContract
 from brokers.session import get_broker
 
 
 def get_options_chain(
     underlying: str,
-    expiry:     Optional[str] = None,
+    expiry: Optional[str] = None,
 ) -> list[OptionsContract]:
     """
     Full options chain for an underlying index or stock.
@@ -56,12 +56,12 @@ def chain_to_dataframe(contracts: list[OptionsContract]) -> pd.DataFrame:
         strike = c.strike
         if strike not in rows:
             rows[strike] = {"strike": strike}
-        prefix = c.option_type          # "CE" or "PE"
-        rows[strike][f"{prefix}_ltp"]    = c.last_price
-        rows[strike][f"{prefix}_oi"]     = c.oi
+        prefix = c.option_type  # "CE" or "PE"
+        rows[strike][f"{prefix}_ltp"] = c.last_price
+        rows[strike][f"{prefix}_oi"] = c.oi
         rows[strike][f"{prefix}_oi_chg"] = c.oi_change
         rows[strike][f"{prefix}_volume"] = c.volume
-        rows[strike][f"{prefix}_iv"]     = c.iv or 0.0
+        rows[strike][f"{prefix}_iv"] = c.iv or 0.0
         rows[strike][f"{prefix}_symbol"] = c.symbol
 
     df = pd.DataFrame(list(rows.values()))
@@ -76,8 +76,16 @@ def chain_to_dataframe(contracts: list[OptionsContract]) -> pd.DataFrame:
 
     col_order = [
         "strike",
-        "CE_ltp", "CE_oi", "CE_oi_chg", "CE_volume", "CE_iv",
-        "PE_ltp", "PE_oi", "PE_oi_chg", "PE_volume", "PE_iv",
+        "CE_ltp",
+        "CE_oi",
+        "CE_oi_chg",
+        "CE_volume",
+        "CE_iv",
+        "PE_ltp",
+        "PE_oi",
+        "PE_oi_chg",
+        "PE_volume",
+        "PE_iv",
     ]
     return df[[c for c in col_order if c in df.columns]]
 
@@ -89,7 +97,7 @@ def get_atm_strike(underlying: str, spot: float) -> float:
     chain = get_broker().get_options_chain(underlying)
     strikes = sorted({c.strike for c in chain})
     if not strikes:
-        return round(spot / 50) * 50    # fallback
+        return round(spot / 50) * 50  # fallback
     return min(strikes, key=lambda s: abs(s - spot))
 
 
@@ -137,4 +145,4 @@ def get_max_pain(underlying: str, expiry: Optional[str] = None) -> float:
                 total_pain += max(0, test_strike - s) * pe.oi
         pain[test_strike] = total_pain
 
-    return min(pain, key=pain.get)   # type: ignore[arg-type]
+    return min(pain, key=pain.get)  # type: ignore[arg-type]

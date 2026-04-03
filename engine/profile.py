@@ -37,53 +37,54 @@ console = Console()
 @dataclass
 class TradingProfile:
     """User's personal trading style derived from trade outcomes."""
+
     # Overview
-    total_trades:     int = 0
+    total_trades: int = 0
     trades_with_outcome: int = 0
     overall_win_rate: float = 0.0
-    total_pnl:        float = 0.0
-    avg_pnl:           float = 0.0
+    total_pnl: float = 0.0
+    avg_pnl: float = 0.0
 
     # Risk tolerance classification
-    risk_class:       str = "UNKNOWN"     # CONSERVATIVE / MODERATE / AGGRESSIVE
-    risk_score:       float = 50.0        # 0-100 (0=very conservative, 100=very aggressive)
-    risk_reasoning:   str = ""
+    risk_class: str = "UNKNOWN"  # CONSERVATIVE / MODERATE / AGGRESSIVE
+    risk_score: float = 50.0  # 0-100 (0=very conservative, 100=very aggressive)
+    risk_reasoning: str = ""
 
     # Win/loss characteristics
-    avg_winner:       float = 0.0         # avg P&L of winning trades
-    avg_loser:        float = 0.0         # avg P&L of losing trades (negative)
-    win_loss_ratio:   float = 0.0         # avg_winner / abs(avg_loser)
-    largest_win:      float = 0.0
-    largest_loss:     float = 0.0
+    avg_winner: float = 0.0  # avg P&L of winning trades
+    avg_loser: float = 0.0  # avg P&L of losing trades (negative)
+    win_loss_ratio: float = 0.0  # avg_winner / abs(avg_loser)
+    largest_win: float = 0.0
+    largest_loss: float = 0.0
 
     # Behavioral patterns
-    cuts_winners_early: bool = False       # avg winner < avg loser
-    holds_losers_long:  bool = False       # avg losing hold > avg winning hold
-    avg_win_hold:       float = 0.0        # avg hold days for winners
-    avg_loss_hold:      float = 0.0        # avg hold days for losers
+    cuts_winners_early: bool = False  # avg winner < avg loser
+    holds_losers_long: bool = False  # avg losing hold > avg winning hold
+    avg_win_hold: float = 0.0  # avg hold days for winners
+    avg_loss_hold: float = 0.0  # avg hold days for losers
 
     # By market regime
-    low_vix_win_rate:   float = 0.0        # VIX < 15
-    mid_vix_win_rate:   float = 0.0        # VIX 15-20
-    high_vix_win_rate:  float = 0.0        # VIX > 20
-    best_vix_regime:    str = ""
+    low_vix_win_rate: float = 0.0  # VIX < 15
+    mid_vix_win_rate: float = 0.0  # VIX 15-20
+    high_vix_win_rate: float = 0.0  # VIX > 20
+    best_vix_regime: str = ""
 
     # By confidence level
-    high_conf_win_rate: float = 0.0        # confidence > 70
-    low_conf_win_rate:  float = 0.0        # confidence < 50
+    high_conf_win_rate: float = 0.0  # confidence > 70
+    low_conf_win_rate: float = 0.0  # confidence < 50
     min_useful_confidence: int = 50
 
     # Top symbols
-    best_symbols:       list[dict] = field(default_factory=list)   # [{symbol, win_rate, trades}]
-    worst_symbols:      list[dict] = field(default_factory=list)
+    best_symbols: list[dict] = field(default_factory=list)  # [{symbol, win_rate, trades}]
+    worst_symbols: list[dict] = field(default_factory=list)
 
     # Streaks
-    current_streak:     int = 0            # positive = wins, negative = losses
+    current_streak: int = 0  # positive = wins, negative = losses
     longest_win_streak: int = 0
     longest_loss_streak: int = 0
 
     # Recommendations
-    recommendations:    list[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
 
     def print_profile(self) -> None:
         if self.trades_with_outcome < 5:
@@ -95,7 +96,9 @@ class TradingProfile:
             return
 
         risk_style = {
-            "CONSERVATIVE": "green", "MODERATE": "yellow", "AGGRESSIVE": "red",
+            "CONSERVATIVE": "green",
+            "MODERATE": "yellow",
+            "AGGRESSIVE": "red",
         }.get(self.risk_class, "white")
         pnl_style = "green" if self.total_pnl >= 0 else "red"
 
@@ -120,42 +123,54 @@ class TradingProfile:
 
         # Behavioral warnings
         if self.cuts_winners_early:
-            lines.append(f"\n  [yellow]! You cut winners early[/yellow] "
-                         f"(avg win hold: {self.avg_win_hold:.0f}d vs avg loss hold: {self.avg_loss_hold:.0f}d)")
+            lines.append(
+                f"\n  [yellow]! You cut winners early[/yellow] "
+                f"(avg win hold: {self.avg_win_hold:.0f}d vs avg loss hold: {self.avg_loss_hold:.0f}d)"
+            )
         if self.holds_losers_long:
             lines.append("  [yellow]! You hold losers too long[/yellow]")
 
         # VIX regime
-        lines.extend([
-            "",
-            "  [bold]By VIX Regime[/bold]",
-            f"  Low (<15)  : {self.low_vix_win_rate:.0f}%",
-            f"  Mid (15-20): {self.mid_vix_win_rate:.0f}%",
-            f"  High (>20) : {self.high_vix_win_rate:.0f}%",
-            f"  Best regime: {self.best_vix_regime}",
-        ])
+        lines.extend(
+            [
+                "",
+                "  [bold]By VIX Regime[/bold]",
+                f"  Low (<15)  : {self.low_vix_win_rate:.0f}%",
+                f"  Mid (15-20): {self.mid_vix_win_rate:.0f}%",
+                f"  High (>20) : {self.high_vix_win_rate:.0f}%",
+                f"  Best regime: {self.best_vix_regime}",
+            ]
+        )
 
         # Confidence
-        lines.extend([
-            "",
-            "  [bold]By Confidence[/bold]",
-            f"  High conf (>70) : {self.high_conf_win_rate:.0f}%",
-            f"  Low conf (<50)  : {self.low_conf_win_rate:.0f}%",
-            f"  Min useful conf : {self.min_useful_confidence}%",
-        ])
+        lines.extend(
+            [
+                "",
+                "  [bold]By Confidence[/bold]",
+                f"  High conf (>70) : {self.high_conf_win_rate:.0f}%",
+                f"  Low conf (<50)  : {self.low_conf_win_rate:.0f}%",
+                f"  Min useful conf : {self.min_useful_confidence}%",
+            ]
+        )
 
         # Streaks
-        lines.extend([
-            "",
-            "  [bold]Streaks[/bold]",
-            f"  Current        : {'W' if self.current_streak > 0 else 'L'}{abs(self.current_streak)}",
-            f"  Longest Win    : W{self.longest_win_streak}",
-            f"  Longest Loss   : L{self.longest_loss_streak}",
-        ])
+        lines.extend(
+            [
+                "",
+                "  [bold]Streaks[/bold]",
+                f"  Current        : {'W' if self.current_streak > 0 else 'L'}{abs(self.current_streak)}",
+                f"  Longest Win    : W{self.longest_win_streak}",
+                f"  Longest Loss   : L{self.longest_loss_streak}",
+            ]
+        )
 
-        console.print(Panel("\n".join(lines),
-                            title="[bold cyan]Your Trading Profile[/bold cyan]",
-                            border_style="cyan"))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold cyan]Your Trading Profile[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
         # Top/worst symbols
         if self.best_symbols:
@@ -239,8 +254,7 @@ def build_profile() -> TradingProfile:
     profile.avg_winner = sum(win_pnls) / len(win_pnls) if win_pnls else 0
     profile.avg_loser = sum(loss_pnls) / len(loss_pnls) if loss_pnls else 0
     profile.win_loss_ratio = (
-        abs(profile.avg_winner / profile.avg_loser)
-        if profile.avg_loser != 0 else float('inf')
+        abs(profile.avg_winner / profile.avg_loser) if profile.avg_loser != 0 else float("inf")
     )
     profile.largest_win = max(win_pnls) if win_pnls else 0
     profile.largest_loss = min(loss_pnls) if loss_pnls else 0
@@ -271,9 +285,11 @@ def build_profile() -> TradingProfile:
     profile.mid_vix_win_rate = _wr(mid_vix)
     profile.high_vix_win_rate = _wr(high_vix)
 
-    rates = {"Low VIX (<15)": profile.low_vix_win_rate,
-             "Mid VIX (15-20)": profile.mid_vix_win_rate,
-             "High VIX (>20)": profile.high_vix_win_rate}
+    rates = {
+        "Low VIX (<15)": profile.low_vix_win_rate,
+        "Mid VIX (15-20)": profile.mid_vix_win_rate,
+        "High VIX (>20)": profile.high_vix_win_rate,
+    }
     profile.best_vix_regime = max(rates, key=rates.get) if any(rates.values()) else "N/A"
 
     # By confidence
@@ -300,7 +316,8 @@ def build_profile() -> TradingProfile:
 
     symbol_data = [
         {"symbol": s, "win_rate": d["wins"] / d["total"] * 100, "trades": d["total"]}
-        for s, d in symbol_stats.items() if d["total"] >= 2
+        for s, d in symbol_stats.items()
+        if d["total"] >= 2
     ]
     profile.best_symbols = sorted(symbol_data, key=lambda x: -x["win_rate"])[:5]
     profile.worst_symbols = sorted(symbol_data, key=lambda x: x["win_rate"])[:5]
@@ -357,22 +374,32 @@ def build_profile() -> TradingProfile:
     # Recommendations
     recs = []
     if profile.cuts_winners_early:
-        recs.append("Let winners run longer — your avg winner is smaller than your avg loser. "
-                     "Consider trailing stops instead of fixed targets.")
+        recs.append(
+            "Let winners run longer — your avg winner is smaller than your avg loser. "
+            "Consider trailing stops instead of fixed targets."
+        )
     if profile.holds_losers_long:
-        recs.append("Cut losers faster — your avg losing hold is much longer than winning hold. "
-                     "Use strict time-based or ATR-based stops.")
+        recs.append(
+            "Cut losers faster — your avg losing hold is much longer than winning hold. "
+            "Use strict time-based or ATR-based stops."
+        )
     if profile.low_conf_win_rate < 40 and profile.high_conf_win_rate > 55:
-        recs.append(f"Only trade when confidence > {profile.min_useful_confidence}%. "
-                     f"Low confidence trades are losing money.")
+        recs.append(
+            f"Only trade when confidence > {profile.min_useful_confidence}%. "
+            f"Low confidence trades are losing money."
+        )
     if profile.best_vix_regime and "Low" in profile.best_vix_regime:
         recs.append("You perform best in low VIX. Reduce size in high-VIX regimes.")
     elif profile.best_vix_regime and "High" in profile.best_vix_regime:
-        recs.append("You perform well in volatile markets — contrarian edge. "
-                     "Consider increasing size when others are fearful.")
+        recs.append(
+            "You perform well in volatile markets — contrarian edge. "
+            "Consider increasing size when others are fearful."
+        )
     if profile.longest_loss_streak >= 4:
-        recs.append(f"You've had losing streaks of {profile.longest_loss_streak}. "
-                     f"Consider a mandatory cooldown after 3 consecutive losses.")
+        recs.append(
+            f"You've had losing streaks of {profile.longest_loss_streak}. "
+            f"Consider a mandatory cooldown after 3 consecutive losses."
+        )
     if not recs:
         recs.append("Keep doing what you're doing — consistent performance.")
 

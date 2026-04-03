@@ -51,6 +51,7 @@ _chat_sessions: dict[str, object] = {}
 
 # ── Request models ────────────────────────────────────────────
 
+
 class SymbolRequest(BaseModel):
     symbol: str
     exchange: str = "NSE"
@@ -88,17 +89,17 @@ class AnalyzeRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
-    session_id: str = "default"    # use different IDs for separate conversations
+    session_id: str = "default"  # use different IDs for separate conversations
 
 
 class AlertAddRequest(BaseModel):
     symbol: str
     exchange: str = "NSE"
     # Price alert fields
-    condition: Optional[str] = None      # ABOVE | BELOW | CROSSES
+    condition: Optional[str] = None  # ABOVE | BELOW | CROSSES
     threshold: Optional[float] = None
     # Technical alert fields
-    indicator: Optional[str] = None      # RSI | MACD | ADX | ATR | SCORE
+    indicator: Optional[str] = None  # RSI | MACD | ADX | ATR | SCORE
     # Conditional alert: list of conditions joined by AND
     conditions: Optional[list[dict]] = None
     # Webhook: POST here when alert fires
@@ -111,6 +112,7 @@ class AlertRemoveRequest(BaseModel):
 
 # ── Helper ────────────────────────────────────────────────────
 
+
 def _ok(data) -> dict:
     return {"status": "ok", "data": _serialise(data)}
 
@@ -121,11 +123,13 @@ def _err(msg: str, code: int = 500) -> HTTPException:
 
 # ── Skills ────────────────────────────────────────────────────
 
+
 @router.post("/quote")
 async def skill_quote(req: SymbolRequest):
     """Live price, OHLCV, and change% for a symbol."""
     try:
         from market.quotes import get_quote
+
         instrument = req.symbol if ":" in req.symbol else f"{req.exchange}:{req.symbol}"
         quotes = get_quote([instrument])
         if not quotes:
@@ -142,6 +146,7 @@ async def skill_options_chain(req: SymbolRequest):
     """Full options chain for a symbol (all strikes and expiries)."""
     try:
         from market.options import get_options_chain
+
         chain = get_options_chain(req.symbol.upper(), None)
         return _ok(chain)
     except Exception as e:
@@ -153,6 +158,7 @@ async def skill_flows():
     """FII/DII institutional flow data with buy/sell signals."""
     try:
         from market.flow_intel import get_flow_analysis
+
         report = get_flow_analysis()
         return _ok(report)
     except Exception as e:
@@ -164,6 +170,7 @@ async def skill_earnings(req: EarningsRequest):
     """Upcoming earnings calendar, optionally filtered by symbol list."""
     try:
         from market.earnings import get_earnings_calendar
+
         events = get_earnings_calendar()
         if req.symbols:
             syms = {s.upper() for s in req.symbols}
@@ -178,6 +185,7 @@ async def skill_macro(req: MacroRequest):
     """Macro snapshot: USD/INR, crude oil, gold, US 10Y yield."""
     try:
         from market.macro import get_macro_snapshot
+
         snap = get_macro_snapshot()
         return _ok(snap)
     except Exception as e:
@@ -189,6 +197,7 @@ async def skill_deals(req: DealsRequest):
     """Bulk and block deals from NSE, optionally filtered by symbol."""
     try:
         from market.bulk_deals import get_bulk_deals
+
         deals = get_bulk_deals(days=req.days, symbol=req.symbol)
         return _ok(deals)
     except Exception as e:
@@ -203,6 +212,7 @@ async def skill_backtest(req: BacktestRequest):
     """
     try:
         from engine.backtest import run_backtest
+
         result = run_backtest(req.symbol.upper(), req.strategy, period=req.period)
         return _ok(result)
     except Exception as e:
@@ -214,6 +224,7 @@ async def skill_pairs(req: PairsRequest):
     """Pair trading analysis: correlation, spread, mean reversion signals."""
     try:
         from engine.pairs import analyze_pair
+
         result = analyze_pair(req.stock_a.upper(), req.stock_b.upper())
         return _ok(result)
     except Exception as e:
@@ -368,6 +379,7 @@ async def skill_chat_reset(req: ChatResetRequest):
 
 # ── Alert skills ──────────────────────────────────────────────
 
+
 @router.post("/alerts/add")
 async def skill_alerts_add(req: AlertAddRequest):
     """
@@ -405,8 +417,10 @@ async def skill_alerts_add(req: AlertAddRequest):
         # Conditional alert
         if req.conditions:
             alert = alert_manager.add_conditional_alert(
-                symbol=sym, conditions=req.conditions,
-                exchange=exch, webhook_url=req.webhook_url,
+                symbol=sym,
+                conditions=req.conditions,
+                exchange=exch,
+                webhook_url=req.webhook_url,
             )
 
         # Technical alert
@@ -414,16 +428,21 @@ async def skill_alerts_add(req: AlertAddRequest):
             if req.condition is None or req.threshold is None:
                 raise _err("Technical alerts require condition and threshold", 400)
             alert = alert_manager.add_technical_alert(
-                symbol=sym, indicator=req.indicator,
-                condition=req.condition, threshold=req.threshold,
-                exchange=exch, webhook_url=req.webhook_url,
+                symbol=sym,
+                indicator=req.indicator,
+                condition=req.condition,
+                threshold=req.threshold,
+                exchange=exch,
+                webhook_url=req.webhook_url,
             )
 
         # Price alert
         elif req.condition and req.threshold is not None:
             alert = alert_manager.add_price_alert(
-                symbol=sym, condition=req.condition,
-                threshold=req.threshold, exchange=exch,
+                symbol=sym,
+                condition=req.condition,
+                threshold=req.threshold,
+                exchange=exch,
                 webhook_url=req.webhook_url,
             )
 
@@ -450,6 +469,7 @@ async def skill_alerts_list():
     """List all active (not yet triggered) alerts."""
     try:
         from engine.alerts import alert_manager
+
         return {"status": "ok", "data": alert_manager.list_alerts()}
     except Exception as e:
         raise _err(str(e))
@@ -460,6 +480,7 @@ async def skill_alerts_remove(req: AlertRemoveRequest):
     """Remove an alert by its ID."""
     try:
         from engine.alerts import alert_manager
+
         removed = alert_manager.remove_alert(req.alert_id)
         if not removed:
             raise _err(f"Alert {req.alert_id} not found", 404)
@@ -479,6 +500,7 @@ async def skill_alerts_check():
     """
     try:
         from engine.alerts import alert_manager
+
         triggered = alert_manager.check_alerts()
         return {
             "status": "ok",

@@ -19,16 +19,17 @@ from market.news import NewsItem
 
 # ── FII / DII Data ───────────────────────────────────────────
 
+
 @dataclass
 class FIIDIIData:
-    date:          str
-    fii_buy:       float       # INR crore
-    fii_sell:      float
-    fii_net:       float       # positive = buying, negative = selling
-    dii_buy:       float
-    dii_sell:      float
-    dii_net:       float
-    verdict:       str         # "FII_BUYING" | "FII_SELLING" | "NEUTRAL"
+    date: str
+    fii_buy: float  # INR crore
+    fii_sell: float
+    fii_net: float  # positive = buying, negative = selling
+    dii_buy: float
+    dii_sell: float
+    dii_net: float
+    verdict: str  # "FII_BUYING" | "FII_SELLING" | "NEUTRAL"
 
 
 NSE_FIIDII_URL = "https://www.nseindia.com/api/fiidiiTradeReact"
@@ -44,8 +45,8 @@ def get_fii_dii_data(days: int = 5) -> list[FIIDIIData]:
     try:
         headers = {
             "User-Agent": "Mozilla/5.0",
-            "Accept":     "application/json",
-            "Referer":    "https://www.nseindia.com",
+            "Accept": "application/json",
+            "Referer": "https://www.nseindia.com",
         }
         session = httpx.Client(follow_redirects=True)
         session.get("https://www.nseindia.com", headers=headers, timeout=5)
@@ -66,8 +67,14 @@ def get_fii_dii_data(days: int = 5) -> list[FIIDIIData]:
             net_val = float(item.get("netValue", 0))
 
             if dt not in by_date:
-                by_date[dt] = {"fii_buy": 0, "fii_sell": 0, "fii_net": 0,
-                               "dii_buy": 0, "dii_sell": 0, "dii_net": 0}
+                by_date[dt] = {
+                    "fii_buy": 0,
+                    "fii_sell": 0,
+                    "fii_net": 0,
+                    "dii_buy": 0,
+                    "dii_sell": 0,
+                    "dii_net": 0,
+                }
 
             if "FII" in category or "FPI" in category:
                 by_date[dt]["fii_buy"] = buy_val
@@ -82,20 +89,20 @@ def get_fii_dii_data(days: int = 5) -> list[FIIDIIData]:
         for dt, vals in list(by_date.items())[:days]:
             fii_net = vals["fii_net"]
             verdict = (
-                "FII_BUYING"  if fii_net > 500 else
-                "FII_SELLING" if fii_net < -500 else
-                "NEUTRAL"
+                "FII_BUYING" if fii_net > 500 else "FII_SELLING" if fii_net < -500 else "NEUTRAL"
             )
-            result.append(FIIDIIData(
-                date     = dt,
-                fii_buy  = vals["fii_buy"],
-                fii_sell = vals["fii_sell"],
-                fii_net  = fii_net,
-                dii_buy  = vals["dii_buy"],
-                dii_sell = vals["dii_sell"],
-                dii_net  = vals["dii_net"],
-                verdict  = verdict,
-            ))
+            result.append(
+                FIIDIIData(
+                    date=dt,
+                    fii_buy=vals["fii_buy"],
+                    fii_sell=vals["fii_sell"],
+                    fii_net=fii_net,
+                    dii_buy=vals["dii_buy"],
+                    dii_sell=vals["dii_sell"],
+                    dii_net=vals["dii_net"],
+                    verdict=verdict,
+                )
+            )
         return result
 
     except Exception:
@@ -105,16 +112,54 @@ def get_fii_dii_data(days: int = 5) -> list[FIIDIIData]:
 # ── News Sentiment ────────────────────────────────────────────
 
 BULLISH_WORDS = {
-    "surge", "rally", "gain", "jump", "rise", "high", "record", "strong",
-    "beat", "outperform", "upgrade", "buy", "positive", "growth", "profit",
-    "upside", "bull", "breakout", "momentum", "recovery", "boom",
+    "surge",
+    "rally",
+    "gain",
+    "jump",
+    "rise",
+    "high",
+    "record",
+    "strong",
+    "beat",
+    "outperform",
+    "upgrade",
+    "buy",
+    "positive",
+    "growth",
+    "profit",
+    "upside",
+    "bull",
+    "breakout",
+    "momentum",
+    "recovery",
+    "boom",
 }
 
 BEARISH_WORDS = {
-    "fall", "drop", "crash", "slump", "decline", "low", "weak", "loss",
-    "miss", "underperform", "downgrade", "sell", "negative", "concern",
-    "downside", "bear", "breakdown", "pressure", "recession", "crisis",
-    "war", "inflation", "rate hike", "debt",
+    "fall",
+    "drop",
+    "crash",
+    "slump",
+    "decline",
+    "low",
+    "weak",
+    "loss",
+    "miss",
+    "underperform",
+    "downgrade",
+    "sell",
+    "negative",
+    "concern",
+    "downside",
+    "bear",
+    "breakdown",
+    "pressure",
+    "recession",
+    "crisis",
+    "war",
+    "inflation",
+    "rate hike",
+    "debt",
 }
 
 
@@ -124,8 +169,8 @@ def score_headline(title: str) -> tuple[str, float]:
     Returns (verdict, score) where score is -1.0 to +1.0.
     """
     words = set(re.sub(r"[^a-z\s]", "", title.lower()).split())
-    bull  = len(words & BULLISH_WORDS)
-    bear  = len(words & BEARISH_WORDS)
+    bull = len(words & BULLISH_WORDS)
+    bear = len(words & BEARISH_WORDS)
     total = bull + bear
     if total == 0:
         return "NEUTRAL", 0.0
@@ -151,39 +196,42 @@ def score_news_batch(items: list[NewsItem]) -> dict:
     scored = []
     for item in items:
         verdict, score = score_headline(item.title)
-        scored.append({
-            "title":   item.title,
-            "source":  item.source,
-            "verdict": verdict,
-            "score":   score,
-        })
+        scored.append(
+            {
+                "title": item.title,
+                "source": item.source,
+                "verdict": verdict,
+                "score": score,
+            }
+        )
 
     bullish = sum(1 for s in scored if s["verdict"] == "BULLISH")
     bearish = sum(1 for s in scored if s["verdict"] == "BEARISH")
     neutral = sum(1 for s in scored if s["verdict"] == "NEUTRAL")
 
     avg_score = sum(s["score"] for s in scored) / len(scored) if scored else 0.0
-    overall   = "BULLISH" if avg_score > 0.1 else "BEARISH" if avg_score < -0.1 else "NEUTRAL"
+    overall = "BULLISH" if avg_score > 0.1 else "BEARISH" if avg_score < -0.1 else "NEUTRAL"
 
     return {
-        "overall":       overall,
-        "score":         round(avg_score, 3),
+        "overall": overall,
+        "score": round(avg_score, 3),
         "bullish_count": bullish,
         "bearish_count": bearish,
         "neutral_count": neutral,
-        "items":         scored,
+        "items": scored,
     }
 
 
 # ── Market Breadth (Advance / Decline) ───────────────────────
 
+
 @dataclass
 class MarketBreadth:
-    advances:  int
-    declines:  int
+    advances: int
+    declines: int
     unchanged: int
-    ad_ratio:  float        # advances / declines
-    verdict:   str          # "BROAD_RALLY" | "BROAD_DECLINE" | "MIXED"
+    ad_ratio: float  # advances / declines
+    verdict: str  # "BROAD_RALLY" | "BROAD_DECLINE" | "MIXED"
 
 
 def get_market_breadth() -> MarketBreadth:
@@ -194,22 +242,23 @@ def get_market_breadth() -> MarketBreadth:
     try:
         headers = {
             "User-Agent": "Mozilla/5.0",
-            "Accept":     "application/json",
-            "Referer":    "https://www.nseindia.com",
+            "Accept": "application/json",
+            "Referer": "https://www.nseindia.com",
         }
         session = httpx.Client(follow_redirects=True)
         session.get("https://www.nseindia.com", headers=headers, timeout=5)
         r = session.get(
             "https://www.nseindia.com/api/allIndices",
-            headers=headers, timeout=8,
+            headers=headers,
+            timeout=8,
         )
         r.raise_for_status()
         # Parse NIFTY 500 advances/declines
         data = r.json().get("data", [])
         nifty500 = next((d for d in data if "500" in d.get("index", "")), None)
         if nifty500:
-            adv  = int(nifty500.get("advances", 0))
-            dec  = int(nifty500.get("declines", 0))
+            adv = int(nifty500.get("advances", 0))
+            dec = int(nifty500.get("declines", 0))
             unch = int(nifty500.get("unchanged", 0))
             return _build_breadth(adv, dec, unch)
     except Exception:
@@ -220,16 +269,12 @@ def get_market_breadth() -> MarketBreadth:
 
 
 def _build_breadth(adv: int, dec: int, unch: int) -> MarketBreadth:
-    ratio   = adv / max(dec, 1)
-    verdict = (
-        "BROAD_RALLY"   if ratio > 2.0 else
-        "BROAD_DECLINE" if ratio < 0.5 else
-        "MIXED"
-    )
+    ratio = adv / max(dec, 1)
+    verdict = "BROAD_RALLY" if ratio > 2.0 else "BROAD_DECLINE" if ratio < 0.5 else "MIXED"
     return MarketBreadth(
-        advances  = adv,
-        declines  = dec,
-        unchanged = unch,
-        ad_ratio  = round(ratio, 2),
-        verdict   = verdict,
+        advances=adv,
+        declines=dec,
+        unchanged=unch,
+        ad_ratio=round(ratio, 2),
+        verdict=verdict,
     )

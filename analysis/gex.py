@@ -30,6 +30,7 @@ console = Console()
 
 # ── Core GEX Computation ─────────────────────────────────────
 
+
 def compute_gex_at_strike(
     oi: int,
     gamma: float,
@@ -74,13 +75,14 @@ def find_gex_flip(gex_by_strike: list[tuple[float, float]]) -> Optional[float]:
 def classify_gex_regime(total_gex: float, threshold: float = 50) -> str:
     """Classify market regime based on total net GEX."""
     if total_gex > threshold:
-        return "POSITIVE"    # Mean-reverting / pinning
+        return "POSITIVE"  # Mean-reverting / pinning
     elif total_gex < -threshold:
-        return "NEGATIVE"    # Trending / breakout
+        return "NEGATIVE"  # Trending / breakout
     return "NEUTRAL"
 
 
 # ── Full GEX Analysis ────────────────────────────────────────
+
 
 def get_gex_analysis(underlying: str, expiry: Optional[str] = None) -> dict:
     """
@@ -143,7 +145,9 @@ def get_gex_analysis(underlying: str, expiry: Optional[str] = None) -> dict:
         regime = classify_gex_regime(total_gex)
 
         # Find max GEX strike
-        max_gex_strike = max(sorted_strikes, key=lambda x: abs(x["net_gex"]))["strike"] if sorted_strikes else 0
+        max_gex_strike = (
+            max(sorted_strikes, key=lambda x: abs(x["net_gex"]))["strike"] if sorted_strikes else 0
+        )
 
         return {
             "underlying": underlying,
@@ -190,8 +194,10 @@ def print_gex(underlying: str, expiry: Optional[str] = None) -> None:
     lines.append(f"  Max GEX Strike: {data['max_gex_strike']:,.0f}")
     lines.append(f"\n  {data['interpretation']}")
 
-    console.print(Panel(
-        "\n".join(lines),
-        title=f"[bold cyan]GEX Analysis — {underlying}[/bold cyan]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title=f"[bold cyan]GEX Analysis — {underlying}[/bold cyan]",
+            border_style="cyan",
+        )
+    )

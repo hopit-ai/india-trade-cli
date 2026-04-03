@@ -31,34 +31,35 @@ console = Console()
 @dataclass
 class FlowAnalysis:
     """Comprehensive FII/DII flow analysis."""
+
     # Current state
-    fii_net_today:    float = 0.0         # Cr
-    dii_net_today:    float = 0.0
+    fii_net_today: float = 0.0  # Cr
+    dii_net_today: float = 0.0
 
     # Streak analysis
-    fii_streak:       int = 0             # +N = N consecutive buying days, -N = selling
-    dii_streak:       int = 0
-    fii_streak_total: float = 0.0         # cumulative Cr over streak
+    fii_streak: int = 0  # +N = N consecutive buying days, -N = selling
+    dii_streak: int = 0
+    fii_streak_total: float = 0.0  # cumulative Cr over streak
     dii_streak_total: float = 0.0
 
     # 5-day totals
-    fii_5d_net:       float = 0.0
-    dii_5d_net:       float = 0.0
+    fii_5d_net: float = 0.0
+    dii_5d_net: float = 0.0
 
     # Divergence signal
-    divergence:       bool = False        # FII and DII moving in opposite directions
-    divergence_type:  str = ""            # "FII_SELL_DII_BUY" or "FII_BUY_DII_SELL"
+    divergence: bool = False  # FII and DII moving in opposite directions
+    divergence_type: str = ""  # "FII_SELL_DII_BUY" or "FII_BUY_DII_SELL"
 
     # Flow momentum
-    fii_momentum:     str = ""            # "ACCELERATING" / "DECELERATING" / "STEADY"
+    fii_momentum: str = ""  # "ACCELERATING" / "DECELERATING" / "STEADY"
 
     # Signal
-    signal:           str = ""            # "BULLISH" / "BEARISH" / "NEUTRAL"
-    signal_reason:    str = ""
-    confidence:       int = 0             # 0-100
+    signal: str = ""  # "BULLISH" / "BEARISH" / "NEUTRAL"
+    signal_reason: str = ""
+    confidence: int = 0  # 0-100
 
     # Raw data
-    raw_data:         list[dict] = field(default_factory=list)
+    raw_data: list[dict] = field(default_factory=list)
 
 
 def get_flow_analysis() -> FlowAnalysis:
@@ -67,6 +68,7 @@ def get_flow_analysis() -> FlowAnalysis:
     """
     try:
         from market.sentiment import get_fii_dii_data
+
         raw = get_fii_dii_data(days=10)
     except Exception:
         return FlowAnalysis(signal="NEUTRAL", signal_reason="Flow data unavailable")
@@ -77,7 +79,7 @@ def get_flow_analysis() -> FlowAnalysis:
     # Convert to dicts if they're dataclasses
     data = []
     for item in raw:
-        if hasattr(item, '__dict__'):
+        if hasattr(item, "__dict__"):
             d = {k: v for k, v in item.__dict__.items()}
         elif isinstance(item, dict):
             d = item
@@ -158,47 +160,59 @@ def _derive_signal(a: FlowAnalysis) -> tuple[str, str, int]:
 
     # Strong signals
     if a.fii_streak <= -5 and a.fii_streak_total < -5000:
-        return ("BEARISH",
-                f"FII selling streak: {abs(a.fii_streak)} days, {a.fii_streak_total:,.0f} Cr. "
-                "Heavy institutional exit.",
-                80)
+        return (
+            "BEARISH",
+            f"FII selling streak: {abs(a.fii_streak)} days, {a.fii_streak_total:,.0f} Cr. "
+            "Heavy institutional exit.",
+            80,
+        )
 
     if a.fii_streak >= 5 and a.fii_streak_total > 5000:
-        return ("BULLISH",
-                f"FII buying streak: {a.fii_streak} days, +{a.fii_streak_total:,.0f} Cr. "
-                "Strong institutional demand.",
-                80)
+        return (
+            "BULLISH",
+            f"FII buying streak: {a.fii_streak} days, +{a.fii_streak_total:,.0f} Cr. "
+            "Strong institutional demand.",
+            80,
+        )
 
     # Divergence signals (historically predictive)
     if a.divergence and a.divergence_type == "FII_SELL_DII_BUY":
-        return ("NEUTRAL_TO_BULLISH",
-                "FII selling but DII absorbing — historically marks short-term bottoms. "
-                f"FII 5d: {a.fii_5d_net:,.0f} Cr, DII 5d: +{a.dii_5d_net:,.0f} Cr.",
-                65)
+        return (
+            "NEUTRAL_TO_BULLISH",
+            "FII selling but DII absorbing — historically marks short-term bottoms. "
+            f"FII 5d: {a.fii_5d_net:,.0f} Cr, DII 5d: +{a.dii_5d_net:,.0f} Cr.",
+            65,
+        )
 
     if a.divergence and a.divergence_type == "FII_BUY_DII_SELL":
-        return ("NEUTRAL_TO_BEARISH",
-                "FII buying but DII selling — potential distribution phase. "
-                f"FII 5d: +{a.fii_5d_net:,.0f} Cr, DII 5d: {a.dii_5d_net:,.0f} Cr.",
-                55)
+        return (
+            "NEUTRAL_TO_BEARISH",
+            "FII buying but DII selling — potential distribution phase. "
+            f"FII 5d: +{a.fii_5d_net:,.0f} Cr, DII 5d: {a.dii_5d_net:,.0f} Cr.",
+            55,
+        )
 
     # Moderate signals
     if a.fii_5d_net < -3000:
-        return ("BEARISH",
-                f"FII 5-day net: {a.fii_5d_net:,.0f} Cr (heavy selling). "
-                f"Momentum: {a.fii_momentum}.",
-                60)
+        return (
+            "BEARISH",
+            f"FII 5-day net: {a.fii_5d_net:,.0f} Cr (heavy selling). Momentum: {a.fii_momentum}.",
+            60,
+        )
 
     if a.fii_5d_net > 3000:
-        return ("BULLISH",
-                f"FII 5-day net: +{a.fii_5d_net:,.0f} Cr (strong buying). "
-                f"Momentum: {a.fii_momentum}.",
-                60)
+        return (
+            "BULLISH",
+            f"FII 5-day net: +{a.fii_5d_net:,.0f} Cr (strong buying). Momentum: {a.fii_momentum}.",
+            60,
+        )
 
-    return ("NEUTRAL",
-            f"FII 5d: {a.fii_5d_net:,.0f} Cr, DII 5d: {a.dii_5d_net:,.0f} Cr. "
-            "No strong directional signal.",
-            40)
+    return (
+        "NEUTRAL",
+        f"FII 5d: {a.fii_5d_net:,.0f} Cr, DII 5d: {a.dii_5d_net:,.0f} Cr. "
+        "No strong directional signal.",
+        40,
+    )
 
 
 def get_flow_context() -> str:
@@ -222,8 +236,10 @@ def print_flow_report() -> None:
     a = get_flow_analysis()
 
     signal_style = {
-        "BULLISH": "green", "BEARISH": "red",
-        "NEUTRAL": "yellow", "NEUTRAL_TO_BULLISH": "green",
+        "BULLISH": "green",
+        "BEARISH": "red",
+        "NEUTRAL": "yellow",
+        "NEUTRAL_TO_BULLISH": "green",
         "NEUTRAL_TO_BEARISH": "red",
     }.get(a.signal, "white")
 
@@ -248,12 +264,16 @@ def print_flow_report() -> None:
     if a.divergence:
         lines.append(f"\n  [bold yellow]DIVERGENCE: {a.divergence_type}[/bold yellow]")
 
-    lines.append(f"\n  [bold]Signal: [{signal_style}]{a.signal}[/{signal_style}][/bold] "
-                 f"(confidence: {a.confidence}%)")
+    lines.append(
+        f"\n  [bold]Signal: [{signal_style}]{a.signal}[/{signal_style}][/bold] "
+        f"(confidence: {a.confidence}%)"
+    )
     lines.append(f"  {a.signal_reason}")
 
-    console.print(Panel(
-        "\n".join(lines),
-        title="[bold cyan]FII/DII Flow Intelligence[/bold cyan]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold cyan]FII/DII Flow Intelligence[/bold cyan]",
+            border_style="cyan",
+        )
+    )

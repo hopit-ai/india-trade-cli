@@ -37,25 +37,27 @@ console = Console()
 @dataclass
 class PairAnalysis:
     """Result of analyzing a stock pair for relative value trading."""
-    stock_a:        str
-    stock_b:        str
-    correlation:    float           # -1 to +1
-    spread_zscore:  float           # current spread z-score
-    spread_mean:    float           # historical mean spread
-    spread_std:     float           # spread standard deviation
-    signal:         str             # "LONG_A_SHORT_B" / "LONG_B_SHORT_A" / "NO_SIGNAL"
-    signal_strength: str            # "STRONG" / "MODERATE" / "WEAK"
-    half_life:      Optional[float] = None  # mean reversion half-life in days
-    hedge_ratio:    float = 1.0     # how many units of B per unit of A
+
+    stock_a: str
+    stock_b: str
+    correlation: float  # -1 to +1
+    spread_zscore: float  # current spread z-score
+    spread_mean: float  # historical mean spread
+    spread_std: float  # spread standard deviation
+    signal: str  # "LONG_A_SHORT_B" / "LONG_B_SHORT_A" / "NO_SIGNAL"
+    signal_strength: str  # "STRONG" / "MODERATE" / "WEAK"
+    half_life: Optional[float] = None  # mean reversion half-life in days
+    hedge_ratio: float = 1.0  # how many units of B per unit of A
 
     # Recent performance
-    a_return_30d:   float = 0.0     # 30-day return %
-    b_return_30d:   float = 0.0
-    spread_return:  float = 0.0     # A return - B return (30d)
+    a_return_30d: float = 0.0  # 30-day return %
+    b_return_30d: float = 0.0
+    spread_return: float = 0.0  # A return - B return (30d)
 
     def print_analysis(self) -> None:
         sig_style = {
-            "LONG_A_SHORT_B": "green", "LONG_B_SHORT_A": "red",
+            "LONG_A_SHORT_B": "green",
+            "LONG_B_SHORT_A": "red",
         }.get(self.signal, "yellow")
 
         lines = [
@@ -77,30 +79,36 @@ class PairAnalysis:
 
         if self.signal != "NO_SIGNAL":
             if self.signal == "LONG_A_SHORT_B":
-                lines.append(f"\n  Trade: BUY {self.stock_a}, SELL {self.stock_b} (spread to narrow)")
+                lines.append(
+                    f"\n  Trade: BUY {self.stock_a}, SELL {self.stock_b} (spread to narrow)"
+                )
             else:
-                lines.append(f"\n  Trade: BUY {self.stock_b}, SELL {self.stock_a} (spread to narrow)")
+                lines.append(
+                    f"\n  Trade: BUY {self.stock_b}, SELL {self.stock_a} (spread to narrow)"
+                )
 
-        console.print(Panel("\n".join(lines),
-                            title="[bold cyan]Pair Analysis[/bold cyan]",
-                            border_style="cyan"))
+        console.print(
+            Panel(
+                "\n".join(lines), title="[bold cyan]Pair Analysis[/bold cyan]", border_style="cyan"
+            )
+        )
 
 
 # ── Common Indian Pairs ──────────────────────────────────────
 
 KNOWN_PAIRS = [
-    ("HDFCBANK", "ICICIBANK"),    # private banks
+    ("HDFCBANK", "ICICIBANK"),  # private banks
     ("HDFCBANK", "KOTAKBANK"),
-    ("TCS", "INFY"),              # IT
+    ("TCS", "INFY"),  # IT
     ("INFY", "WIPRO"),
-    ("SBIN", "BANKBARODA"),       # PSU banks
-    ("TATASTEEL", "JSWSTEEL"),    # metals
-    ("SUNPHARMA", "DRREDDY"),     # pharma
-    ("MARUTI", "TATAMOTORS"),     # auto
-    ("RELIANCE", "BHARTIARTL"),   # telecom/conglomerate
-    ("ITC", "HINDUNILVR"),        # FMCG
-    ("ASIANPAINT", "BERGEPAINT"), # paints
-    ("NTPC", "POWERGRID"),        # power utilities
+    ("SBIN", "BANKBARODA"),  # PSU banks
+    ("TATASTEEL", "JSWSTEEL"),  # metals
+    ("SUNPHARMA", "DRREDDY"),  # pharma
+    ("MARUTI", "TATAMOTORS"),  # auto
+    ("RELIANCE", "BHARTIARTL"),  # telecom/conglomerate
+    ("ITC", "HINDUNILVR"),  # FMCG
+    ("ASIANPAINT", "BERGEPAINT"),  # paints
+    ("NTPC", "POWERGRID"),  # power utilities
 ]
 
 
@@ -118,9 +126,14 @@ def analyze_pair(
 
     if returns_a is None or returns_b is None:
         return PairAnalysis(
-            stock_a=stock_a, stock_b=stock_b,
-            correlation=0, spread_zscore=0, spread_mean=0, spread_std=0,
-            signal="NO_SIGNAL", signal_strength="WEAK",
+            stock_a=stock_a,
+            stock_b=stock_b,
+            correlation=0,
+            spread_zscore=0,
+            spread_mean=0,
+            spread_std=0,
+            signal="NO_SIGNAL",
+            signal_strength="WEAK",
         )
 
     # Align lengths
@@ -210,11 +223,13 @@ def find_pairs(
 
     # Sort: signals first, then by z-score magnitude
     signal_order = {"STRONG": 0, "MODERATE": 1, "WEAK": 2}
-    results.sort(key=lambda x: (
-        0 if x.signal != "NO_SIGNAL" else 1,
-        signal_order.get(x.signal_strength, 3),
-        -abs(x.spread_zscore),
-    ))
+    results.sort(
+        key=lambda x: (
+            0 if x.signal != "NO_SIGNAL" else 1,
+            signal_order.get(x.signal_strength, 3),
+            -abs(x.spread_zscore),
+        )
+    )
 
     return results
 
@@ -236,7 +251,8 @@ def print_pairs_scan(symbols: Optional[list[str]] = None) -> None:
 
     for p in pairs:
         sig_style = {
-            "LONG_A_SHORT_B": "green", "LONG_B_SHORT_A": "red",
+            "LONG_A_SHORT_B": "green",
+            "LONG_B_SHORT_A": "red",
         }.get(p.signal, "dim")
         str_style = {"STRONG": "bold", "MODERATE": "", "WEAK": "dim"}.get(p.signal_strength, "")
 
@@ -254,10 +270,12 @@ def print_pairs_scan(symbols: Optional[list[str]] = None) -> None:
 
 # ── Helpers ──────────────────────────────────────────────────
 
+
 def _get_closes(symbol: str, days: int = 252) -> Optional[np.ndarray]:
     """Get closing prices from yfinance."""
     try:
         from market.yfinance_provider import yf_get_ohlcv
+
         data = yf_get_ohlcv(symbol, period="1y")
         if not data or len(data) < 30:
             return None

@@ -35,18 +35,32 @@ STRATEGIES_DIR = Path.home() / ".trading_platform" / "strategies"
 
 # Modules that user-generated strategy code is allowed to import
 IMPORT_WHITELIST = {
-    "pandas", "pd",
-    "numpy", "np",
+    "pandas",
+    "pd",
+    "numpy",
+    "np",
     "math",
-    "analysis.technical", "analysis",
-    "engine.backtest", "engine",
-    "market.history", "market",  # for pairs strategies fetching other symbols
+    "analysis.technical",
+    "analysis",
+    "engine.backtest",
+    "engine",
+    "market.history",
+    "market",  # for pairs strategies fetching other symbols
 }
 
 # Keywords for matching user descriptions to existing strategies
 STRATEGY_KEYWORDS = {
     "rsi": ["rsi", "relative strength", "oversold", "overbought", "momentum"],
-    "ma": ["moving average", "ema", "sma", "crossover", "cross", "golden cross", "death cross", "trend"],
+    "ma": [
+        "moving average",
+        "ema",
+        "sma",
+        "crossover",
+        "cross",
+        "golden cross",
+        "death cross",
+        "trend",
+    ],
     "ema": ["ema", "exponential moving average"],
     "macd": ["macd", "signal line", "histogram", "convergence", "divergence"],
     "bollinger": ["bollinger", "bb", "bands", "squeeze", "standard deviation", "mean reversion"],
@@ -55,6 +69,7 @@ STRATEGY_KEYWORDS = {
 
 
 # ── Strategy Store ──────────────────────────────────────────
+
 
 class StrategyStore:
     """Persistence layer for user-created strategies."""
@@ -91,10 +106,10 @@ class StrategyStore:
 
         # Find the Strategy subclass in the module
         from engine.backtest import Strategy
+
         for attr_name in dir(module):
             obj = getattr(module, attr_name)
-            if (isinstance(obj, type) and issubclass(obj, Strategy)
-                    and obj is not Strategy):
+            if isinstance(obj, type) and issubclass(obj, Strategy) and obj is not Strategy:
                 # Load parameters from metadata if available
                 meta = self.get_metadata(name)
                 params = meta.get("parameters", {}) if meta else {}
@@ -164,6 +179,7 @@ strategy_store = StrategyStore()
 
 # ── Code Validation ─────────────────────────────────────────
 
+
 def validate_strategy_code(code: str) -> tuple[bool, str]:
     """
     Validate LLM-generated strategy code for safety and correctness.
@@ -217,37 +233,66 @@ def validate_strategy_code(code: str) -> tuple[bool, str]:
             for alias in node.names:
                 root = alias.name.split(".")[0]
                 if root not in IMPORT_WHITELIST:
-                    return False, f"Forbidden import: '{alias.name}'. Only allowed: pandas, numpy, math, analysis.technical, engine.backtest"
+                    return (
+                        False,
+                        f"Forbidden import: '{alias.name}'. Only allowed: pandas, numpy, math, analysis.technical, engine.backtest",
+                    )
         elif isinstance(node, ast.ImportFrom):
             if node.module:
                 root = node.module.split(".")[0]
                 if root not in IMPORT_WHITELIST:
-                    return False, f"Forbidden import: 'from {node.module}'. Only allowed: pandas, numpy, math, analysis.technical, engine.backtest"
+                    return (
+                        False,
+                        f"Forbidden import: 'from {node.module}'. Only allowed: pandas, numpy, math, analysis.technical, engine.backtest",
+                    )
 
     # 4. Dangerous builtin / dunder access check
     _DANGEROUS_BUILTINS = {
-        "exec", "eval", "compile", "open", "__import__",
-        "getattr", "setattr", "delattr", "vars", "dir",
-        "globals", "locals", "breakpoint",
+        "exec",
+        "eval",
+        "compile",
+        "open",
+        "__import__",
+        "getattr",
+        "setattr",
+        "delattr",
+        "vars",
+        "dir",
+        "globals",
+        "locals",
+        "breakpoint",
     }
     _DANGEROUS_DUNDERS = {
-        "__builtins__", "__globals__", "__locals__", "__class__",
-        "__bases__", "__subclasses__", "__import__", "__code__",
+        "__builtins__",
+        "__globals__",
+        "__locals__",
+        "__class__",
+        "__bases__",
+        "__subclasses__",
+        "__import__",
+        "__code__",
     }
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name) and node.func.id in _DANGEROUS_BUILTINS:
                 return False, f"Forbidden call: '{node.func.id}()' is not allowed in strategy code."
         if isinstance(node, ast.Attribute) and node.attr in _DANGEROUS_DUNDERS:
-            return False, f"Forbidden attribute access: '{node.attr}' is not allowed in strategy code."
+            return (
+                False,
+                f"Forbidden attribute access: '{node.attr}' is not allowed in strategy code.",
+            )
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             if node.value in _DANGEROUS_DUNDERS:
-                return False, f"Forbidden string literal: '{node.value}' may not appear in strategy code."
+                return (
+                    False,
+                    f"Forbidden string literal: '{node.value}' may not appear in strategy code.",
+                )
 
     return True, ""
 
 
 # ── Similar Strategy Finder ─────────────────────────────────
+
 
 def find_similar_strategies(description: str) -> list[dict]:
     """
@@ -261,12 +306,14 @@ def find_similar_strategies(description: str) -> list[dict]:
     for name, keywords in STRATEGY_KEYWORDS.items():
         score = sum(1 for kw in keywords if kw in desc_lower)
         if score > 0:
-            results.append({
-                "name": name,
-                "type": "builtin",
-                "match_score": score,
-                "description": _builtin_description(name),
-            })
+            results.append(
+                {
+                    "name": name,
+                    "type": "builtin",
+                    "match_score": score,
+                    "description": _builtin_description(name),
+                }
+            )
 
     # Check saved user strategies
     for meta in strategy_store.list_strategies():
@@ -276,12 +323,14 @@ def find_similar_strategies(description: str) -> list[dict]:
         user_words = set(user_desc.split())
         overlap = len(desc_words & user_words)
         if overlap >= 2:
-            results.append({
-                "name": meta["name"],
-                "type": "saved",
-                "match_score": overlap,
-                "description": meta.get("description", ""),
-            })
+            results.append(
+                {
+                    "name": meta["name"],
+                    "type": "saved",
+                    "match_score": overlap,
+                    "description": meta.get("description", ""),
+                }
+            )
 
     results.sort(key=lambda x: x["match_score"], reverse=True)
     return results[:5]
@@ -301,6 +350,7 @@ def _builtin_description(name: str) -> str:
 
 
 # ── Build and Test ──────────────────────────────────────────
+
 
 def build_and_test(
     code: str,
@@ -330,6 +380,7 @@ def build_and_test(
         spec.loader.exec_module(module)
 
         from engine.backtest import Strategy, Backtester
+
         strategy = None
         for attr_name in dir(module):
             obj = getattr(module, attr_name)
@@ -411,7 +462,11 @@ def extract_strategy_payload(response: str) -> Optional[dict]:
         code_lines = []
         in_code = False
         for line in lines:
-            if line.strip().startswith("from ") or line.strip().startswith("import ") or line.strip().startswith("class "):
+            if (
+                line.strip().startswith("from ")
+                or line.strip().startswith("import ")
+                or line.strip().startswith("class ")
+            ):
                 in_code = True
             if in_code:
                 code_lines.append(line)
@@ -429,10 +484,13 @@ def extract_strategy_payload(response: str) -> Optional[dict]:
 
 # ── Display Helpers ─────────────────────────────────────────
 
+
 def print_strategy_list(strategies: list[dict]) -> None:
     """Print a Rich table of saved strategies."""
     if not strategies:
-        console.print("[dim]No saved strategies. Use [bold]strategy new[/bold] to create one.[/dim]")
+        console.print(
+            "[dim]No saved strategies. Use [bold]strategy new[/bold] to create one.[/dim]"
+        )
         return
 
     table = Table(title="Saved Strategies", show_lines=False)
@@ -452,7 +510,10 @@ def print_strategy_list(strategies: list[dict]) -> None:
         table.add_row(
             s.get("name", "?"),
             s.get("description", "")[:50],
-            ret, sharpe, wr, created,
+            ret,
+            sharpe,
+            wr,
+            created,
         )
 
     console.print(table)

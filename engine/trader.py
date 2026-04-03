@@ -46,21 +46,39 @@ console = Console()
 # ── F&O Lot Sizes (as of 2026, update periodically) ──────────
 
 LOT_SIZES = {
-    "NIFTY": 75, "BANKNIFTY": 15, "FINNIFTY": 25, "MIDCPNIFTY": 50,
-    "RELIANCE": 250, "TCS": 150, "INFY": 300, "HDFCBANK": 550,
-    "ICICIBANK": 700, "SBIN": 750, "BHARTIARTL": 475,
-    "ITC": 1600, "KOTAKBANK": 400, "AXISBANK": 600,
-    "LT": 150, "TATAMOTORS": 575, "MARUTI": 100,
-    "BAJFINANCE": 125, "TITAN": 375, "WIPRO": 1500,
-    "SUNPHARMA": 350, "HINDUNILVR": 300, "ASIANPAINT": 200,
-    "TATASTEEL": 550, "M&M": 350, "ADANIENT": 250,
+    "NIFTY": 75,
+    "BANKNIFTY": 15,
+    "FINNIFTY": 25,
+    "MIDCPNIFTY": 50,
+    "RELIANCE": 250,
+    "TCS": 150,
+    "INFY": 300,
+    "HDFCBANK": 550,
+    "ICICIBANK": 700,
+    "SBIN": 750,
+    "BHARTIARTL": 475,
+    "ITC": 1600,
+    "KOTAKBANK": 400,
+    "AXISBANK": 600,
+    "LT": 150,
+    "TATAMOTORS": 575,
+    "MARUTI": 100,
+    "BAJFINANCE": 125,
+    "TITAN": 375,
+    "WIPRO": 1500,
+    "SUNPHARMA": 350,
+    "HINDUNILVR": 300,
+    "ASIANPAINT": 200,
+    "TATASTEEL": 550,
+    "M&M": 350,
+    "ADANIENT": 250,
 }
 
 # Minimum margin requirement approximations (% of contract value)
 MARGIN_PCT = {
-    "equity": 100,       # full capital for delivery
-    "intraday": 20,      # MIS margin
-    "futures": 15,       # NRML F&O
+    "equity": 100,  # full capital for delivery
+    "intraday": 20,  # MIS margin
+    "futures": 15,  # NRML F&O
     "options_buy": 100,  # premium-only for buying
     "options_sell": 20,  # margin for selling
 }
@@ -68,51 +86,53 @@ MARGIN_PCT = {
 
 # ── Risk Persona Profiles ────────────────────────────────────
 
+
 @dataclass
 class RiskProfile:
     """Configuration for a risk persona."""
-    name:            str          # "Aggressive" / "Neutral" / "Conservative"
-    risk_pct:        float        # % of capital to risk per trade
-    sl_atr_mult:     float        # ATR multiplier for stop-loss
-    max_position_pct: float       # max % of capital in a single position
-    target_rr:       float        # minimum reward:risk ratio
-    t1_rr:           float        # R:R at which to take first partial profit
-    t1_close_pct:    str          # what to close at T1
-    trail_trigger:   float        # % gain to start trailing
-    trail_step:      float        # % trailing step
-    prefer_options:  bool         # prefer options over equity
-    prefer_spreads:  bool         # prefer spreads over naked options
-    max_hold_swing:  int          # max days for swing trades
-    max_hold_pos:    int          # max days for positional trades
-    description:     str = ""
+
+    name: str  # "Aggressive" / "Neutral" / "Conservative"
+    risk_pct: float  # % of capital to risk per trade
+    sl_atr_mult: float  # ATR multiplier for stop-loss
+    max_position_pct: float  # max % of capital in a single position
+    target_rr: float  # minimum reward:risk ratio
+    t1_rr: float  # R:R at which to take first partial profit
+    t1_close_pct: str  # what to close at T1
+    trail_trigger: float  # % gain to start trailing
+    trail_step: float  # % trailing step
+    prefer_options: bool  # prefer options over equity
+    prefer_spreads: bool  # prefer spreads over naked options
+    max_hold_swing: int  # max days for swing trades
+    max_hold_pos: int  # max days for positional trades
+    description: str = ""
 
 
 RISK_PROFILES = {
     "aggressive": RiskProfile(
         name="Aggressive",
         risk_pct=3.0,
-        sl_atr_mult=1.0,            # tight stop: 1x ATR
+        sl_atr_mult=1.0,  # tight stop: 1x ATR
         max_position_pct=25.0,
-        target_rr=3.0,              # aim for 3:1
+        target_rr=3.0,  # aim for 3:1
         t1_rr=1.5,
-        t1_close_pct="CLOSE_33%",   # take 1/3 at T1, let rest run
+        t1_close_pct="CLOSE_33%",  # take 1/3 at T1, let rest run
         trail_trigger=3.0,
         trail_step=1.0,
         prefer_options=True,
-        prefer_spreads=False,        # ok with naked options
+        prefer_spreads=False,  # ok with naked options
         max_hold_swing=15,
         max_hold_pos=60,
         description="High risk, high reward. Larger positions, tighter stops, "
-                    "prefers options for leverage. Suitable for experienced traders.",
+        "prefers options for leverage. Suitable for experienced traders.",
     ),
     "neutral": RiskProfile(
         name="Neutral",
         risk_pct=2.0,
-        sl_atr_mult=1.5,            # standard: 1.5x ATR
+        sl_atr_mult=1.5,  # standard: 1.5x ATR
         max_position_pct=20.0,
-        target_rr=2.0,              # aim for 2:1
+        target_rr=2.0,  # aim for 2:1
         t1_rr=1.5,
-        t1_close_pct="CLOSE_50%",   # take half at T1
+        t1_close_pct="CLOSE_50%",  # take half at T1
         trail_trigger=2.0,
         trail_step=0.5,
         prefer_options=False,
@@ -120,109 +140,119 @@ RISK_PROFILES = {
         max_hold_swing=10,
         max_hold_pos=45,
         description="Balanced risk/reward. Standard position sizing, ATR-based stops, "
-                    "mix of equity and spreads. Default for most traders.",
+        "mix of equity and spreads. Default for most traders.",
     ),
     "conservative": RiskProfile(
         name="Conservative",
         risk_pct=1.0,
-        sl_atr_mult=2.0,            # wide stop: 2x ATR (less likely to get stopped out)
+        sl_atr_mult=2.0,  # wide stop: 2x ATR (less likely to get stopped out)
         max_position_pct=15.0,
-        target_rr=1.5,              # accept 1.5:1 (higher probability)
+        target_rr=1.5,  # accept 1.5:1 (higher probability)
         t1_rr=1.0,
-        t1_close_pct="CLOSE_50%",   # take half at 1:1
+        t1_close_pct="CLOSE_50%",  # take half at 1:1
         trail_trigger=1.5,
         trail_step=0.5,
         prefer_options=False,
-        prefer_spreads=True,         # always use defined-risk
+        prefer_spreads=True,  # always use defined-risk
         max_hold_swing=7,
         max_hold_pos=30,
         description="Capital preservation first. Smaller positions, wider stops, "
-                    "prefers equity delivery and spreads. Avoid naked options.",
+        "prefers equity delivery and spreads. Avoid naked options.",
     ),
 }
 
 
 # ── Data Models ──────────────────────────────────────────────
 
+
 @dataclass
 class OrderLeg:
     """A single order in the trade plan."""
-    action:         str          # "BUY" or "SELL"
-    instrument:     str          # "RELIANCE" or "RELIANCE 22500 CE APR"
-    exchange:       str          # "NSE" or "NFO"
-    product:        str          # "CNC" (delivery) / "MIS" (intraday) / "NRML" (F&O)
-    order_type:     str          # "MARKET" / "LIMIT" / "SL" / "SL-M"
-    quantity:       int
-    price:          Optional[float] = None    # for LIMIT orders
-    trigger_price:  Optional[float] = None    # for SL orders
-    lot_size:       int = 1
-    lots:           int = 1
-    tag:            str = ""     # tracking label
+
+    action: str  # "BUY" or "SELL"
+    instrument: str  # "RELIANCE" or "RELIANCE 22500 CE APR"
+    exchange: str  # "NSE" or "NFO"
+    product: str  # "CNC" (delivery) / "MIS" (intraday) / "NRML" (F&O)
+    order_type: str  # "MARKET" / "LIMIT" / "SL" / "SL-M"
+    quantity: int
+    price: Optional[float] = None  # for LIMIT orders
+    trigger_price: Optional[float] = None  # for SL orders
+    lot_size: int = 1
+    lots: int = 1
+    tag: str = ""  # tracking label
 
 
 @dataclass
 class ExitPlan:
     """When and how to exit the position."""
-    stop_loss:      float        # absolute price
-    stop_loss_pct:  float        # % from entry
-    stop_loss_type: str          # "FIXED" / "TRAILING" / "ATR_BASED"
 
-    target_1:       float        # first profit target
-    target_1_pct:   float        # % from entry
+    stop_loss: float  # absolute price
+    stop_loss_pct: float  # % from entry
+    stop_loss_type: str  # "FIXED" / "TRAILING" / "ATR_BASED"
+
+    target_1: float  # first profit target
+    target_1_pct: float  # % from entry
     target_1_action: str = "CLOSE_50%"  # what to do at T1
 
-    target_2:       Optional[float] = None
-    target_2_pct:   Optional[float] = None
+    target_2: Optional[float] = None
+    target_2_pct: Optional[float] = None
     target_2_action: str = "CLOSE_REMAINING"
 
-    trail_trigger:  Optional[float] = None  # start trailing after this %
-    trail_step:     Optional[float] = None  # trail SL by this %
+    trail_trigger: Optional[float] = None  # start trailing after this %
+    trail_step: Optional[float] = None  # trail SL by this %
 
-    time_exit:      str = ""     # "SAME_DAY" / "BEFORE_EXPIRY" / "AFTER_EARNINGS" / ""
-    max_hold_days:  Optional[int] = None
+    time_exit: str = ""  # "SAME_DAY" / "BEFORE_EXPIRY" / "AFTER_EARNINGS" / ""
+    max_hold_days: Optional[int] = None
 
 
 @dataclass
 class TradePlan:
     """Complete executable trade plan."""
+
     # Identity
-    symbol:         str
-    exchange:       str
-    timestamp:      str
+    symbol: str
+    exchange: str
+    timestamp: str
 
     # Strategy
-    strategy_name:  str          # "Delivery Buy", "Bull Call Spread", "Intraday Long"
-    direction:      str          # "LONG" / "SHORT" / "NEUTRAL"
-    instrument_type: str         # "EQUITY" / "FUTURES" / "OPTIONS" / "SPREAD"
-    timeframe:      str          # "INTRADAY" / "SWING" (2-10 days) / "POSITIONAL" (>10 days)
+    strategy_name: str  # "Delivery Buy", "Bull Call Spread", "Intraday Long"
+    direction: str  # "LONG" / "SHORT" / "NEUTRAL"
+    instrument_type: str  # "EQUITY" / "FUTURES" / "OPTIONS" / "SPREAD"
+    timeframe: str  # "INTRADAY" / "SWING" (2-10 days) / "POSITIONAL" (>10 days)
 
     # Sizing
-    capital_deployed: float      # INR
-    capital_pct:      float      # % of total capital
-    max_risk:         float      # INR max loss if SL hits
-    risk_pct:         float      # % of capital at risk
-    reward_risk:      float      # R:R ratio
+    capital_deployed: float  # INR
+    capital_pct: float  # % of total capital
+    max_risk: float  # INR max loss if SL hits
+    risk_pct: float  # % of capital at risk
+    reward_risk: float  # R:R ratio
 
     # Orders
-    entry_orders:   list[OrderLeg] = field(default_factory=list)
-    exit_plan:      Optional[ExitPlan] = None
+    entry_orders: list[OrderLeg] = field(default_factory=list)
+    exit_plan: Optional[ExitPlan] = None
 
     # Scaling
-    scale_in:       bool = False
-    scale_logic:    str = ""     # "50% now, 50% at support" / "All at market"
+    scale_in: bool = False
+    scale_logic: str = ""  # "50% now, 50% at support" / "All at market"
 
     # Context
-    rationale:      list[str] = field(default_factory=list)
-    risks:          list[str] = field(default_factory=list)
+    rationale: list[str] = field(default_factory=list)
+    risks: list[str] = field(default_factory=list)
     pre_conditions: list[str] = field(default_factory=list)  # conditions that must hold
 
     # Verdict that generated this plan
-    verdict:        str = ""     # from synthesis
-    confidence:     int = 0
+    verdict: str = ""  # from synthesis
+    confidence: int = 0
 
     def print_plan(self) -> None:
         """Display the trade plan as a Rich panel."""
-        dir_style = "green" if self.direction == "LONG" else "red" if self.direction == "SHORT" else "yellow"
+        dir_style = (
+            "green"
+            if self.direction == "LONG"
+            else "red"
+            if self.direction == "SHORT"
+            else "yellow"
+        )
 
         lines = [
             f"  [bold]{self.strategy_name}[/bold]  [{dir_style}]{self.direction}[/{dir_style}]",
@@ -249,12 +279,14 @@ class TradePlan:
 
         if self.exit_plan:
             ep = self.exit_plan
-            lines.extend([
-                "",
-                "  [bold]Exit Plan[/bold]",
-                f"  Stop-Loss  : {ep.stop_loss:,.2f} ({ep.stop_loss_pct:+.1f}%) [{ep.stop_loss_type}]",
-                f"  Target 1   : {ep.target_1:,.2f} ({ep.target_1_pct:+.1f}%) → {ep.target_1_action}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "  [bold]Exit Plan[/bold]",
+                    f"  Stop-Loss  : {ep.stop_loss:,.2f} ({ep.stop_loss_pct:+.1f}%) [{ep.stop_loss_type}]",
+                    f"  Target 1   : {ep.target_1:,.2f} ({ep.target_1_pct:+.1f}%) → {ep.target_1_action}",
+                ]
+            )
             if ep.target_2:
                 lines.append(
                     f"  Target 2   : {ep.target_2:,.2f} ({ep.target_2_pct:+.1f}%) → {ep.target_2_action}"
@@ -286,14 +318,17 @@ class TradePlan:
             for p in self.pre_conditions:
                 lines.append(f"  - {p}")
 
-        console.print(Panel(
-            "\n".join(lines),
-            title="[bold cyan]TRADE PLAN[/bold cyan]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold cyan]TRADE PLAN[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
 
 # ── Trader Agent ─────────────────────────────────────────────
+
 
 class TraderAgent:
     """
@@ -315,9 +350,9 @@ class TraderAgent:
 
     def __init__(
         self,
-        capital:  Optional[float] = None,
+        capital: Optional[float] = None,
         risk_pct: Optional[float] = None,
-        profile:  Optional[str] = None,     # "aggressive" / "neutral" / "conservative"
+        profile: Optional[str] = None,  # "aggressive" / "neutral" / "conservative"
     ) -> None:
         self.capital = capital or float(os.environ.get("TOTAL_CAPITAL", "200000"))
         self.risk_pct = risk_pct or float(os.environ.get("DEFAULT_RISK_PCT", "2"))
@@ -366,23 +401,47 @@ class TraderAgent:
 
         # Determine strategy
         strategy = self._select_strategy(
-            symbol, verdict, confidence, ltp, atr, support, resistance,
-            vix, rsi, iv_rank, strategy_hint,
+            symbol,
+            verdict,
+            confidence,
+            ltp,
+            atr,
+            support,
+            resistance,
+            vix,
+            rsi,
+            iv_rank,
+            strategy_hint,
         )
 
         # Position sizing
         sizing = self._calculate_sizing(
-            ltp, atr, strategy, vix_factor, confidence,
+            ltp,
+            atr,
+            strategy,
+            vix_factor,
+            confidence,
         )
 
         # Entry orders
         entry_orders = self._build_entry_orders(
-            symbol, exchange, strategy, ltp, sizing, support,
+            symbol,
+            exchange,
+            strategy,
+            ltp,
+            sizing,
+            support,
         )
 
         # Exit plan
         exit_plan = self._build_exit_plan(
-            strategy, ltp, atr, sizing, support, resistance, vix_factor,
+            strategy,
+            ltp,
+            atr,
+            sizing,
+            support,
+            resistance,
+            vix_factor,
         )
 
         # Parse rationale from synthesis
@@ -434,9 +493,9 @@ class TraderAgent:
         iv_rank = None
 
         for r in reports:
-            if not hasattr(r, 'analyst') or r.error:
+            if not hasattr(r, "analyst") or r.error:
                 continue
-            data = r.data if hasattr(r, 'data') else {}
+            data = r.data if hasattr(r, "data") else {}
 
             if r.analyst == "Technical":
                 ltp = ltp or data.get("ltp")
@@ -480,7 +539,7 @@ class TraderAgent:
         reports: Optional[list] = None,
         synthesis: str = "",
         **kwargs,
-    ) -> dict[str, Optional['TradePlan']]:
+    ) -> dict[str, Optional["TradePlan"]]:
         """
         Generate trade plans for all 3 risk personas.
         Returns dict: {"aggressive": plan, "neutral": plan, "conservative": plan}
@@ -500,7 +559,7 @@ class TraderAgent:
         return results
 
     @staticmethod
-    def print_all_plans(plans: dict[str, Optional['TradePlan']]) -> None:
+    def print_all_plans(plans: dict[str, Optional["TradePlan"]]) -> None:
         """Display all 3 risk persona trade plans side by side."""
         console.print()
         console.rule("[bold cyan]Risk Management Team — 3 Perspectives[/bold cyan]", style="cyan")
@@ -536,12 +595,12 @@ class TraderAgent:
         # Capital deployed
         table.add_row(
             "Capital",
-            _val(plans_list[0], "capital_deployed", "{:,.0f}") +
-            f" ({_val(plans_list[0], 'capital_pct', '{:.0f}')}%)",
-            _val(plans_list[1], "capital_deployed", "{:,.0f}") +
-            f" ({_val(plans_list[1], 'capital_pct', '{:.0f}')}%)",
-            _val(plans_list[2], "capital_deployed", "{:,.0f}") +
-            f" ({_val(plans_list[2], 'capital_pct', '{:.0f}')}%)",
+            _val(plans_list[0], "capital_deployed", "{:,.0f}")
+            + f" ({_val(plans_list[0], 'capital_pct', '{:.0f}')}%)",
+            _val(plans_list[1], "capital_deployed", "{:,.0f}")
+            + f" ({_val(plans_list[1], 'capital_pct', '{:.0f}')}%)",
+            _val(plans_list[2], "capital_deployed", "{:,.0f}")
+            + f" ({_val(plans_list[2], 'capital_pct', '{:.0f}')}%)",
         )
 
         # Max risk
@@ -617,8 +676,18 @@ class TraderAgent:
     # ── Strategy Selection ───────────────────────────────────
 
     def _select_strategy(
-        self, symbol, verdict, confidence, ltp, atr, support, resistance,
-        vix, rsi, iv_rank, hint,
+        self,
+        symbol,
+        verdict,
+        confidence,
+        ltp,
+        atr,
+        support,
+        resistance,
+        vix,
+        rsi,
+        iv_rank,
+        hint,
     ) -> dict:
         """
         Select the best strategy based on conditions.
@@ -730,7 +799,12 @@ class TraderAgent:
     # ── Position Sizing ──────────────────────────────────────
 
     def _calculate_sizing(
-        self, ltp, atr, strategy, vix_factor, confidence,
+        self,
+        ltp,
+        atr,
+        strategy,
+        vix_factor,
+        confidence,
     ) -> dict:
         """
         Risk-based position sizing using the active risk profile.
@@ -786,7 +860,13 @@ class TraderAgent:
     # ── Entry Orders ─────────────────────────────────────────
 
     def _build_entry_orders(
-        self, symbol, exchange, strategy, ltp, sizing, support,
+        self,
+        symbol,
+        exchange,
+        strategy,
+        ltp,
+        sizing,
+        support,
     ) -> list[OrderLeg]:
         """Build the actual order legs."""
         shares = sizing["shares"]
@@ -798,59 +878,74 @@ class TraderAgent:
             if strategy.get("scale_in") and support and support < ltp:
                 # Split: 50% market, 50% limit at support
                 half = shares // 2
-                orders.append(OrderLeg(
-                    action="BUY" if strategy["direction"] == "LONG" else "SELL",
-                    instrument=symbol,
-                    exchange=exchange,
-                    product=product,
-                    order_type="MARKET",
-                    quantity=half or 1,
-                    tag="ENTRY_1",
-                ))
-                orders.append(OrderLeg(
-                    action="BUY" if strategy["direction"] == "LONG" else "SELL",
-                    instrument=symbol,
-                    exchange=exchange,
-                    product=product,
-                    order_type="LIMIT",
-                    quantity=shares - half,
-                    price=round(support, 2),
-                    tag="ENTRY_2_SCALE",
-                ))
+                orders.append(
+                    OrderLeg(
+                        action="BUY" if strategy["direction"] == "LONG" else "SELL",
+                        instrument=symbol,
+                        exchange=exchange,
+                        product=product,
+                        order_type="MARKET",
+                        quantity=half or 1,
+                        tag="ENTRY_1",
+                    )
+                )
+                orders.append(
+                    OrderLeg(
+                        action="BUY" if strategy["direction"] == "LONG" else "SELL",
+                        instrument=symbol,
+                        exchange=exchange,
+                        product=product,
+                        order_type="LIMIT",
+                        quantity=shares - half,
+                        price=round(support, 2),
+                        tag="ENTRY_2_SCALE",
+                    )
+                )
             else:
-                orders.append(OrderLeg(
-                    action="BUY" if strategy["direction"] == "LONG" else "SELL",
-                    instrument=symbol,
-                    exchange=exchange,
-                    product=product,
-                    order_type="MARKET",
-                    quantity=shares,
-                    tag="ENTRY",
-                ))
+                orders.append(
+                    OrderLeg(
+                        action="BUY" if strategy["direction"] == "LONG" else "SELL",
+                        instrument=symbol,
+                        exchange=exchange,
+                        product=product,
+                        order_type="MARKET",
+                        quantity=shares,
+                        tag="ENTRY",
+                    )
+                )
 
         elif strategy["instrument"] == "OPTIONS":
             lot = LOT_SIZES.get(symbol, 1)
             lots = max(1, shares // lot) if lot > 1 else 1
             qty = lots * lot
 
-            orders.append(OrderLeg(
-                action="BUY",
-                instrument=f"{symbol} ATM {'CE' if strategy['direction'] == 'LONG' else 'PE'}",
-                exchange="NFO",
-                product="NRML",
-                order_type="MARKET",
-                quantity=qty,
-                lot_size=lot,
-                lots=lots,
-                tag="ENTRY",
-            ))
+            orders.append(
+                OrderLeg(
+                    action="BUY",
+                    instrument=f"{symbol} ATM {'CE' if strategy['direction'] == 'LONG' else 'PE'}",
+                    exchange="NFO",
+                    product="NRML",
+                    order_type="MARKET",
+                    quantity=qty,
+                    lot_size=lot,
+                    lots=lots,
+                    tag="ENTRY",
+                )
+            )
 
         return orders
 
     # ── Exit Plan ────────────────────────────────────────────
 
     def _build_exit_plan(
-        self, strategy, ltp, atr, sizing, support, resistance, vix_factor,
+        self,
+        strategy,
+        ltp,
+        atr,
+        sizing,
+        support,
+        resistance,
+        vix_factor,
     ) -> ExitPlan:
         """Build dynamic stop-loss and profit targets."""
         sl_distance = sizing["sl_distance"]
@@ -865,7 +960,7 @@ class TraderAgent:
         else:
             sl_price = ltp + sl_distance
 
-        sl_pct = ((sl_price - ltp) / ltp * 100)
+        sl_pct = (sl_price - ltp) / ltp * 100
 
         # SL type
         sl_type = "ATR_BASED" if atr else "FIXED"
@@ -879,12 +974,12 @@ class TraderAgent:
         else:
             t1 = ltp - t1_distance
 
-        t1_pct = ((t1 - ltp) / ltp * 100)
+        t1_pct = (t1 - ltp) / ltp * 100
 
         # Target 2: profile's full target R:R
         t2_distance = sl_distance * self.profile.target_rr
         t2 = ltp + t2_distance if is_long else ltp - t2_distance
-        t2_pct = ((t2 - ltp) / ltp * 100)
+        t2_pct = (t2 - ltp) / ltp * 100
 
         # Trailing logic from profile
         trail_trigger = self.profile.trail_trigger
@@ -923,6 +1018,7 @@ class TraderAgent:
         """Get current price."""
         try:
             from market.quotes import get_ltp
+
             return get_ltp(f"{exchange}:{symbol}")
         except Exception:
             return 0.0
@@ -931,6 +1027,7 @@ class TraderAgent:
         """Get ATR from technical analysis."""
         try:
             from analysis.technical import analyse
+
             snap = analyse(symbol, exchange)
             return snap.atr if snap.atr > 0 else None
         except Exception:
@@ -944,7 +1041,7 @@ class TraderAgent:
         if vix is None:
             return 1.0
         if vix > 25:
-            return 0.5    # halve position size
+            return 0.5  # halve position size
         if vix > 20:
             return 0.65
         if vix > 15:
@@ -982,7 +1079,11 @@ class TraderAgent:
         return points[:5]
 
     def _check_preconditions(
-        self, symbol, ltp, vix, confidence,
+        self,
+        symbol,
+        ltp,
+        vix,
+        confidence,
     ) -> list[str]:
         """Check conditions that should hold before executing."""
         conditions = []
@@ -991,11 +1092,14 @@ class TraderAgent:
             conditions.append(f"LOW CONFIDENCE ({confidence}%) — consider paper trading first")
 
         if vix and vix > 20:
-            conditions.append(f"VIX elevated ({vix:.1f}) — position size reduced, use defined-risk only")
+            conditions.append(
+                f"VIX elevated ({vix:.1f}) — position size reduced, use defined-risk only"
+            )
 
         # Check for upcoming events
         try:
             from engine.event_strategies import get_event_strategies
+
             events = get_event_strategies(symbols=[symbol], days_ahead=3)
             for ev in events:
                 conditions.append(f"EVENT in {ev.days_away}d: {ev.event} — {ev.strategy[:50]}")
@@ -1006,6 +1110,7 @@ class TraderAgent:
 
 
 # ── Helpers ──────────────────────────────────────────────────
+
 
 def _parse_synthesis_verdict(text: str) -> tuple[str, int, str]:
     """Extract verdict, confidence, strategy from synthesis text."""

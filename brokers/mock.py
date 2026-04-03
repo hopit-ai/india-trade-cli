@@ -17,9 +17,16 @@ from datetime import datetime
 from typing import Optional
 
 from .base import (
-    BrokerAPI, UserProfile, Funds, Holding,
-    Position, Quote, OptionsContract,
-    OrderRequest, OrderResponse, Order,
+    BrokerAPI,
+    UserProfile,
+    Funds,
+    Holding,
+    Position,
+    Quote,
+    OptionsContract,
+    OrderRequest,
+    OrderResponse,
+    Order,
 )
 
 
@@ -48,10 +55,10 @@ class MockBrokerAPI(BrokerAPI):
     def complete_login(self, **kwargs) -> UserProfile:
         self._authenticated = True
         return UserProfile(
-            user_id = "PAPER001",
-            name    = "Paper Trader",
-            email   = "paper@tradingplatform.local",
-            broker  = "PAPER",
+            user_id="PAPER001",
+            name="Paper Trader",
+            email="paper@tradingplatform.local",
+            broker="PAPER",
         )
 
     def is_authenticated(self) -> bool:
@@ -64,18 +71,18 @@ class MockBrokerAPI(BrokerAPI):
 
     def get_profile(self) -> UserProfile:
         return UserProfile(
-            user_id = "PAPER001",
-            name    = "Paper Trader",
-            email   = "paper@tradingplatform.local",
-            broker  = "PAPER",
+            user_id="PAPER001",
+            name="Paper Trader",
+            email="paper@tradingplatform.local",
+            broker="PAPER",
         )
 
     def get_funds(self) -> Funds:
         capital = float(os.environ.get("TOTAL_CAPITAL", "200000"))
         return Funds(
-            available_cash = capital,
-            used_margin    = 0.0,
-            total_balance  = capital,
+            available_cash=capital,
+            used_margin=0.0,
+            total_balance=capital,
         )
 
     # ── Portfolio (starts empty — paper trades tracked separately) ──
@@ -103,16 +110,25 @@ class MockBrokerAPI(BrokerAPI):
     def place_order(self, order: OrderRequest) -> OrderResponse:
         oid = f"PAPER{self._order_counter}"
         self._order_counter += 1
-        self._orders.append(Order(
-            order_id=oid, symbol=order.symbol, exchange=order.exchange,
-            transaction_type=order.transaction_type, quantity=order.quantity,
-            order_type=order.order_type, product=order.product,
-            status="COMPLETE", price=order.price,
-            average_price=order.price or 0.0,
-            filled_quantity=order.quantity, placed_at=datetime.now().strftime("%H:%M:%S"),
-        ))
+        self._orders.append(
+            Order(
+                order_id=oid,
+                symbol=order.symbol,
+                exchange=order.exchange,
+                transaction_type=order.transaction_type,
+                quantity=order.quantity,
+                order_type=order.order_type,
+                product=order.product,
+                status="COMPLETE",
+                price=order.price,
+                average_price=order.price or 0.0,
+                filled_quantity=order.quantity,
+                placed_at=datetime.now().strftime("%H:%M:%S"),
+            )
+        )
         return OrderResponse(
-            order_id=oid, status="COMPLETE",
+            order_id=oid,
+            status="COMPLETE",
             message="Paper order filled",
             average_price=order.price or 0.0,
             filled_quantity=order.quantity,
@@ -129,10 +145,10 @@ class MockBrokerAPI(BrokerAPI):
 
     def get_historical_data(
         self,
-        symbol:    str,
-        exchange:  str = "NSE",
-        interval:  str = "day",
+        symbol: str,
+        exchange: str = "NSE",
+        interval: str = "day",
         from_date: Optional[datetime] = None,
-        to_date:   Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
     ) -> list[dict]:
         raise NotImplementedError("Mock broker — use yfinance for historical data")

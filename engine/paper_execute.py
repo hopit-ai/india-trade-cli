@@ -45,13 +45,15 @@ def execute_trade_plan(plan, broker: BrokerAPI) -> list[dict]:
 
     results = []
     console.print()
-    console.print(Panel(
-        f"  Executing: [bold]{plan.strategy_name}[/bold] on {plan.symbol}\n"
-        f"  Mode: {'PAPER' if _is_paper(broker) else 'LIVE'}\n"
-        f"  Orders: {len(plan.entry_orders)}",
-        title="[bold yellow]Order Execution[/bold yellow]",
-        border_style="yellow",
-    ))
+    console.print(
+        Panel(
+            f"  Executing: [bold]{plan.strategy_name}[/bold] on {plan.symbol}\n"
+            f"  Mode: {'PAPER' if _is_paper(broker) else 'LIVE'}\n"
+            f"  Orders: {len(plan.entry_orders)}",
+            title="[bold yellow]Order Execution[/bold yellow]",
+            border_style="yellow",
+        )
+    )
 
     for i, leg in enumerate(plan.entry_orders, 1):
         try:
@@ -76,24 +78,30 @@ def execute_trade_plan(plan, broker: BrokerAPI) -> list[dict]:
                 f"(ID: {response.order_id})"
             )
 
-            results.append({
-                "order_id": response.order_id,
-                "symbol": leg.instrument,
-                "action": leg.action,
-                "quantity": leg.quantity,
-                "status": response.status,
-                "message": response.message,
-            })
+            results.append(
+                {
+                    "order_id": response.order_id,
+                    "symbol": leg.instrument,
+                    "action": leg.action,
+                    "quantity": leg.quantity,
+                    "status": response.status,
+                    "message": response.message,
+                }
+            )
 
         except Exception as e:
-            console.print(f"  [{i}] {leg.action} {leg.quantity} {leg.instrument} → [red]FAILED: {e}[/red]")
-            results.append({
-                "symbol": leg.instrument,
-                "action": leg.action,
-                "quantity": leg.quantity,
-                "status": "FAILED",
-                "message": str(e),
-            })
+            console.print(
+                f"  [{i}] {leg.action} {leg.quantity} {leg.instrument} → [red]FAILED: {e}[/red]"
+            )
+            results.append(
+                {
+                    "symbol": leg.instrument,
+                    "action": leg.action,
+                    "quantity": leg.quantity,
+                    "status": "FAILED",
+                    "message": str(e),
+                }
+            )
 
     # Show exit plan reminder
     if plan.exit_plan:
@@ -102,17 +110,26 @@ def execute_trade_plan(plan, broker: BrokerAPI) -> list[dict]:
             f"\n  [bold]Exit Plan (set these manually or as alerts):[/bold]\n"
             f"  Stop-Loss : {ep.stop_loss:,.2f} ({ep.stop_loss_pct:+.1f}%)\n"
             f"  Target 1  : {ep.target_1:,.2f} ({ep.target_1_pct:+.1f}%) → {ep.target_1_action}\n"
-            f"  Target 2  : {ep.target_2:,.2f} ({ep.target_2_pct:+.1f}%) → {ep.target_2_action}" if ep.target_2 else ""
+            f"  Target 2  : {ep.target_2:,.2f} ({ep.target_2_pct:+.1f}%) → {ep.target_2_action}"
+            if ep.target_2
+            else ""
         )
 
         # Auto-create alerts for SL and targets
         try:
             from engine.alerts import alert_manager
+
             alert_manager.add_price_alert(
-                plan.symbol, "BELOW", ep.stop_loss, plan.exchange,
+                plan.symbol,
+                "BELOW",
+                ep.stop_loss,
+                plan.exchange,
             )
             alert_manager.add_price_alert(
-                plan.symbol, "ABOVE", ep.target_1, plan.exchange,
+                plan.symbol,
+                "ABOVE",
+                ep.target_1,
+                plan.exchange,
             )
             console.print("[dim]  Auto-created alerts for SL and Target 1.[/dim]")
         except Exception:

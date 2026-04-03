@@ -9,15 +9,21 @@ class TestToolRegistry:
     def test_build_registry_has_tools(self):
         """build_registry should register 30+ tools."""
         from agent.tools import build_registry
+
         reg = build_registry()
         assert len(reg.names) >= 30, f"Only {len(reg.names)} tools registered"
 
     def test_known_tools_present(self):
         from agent.tools import build_registry
+
         reg = build_registry()
         expected = [
-            "get_quote", "technical_analyse", "fundamental_analyse",
-            "get_vix", "get_market_snapshot", "get_iv_rank",
+            "get_quote",
+            "technical_analyse",
+            "fundamental_analyse",
+            "get_vix",
+            "get_market_snapshot",
+            "get_iv_rank",
         ]
         for name in expected:
             assert name in reg.names, f"Tool '{name}' missing from registry"
@@ -25,6 +31,7 @@ class TestToolRegistry:
     def test_anthropic_schema_structure(self):
         """Anthropic schema should produce list of dicts with name/description/input_schema."""
         from agent.tools import build_registry
+
         reg = build_registry()
         schema = reg.anthropic_schema()
         assert isinstance(schema, list)
@@ -37,6 +44,7 @@ class TestToolRegistry:
     def test_openai_schema_structure(self):
         """OpenAI schema should produce list of dicts with type=function."""
         from agent.tools import build_registry
+
         reg = build_registry()
         schema = reg.openai_schema()
         assert isinstance(schema, list)
@@ -62,6 +70,7 @@ class TestSerialization:
 
     def test_dataframe_serialized(self):
         from agent.tools import _serialise
+
         df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         result = _serialise(df)
         assert isinstance(result, list)
@@ -69,10 +78,12 @@ class TestSerialization:
 
     def test_nan_becomes_none(self):
         from agent.tools import _serialise
+
         assert _serialise(float("nan")) is None
 
     def test_date_becomes_string(self):
         from agent.tools import _serialise
+
         d = date(2025, 4, 1)
         result = _serialise(d)
         assert isinstance(result, str)
@@ -80,6 +91,7 @@ class TestSerialization:
 
     def test_nested_structures(self):
         from agent.tools import _serialise
+
         data = {"items": [{"val": float("nan")}, {"val": 42}]}
         result = _serialise(data)
         assert result["items"][0]["val"] is None

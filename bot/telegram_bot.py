@@ -59,6 +59,7 @@ class _BotThreadFilter(logging.Filter):
     All background threads (telegram-bot, executor pool, websocket, etc.)
     are silenced so their output never appears in the REPL.
     """
+
     def filter(self, record: logging.LogRecord) -> bool:
         return threading.current_thread().name == "MainThread"
 
@@ -77,6 +78,7 @@ class _BotThreadFileWrapper:
 
     Thread-safe: the thread check happens at write time.
     """
+
     _bot_patched = True  # sentinel to avoid double-wrapping
 
     def __init__(self, wrapped: object) -> None:
@@ -109,6 +111,7 @@ from bot.status import set_active, clear_active
 
 def _track_command(func):
     """Decorator that sets/clears the REPL status badge around a handler."""
+
     @functools.wraps(func)
     async def wrapper(update, context):
         cmd_text = update.message.text if update.message else func.__name__
@@ -117,26 +120,41 @@ def _track_command(func):
             return await func(update, context)
         finally:
             clear_active()
+
     return wrapper
 
 
 # ── Lazy imports to avoid startup overhead ───────────────────
 
+
 def _get_telegram():
     try:
         from telegram import Update, Bot
         from telegram.ext import (
-            ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters,
+            ApplicationBuilder,
+            CommandHandler,
+            ContextTypes,
+            MessageHandler,
+            filters,
         )
-        return Update, Bot, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+
+        return (
+            Update,
+            Bot,
+            ApplicationBuilder,
+            CommandHandler,
+            ContextTypes,
+            MessageHandler,
+            filters,
+        )
     except ImportError:
         raise RuntimeError(
-            "python-telegram-bot not installed. Run:\n"
-            "  pip install python-telegram-bot"
+            "python-telegram-bot not installed. Run:\n  pip install python-telegram-bot"
         )
 
 
 # ── Bot token management ─────────────────────────────────────
+
 
 def _get_bot_token() -> str:
     """Get Telegram bot token from keychain or env."""
@@ -144,6 +162,7 @@ def _get_bot_token() -> str:
     if not token:
         try:
             from config.credentials import _kr_get
+
             token = _kr_get("TELEGRAM_BOT_TOKEN") or ""
         except Exception:
             pass
@@ -196,6 +215,7 @@ def _load_chat_id() -> Optional[int]:
 
 # ── Command Handlers ─────────────────────────────────────────
 
+
 async def cmd_start(update, context) -> None:
     """Handle /start command."""
     _save_chat_id(update.effective_chat.id)
@@ -232,6 +252,7 @@ async def cmd_quote(update, context) -> None:
     symbol = context.args[0].upper()
     try:
         from market.quotes import get_quote
+
         quotes = get_quote([f"NSE:{symbol}"])
         q = quotes.get(f"NSE:{symbol}")
         if q and q.last_price:
@@ -267,10 +288,13 @@ async def cmd_analyze(update, context) -> None:
         # Log to file — stdout and logging are both suppressed on this thread
         import tempfile
         import pathlib
+
         _logfile = pathlib.Path(tempfile.gettempdir()) / "tg_analyze.log"
+
         def _log(msg):  # noqa: E731
             with open(_logfile, "a") as f:
                 f.write(f"{msg}\n")
+
         try:
             _log(f"Starting analysis for {symbol}")
             from agent.tools import build_registry
@@ -288,7 +312,7 @@ async def cmd_analyze(update, context) -> None:
             reports = []
             for i, a in enumerate(analyzer.analysts):
                 try:
-                    _log(f"Analyst {i+1}/{len(analyzer.analysts)}: {a.__class__.__name__}")
+                    _log(f"Analyst {i + 1}/{len(analyzer.analysts)}: {a.__class__.__name__}")
                     reports.append(a.analyze(symbol))
                 except Exception as ex:
                     _log(f"Analyst {a.__class__.__name__} failed: {ex}")
@@ -305,7 +329,7 @@ async def cmd_analyze(update, context) -> None:
 
             # Run debate + synthesis
             _log("Running debate")
-            debate    = analyzer._run_debate(symbol, "NSE", reports)
+            debate = analyzer._run_debate(symbol, "NSE", reports)
             _log("Running synthesis")
             synthesis = analyzer._run_synthesis(symbol, "NSE", reports, debate)
             _log("Pipeline complete")
@@ -351,6 +375,7 @@ async def cmd_analyze(update, context) -> None:
         except Exception as e:
             os.environ.pop("_CLI_BATCH_MODE", None)
             import traceback
+
             _log(f"FAILED: {e}\n{traceback.format_exc()}")
             return f"Analysis failed: {e}", "", ""
         finally:
@@ -362,7 +387,9 @@ async def cmd_analyze(update, context) -> None:
             loop.run_in_executor(None, _run_analysis),
             timeout=300,  # 5 minute hard timeout
         )
-        msg1, msg2, msg3 = result if isinstance(result, tuple) and len(result) == 3 else (str(result), "", "")
+        msg1, msg2, msg3 = (
+            result if isinstance(result, tuple) and len(result) == 3 else (str(result), "", "")
+        )
         # Send as plain text — LLM output can contain any characters that
         # would break Telegram's HTML/Markdown parsers.
         # Telegram limit is 4096 chars per message.
@@ -397,10 +424,13 @@ async def cmd_deepanalyze(update, context) -> None:
         _suppress_output.active = True
         import tempfile
         import pathlib
+
         _logfile = pathlib.Path(tempfile.gettempdir()) / "tg_deepanalyze.log"
+
         def _log(msg):
             with open(_logfile, "a") as f:
                 f.write(f"{msg}\n")
+
         try:
             _log(f"Starting deep analysis for {symbol}")
             from agent.tools import build_registry
@@ -455,6 +485,7 @@ async def cmd_deepanalyze(update, context) -> None:
         except Exception as e:
             os.environ.pop("_CLI_BATCH_MODE", None)
             import traceback
+
             _log(f"FAILED: {e}\n{traceback.format_exc()}")
             return f"Deep analysis failed: {e}", "", ""
         finally:
@@ -466,7 +497,9 @@ async def cmd_deepanalyze(update, context) -> None:
             loop.run_in_executor(None, _run_deep),
             timeout=600,  # 10 minute timeout for deep analysis
         )
-        msg1, msg2, msg3 = result if isinstance(result, tuple) and len(result) == 3 else (str(result), "", "")
+        msg1, msg2, msg3 = (
+            result if isinstance(result, tuple) and len(result) == 3 else (str(result), "", "")
+        )
         if msg1:
             await update.message.reply_text(msg1[:4000])
         if msg2:
@@ -507,6 +540,7 @@ async def cmd_flows(update, context) -> None:
     """Handle /flows — FII/DII intelligence."""
     try:
         from market.flow_intel import get_flow_analysis
+
         a = get_flow_analysis()
         await update.message.reply_text(
             f"💰 FII/DII Flows\n\n"
@@ -526,6 +560,7 @@ async def cmd_earnings(update, context) -> None:
     """Handle /earnings."""
     try:
         from market.earnings import get_earnings_calendar, _current_quarter
+
         syms = [a.upper() for a in context.args] if context.args else None
         calendar = get_earnings_calendar(syms)
 
@@ -547,6 +582,7 @@ async def cmd_events(update, context) -> None:
     """Handle /events."""
     try:
         from engine.event_strategies import get_event_strategies
+
         strategies = get_event_strategies(days_ahead=7)
 
         if not strategies:
@@ -568,14 +604,27 @@ async def cmd_macro(update, context) -> None:
     """Handle /macro."""
     try:
         from market.macro import get_macro_snapshot
+
         snap = get_macro_snapshot()
         lines = ["🌍 Macro Snapshot\n"]
         if snap.usdinr:
-            lines.append(f"USD/INR: {snap.usdinr:.2f} ({snap.usdinr_change:+.2f}%)" if snap.usdinr_change else f"USD/INR: {snap.usdinr:.2f}")
+            lines.append(
+                f"USD/INR: {snap.usdinr:.2f} ({snap.usdinr_change:+.2f}%)"
+                if snap.usdinr_change
+                else f"USD/INR: {snap.usdinr:.2f}"
+            )
         if snap.crude_oil:
-            lines.append(f"Crude: ${snap.crude_oil:.1f}/bbl ({snap.crude_change:+.1f}%)" if snap.crude_change else f"Crude: ${snap.crude_oil:.1f}")
+            lines.append(
+                f"Crude: ${snap.crude_oil:.1f}/bbl ({snap.crude_change:+.1f}%)"
+                if snap.crude_change
+                else f"Crude: ${snap.crude_oil:.1f}"
+            )
         if snap.gold:
-            lines.append(f"Gold: ${snap.gold:.0f}/oz ({snap.gold_change:+.1f}%)" if snap.gold_change else f"Gold: ${snap.gold:.0f}")
+            lines.append(
+                f"Gold: ${snap.gold:.0f}/oz ({snap.gold_change:+.1f}%)"
+                if snap.gold_change
+                else f"Gold: ${snap.gold:.0f}"
+            )
         if snap.us_10y:
             lines.append(f"US 10Y: {snap.us_10y:.2f}%")
         await update.message.reply_text("\n".join(lines))
@@ -591,6 +640,7 @@ async def cmd_alert(update, context) -> None:
 
     try:
         from engine.alerts import alert_manager
+
         symbol = context.args[0].upper()
         condition = context.args[1].upper()
         threshold = float(context.args[2])
@@ -604,6 +654,7 @@ async def cmd_alerts(update, context) -> None:
     """Handle /alerts — list active alerts."""
     try:
         from engine.alerts import alert_manager
+
         active = [a for a in alert_manager._alerts if not a.triggered]
         if not active:
             await update.message.reply_text("No active alerts.")
@@ -620,6 +671,7 @@ async def cmd_memory(update, context) -> None:
     """Handle /memory — recent analyses."""
     try:
         from engine.memory import trade_memory
+
         recent = list(reversed(trade_memory._records[-5:]))
         if not recent:
             await update.message.reply_text("No analyses stored yet.")
@@ -627,7 +679,9 @@ async def cmd_memory(update, context) -> None:
         lines = ["📝 Recent Analyses\n"]
         for r in recent:
             outcome = f" → {r.outcome}" if r.outcome else ""
-            lines.append(f"  [{r.id}] {r.timestamp[:10]} {r.symbol}: {r.verdict} ({r.confidence}%){outcome}")
+            lines.append(
+                f"  [{r.id}] {r.timestamp[:10]} {r.symbol}: {r.verdict} ({r.confidence}%){outcome}"
+            )
         await update.message.reply_text("\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Memory failed: {e}")
@@ -637,6 +691,7 @@ async def cmd_pnl(update, context) -> None:
     """Handle /pnl — portfolio summary."""
     try:
         from engine.portfolio import get_portfolio_summary
+
         summary = get_portfolio_summary()
         pnl_emoji = "📈" if summary.total_pnl >= 0 else "📉"
         await update.message.reply_text(
@@ -652,12 +707,11 @@ async def cmd_pnl(update, context) -> None:
 
 async def cmd_unknown(update, context) -> None:
     """Handle unknown messages."""
-    await update.message.reply_text(
-        "Unknown command. Type /help for available commands."
-    )
+    await update.message.reply_text("Unknown command. Type /help for available commands.")
 
 
 # ── Token validation ─────────────────────────────────────────
+
 
 def validate_token(token: str) -> tuple[bool, str]:
     """
@@ -669,6 +723,7 @@ def validate_token(token: str) -> tuple[bool, str]:
     """
     try:
         import httpx
+
         resp = httpx.get(
             f"https://api.telegram.org/bot{token}/getMe",
             timeout=10,
@@ -697,6 +752,7 @@ def send_test_push(chat_id: Optional[int] = None, token: Optional[str] = None) -
         return False
     try:
         import httpx
+
         resp = httpx.post(
             f"https://api.telegram.org/bot{tok}/sendMessage",
             json={
@@ -730,6 +786,7 @@ def wait_for_start(timeout: int = 120) -> bool:
         True if the chat ID was received within the timeout, False otherwise.
     """
     import time
+
     for _ in range(timeout):
         if _load_chat_id():
             return True
@@ -761,6 +818,7 @@ def run_setup_wizard() -> None:
     if not token:
         try:
             from config.credentials import _kr_get
+
             token = _kr_get("TELEGRAM_BOT_TOKEN") or ""
         except Exception:
             pass
@@ -783,12 +841,15 @@ def run_setup_wizard() -> None:
 
         try:
             from config.credentials import _kr_set
+
             if _kr_set("TELEGRAM_BOT_TOKEN", token):
                 os.environ["TELEGRAM_BOT_TOKEN"] = token
                 console.print("  [green]✓ Token saved to keychain[/green]")
             else:
                 os.environ["TELEGRAM_BOT_TOKEN"] = token
-                console.print("  [yellow]⚠  Keychain unavailable — token active for this session only.[/yellow]")
+                console.print(
+                    "  [yellow]⚠  Keychain unavailable — token active for this session only.[/yellow]"
+                )
         except Exception:
             os.environ["TELEGRAM_BOT_TOKEN"] = token
 
@@ -833,7 +894,9 @@ def run_setup_wizard() -> None:
             if send_test_push(chat_id, token):
                 console.print("  [green]✓ Test message delivered. Check your Telegram.[/green]")
             else:
-                console.print("  [yellow]⚠  Bot connected but test message failed — try /start again.[/yellow]")
+                console.print(
+                    "  [yellow]⚠  Bot connected but test message failed — try /start again.[/yellow]"
+                )
         else:
             console.print(
                 "\n  [yellow]⏱  Timed out — didn't receive /start within 2 minutes.[/yellow]\n"
@@ -851,6 +914,7 @@ def run_setup_wizard() -> None:
 
 
 # ── Push Notifications ───────────────────────────────────────
+
 
 def send_push(message: str) -> None:
     """
@@ -870,6 +934,7 @@ def send_push(message: str) -> None:
     def _send():
         try:
             import httpx
+
             url = f"https://api.telegram.org/bot{token}/sendMessage"
             httpx.post(url, json={"chat_id": chat_id, "text": message}, timeout=10)
         except Exception:
@@ -889,6 +954,7 @@ def push_brief(brief_text: str) -> None:
 
 
 # ── Alert Integration ────────────────────────────────────────
+
 
 def patch_alert_manager() -> None:
     """
@@ -912,9 +978,12 @@ def patch_alert_manager() -> None:
 
 # ── Bot Runner ───────────────────────────────────────────────
 
+
 def run_bot() -> None:
     """Start the Telegram bot (blocking — runs the event loop)."""
-    Update, Bot, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters = _get_telegram()
+    Update, Bot, ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters = (
+        _get_telegram()
+    )
 
     token = _get_bot_token()
 
@@ -953,6 +1022,7 @@ def run_bot() -> None:
 
     # 2. Stdout wrapper: blocks plain print() calls from this thread.
     import sys
+
     if not isinstance(sys.stdout, _BotThreadFileWrapper):
         sys.stdout = _BotThreadFileWrapper(sys.stdout)
 
@@ -962,6 +1032,7 @@ def run_bot() -> None:
     try:
         import gc
         from rich.console import Console as _RichConsole
+
         for _obj in gc.get_objects():
             if isinstance(_obj, _RichConsole):
                 if _obj._file is not None and not getattr(_obj._file, "_bot_patched", False):

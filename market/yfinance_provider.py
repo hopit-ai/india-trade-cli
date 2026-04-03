@@ -45,23 +45,23 @@ from brokers.base import Quote
 
 # Index symbols that don't follow the .NS convention
 _INDEX_MAP = {
-    "NIFTY 50":          "^NSEI",
-    "NIFTY50":           "^NSEI",
-    "NIFTY":             "^NSEI",
-    "NIFTY BANK":        "^NSEBANK",
-    "BANKNIFTY":         "^NSEBANK",
-    "SENSEX":            "^BSESN",
-    "INDIA VIX":         "^INDIAVIX",
-    "VIX":               "^INDIAVIX",
-    "NIFTY IT":          "^CNXIT",
-    "NIFTY PHARMA":      "^CNXPHARMA",
-    "NIFTY AUTO":        "^CNXAUTO",
-    "NIFTY FMCG":        "^CNXFMCG",
-    "NIFTY REALTY":      "^CNXREALTY",
-    "NIFTY METAL":       "^CNXMETAL",
-    "NIFTY ENERGY":      "^CNXENERGY",
+    "NIFTY 50": "^NSEI",
+    "NIFTY50": "^NSEI",
+    "NIFTY": "^NSEI",
+    "NIFTY BANK": "^NSEBANK",
+    "BANKNIFTY": "^NSEBANK",
+    "SENSEX": "^BSESN",
+    "INDIA VIX": "^INDIAVIX",
+    "VIX": "^INDIAVIX",
+    "NIFTY IT": "^CNXIT",
+    "NIFTY PHARMA": "^CNXPHARMA",
+    "NIFTY AUTO": "^CNXAUTO",
+    "NIFTY FMCG": "^CNXFMCG",
+    "NIFTY REALTY": "^CNXREALTY",
+    "NIFTY METAL": "^CNXMETAL",
+    "NIFTY ENERGY": "^CNXENERGY",
     "NIFTY FIN SERVICE": "^CNXFIN",
-    "NIFTY MIDCAP 100":  "^CNXMIDCAP",
+    "NIFTY MIDCAP 100": "^CNXMIDCAP",
 }
 
 
@@ -92,10 +92,12 @@ def _from_instrument(instrument: str) -> str:
 
 # ── Lazy import ──────────────────────────────────────────────
 
+
 def _get_yf():
     """Lazy import yfinance to avoid import overhead when not needed."""
     try:
         import yfinance as yf
+
         return yf
     except ImportError:
         raise RuntimeError(
@@ -105,6 +107,7 @@ def _get_yf():
 
 
 # ── Quote functions ──────────────────────────────────────────
+
 
 def yf_get_quote(symbol: str, exchange: str = "NSE") -> Quote:
     """
@@ -184,6 +187,7 @@ def yf_get_ltp(symbol: str, exchange: str = "NSE") -> float:
 
 # ── Historical OHLCV ─────────────────────────────────────────
 
+
 def yf_get_ohlcv(
     symbol: str,
     exchange: str = "NSE",
@@ -248,14 +252,16 @@ def yf_get_ohlcv(
 
         rows = []
         for idx, row in hist.iterrows():
-            rows.append({
-                "date": idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx,
-                "open": float(row["Open"]),
-                "high": float(row["High"]),
-                "low": float(row["Low"]),
-                "close": float(row["Close"]),
-                "volume": int(row["Volume"]),
-            })
+            rows.append(
+                {
+                    "date": idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx,
+                    "open": float(row["Open"]),
+                    "high": float(row["High"]),
+                    "low": float(row["Low"]),
+                    "close": float(row["Close"]),
+                    "volume": int(row["Volume"]),
+                }
+            )
         return rows
     except Exception:
         return []
@@ -263,10 +269,12 @@ def yf_get_ohlcv(
 
 # ── Convenience ──────────────────────────────────────────────
 
+
 def yf_available() -> bool:
     """Check if yfinance is installed."""
     try:
         import yfinance  # noqa: F401
+
         return True
     except ImportError:
         return False

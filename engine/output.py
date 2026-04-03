@@ -39,6 +39,7 @@ EXPORTS_DIR = Path.home() / ".trading_platform" / "exports"
 
 # ── PDF Export ───────────────────────────────────────────────
 
+
 def _build_pdf(content: str, title: str) -> object:
     """Build a FPDF object from content. Returns the FPDF instance."""
     from fpdf import FPDF
@@ -47,7 +48,12 @@ def _build_pdf(content: str, title: str) -> object:
     clean = _strip_rich_markup(content)
     clean = clean.replace("\u20b9", "Rs.").replace("\u2192", "->").replace("\u2190", "<-")
     clean = clean.replace("\u2501", "-").replace("\u2500", "-").replace("\u2502", "|")
-    clean = clean.replace("\u2554", "+").replace("\u2557", "+").replace("\u255a", "+").replace("\u255d", "+")
+    clean = (
+        clean.replace("\u2554", "+")
+        .replace("\u2557", "+")
+        .replace("\u255a", "+")
+        .replace("\u255d", "+")
+    )
     # Remove any remaining non-latin1 characters
     clean = clean.encode("latin-1", errors="replace").decode("latin-1")
 
@@ -78,7 +84,11 @@ def _build_pdf(content: str, title: str) -> object:
     pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(150, 150, 150)
-    pdf.multi_cell(w, 4, "India Trade CLI | AI-Powered Multi-Agent Stock Analysis | github.com/hopit-ai/india-trade-cli")
+    pdf.multi_cell(
+        w,
+        4,
+        "India Trade CLI | AI-Powered Multi-Agent Stock Analysis | github.com/hopit-ai/india-trade-cli",
+    )
 
     return pdf
 
@@ -129,11 +139,11 @@ def _archive_filename(title: str) -> str:
             report_type = "_".join(parts[1:]).lower()
 
     if not report_type:
-        report_type = re.sub(r'[^\w]', '_', title.lower())[:30]
+        report_type = re.sub(r"[^\w]", "_", title.lower())[:30]
 
     # Clean up
-    symbol = re.sub(r'[^\w]', '', symbol).upper()
-    report_type = re.sub(r'[^\w]', '_', report_type).lower()[:30]
+    symbol = re.sub(r"[^\w]", "", symbol).upper()
+    report_type = re.sub(r"[^\w]", "_", report_type).lower()[:30]
 
     if symbol:
         return f"{symbol}_{report_type}_{ts}.pdf"
@@ -170,7 +180,7 @@ def export_to_pdf(
     # Generate desktop filename
     if not filename:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_title = re.sub(r'[^\w\-]', '_', title)[:30]
+        safe_title = re.sub(r"[^\w\-]", "_", title)[:30]
         filename = f"trade_{safe_title}_{ts}.pdf"
 
     filepath = PDF_OUTPUT_DIR / filename
@@ -182,6 +192,7 @@ def export_to_pdf(
         archive_name = _archive_filename(title)
         archive_path = EXPORTS_DIR / archive_name
         import shutil
+
         shutil.copy2(str(filepath), str(archive_path))
     except Exception:
         pass  # archiving is best-effort, never fail the main export
@@ -190,6 +201,7 @@ def export_to_pdf(
 
 
 # ── Exports management ──────────────────────────────────────
+
 
 def list_exports() -> list[dict]:
     """
@@ -204,12 +216,14 @@ def list_exports() -> list[dict]:
     exports = []
     for f in EXPORTS_DIR.glob("*.pdf"):
         stat = f.stat()
-        exports.append({
-            "name": f.name,
-            "path": str(f),
-            "size_kb": stat.st_size / 1024,
-            "modified": datetime.fromtimestamp(stat.st_mtime),
-        })
+        exports.append(
+            {
+                "name": f.name,
+                "path": str(f),
+                "size_kb": stat.st_size / 1024,
+                "modified": datetime.fromtimestamp(stat.st_mtime),
+            }
+        )
 
     exports.sort(key=lambda x: x["modified"], reverse=True)
     return exports
@@ -259,6 +273,7 @@ def clear_exports(older_than_days: int = 30) -> int:
 
 
 # ── Simple Explainer ─────────────────────────────────────────
+
 
 def explain_simply(content: str, llm_provider=None) -> str:
     """
@@ -347,13 +362,12 @@ def _rule_based_explain(content: str) -> str:
         result = result.replace(term, f"{term} ({simple})")
 
     return (
-        "\n--- SIMPLE EXPLANATION ---\n"
-        "Here's what the above means in plain English:\n\n"
-        + result
+        "\n--- SIMPLE EXPLANATION ---\nHere's what the above means in plain English:\n\n" + result
     )
 
 
 # ── Flag Parser ──────────────────────────────────────────────
+
 
 def parse_output_flags(args: list[str]) -> tuple[list[str], bool, bool, bool]:
     """
@@ -412,10 +426,11 @@ def handle_output_flags(
 
 # ── Helpers ──────────────────────────────────────────────────
 
+
 def _strip_rich_markup(text: str) -> str:
     """Remove Rich markup tags from text."""
     # Remove [bold], [red], [/bold], [dim], etc.
-    clean = re.sub(r'\[/?[a-zA-Z_ ]+\]', '', text)
+    clean = re.sub(r"\[/?[a-zA-Z_ ]+\]", "", text)
     # Remove emoji that might not render in PDF
-    clean = re.sub(r'[^\x00-\x7F\u20B9]+', '', clean)
+    clean = re.sub(r"[^\x00-\x7F\u20B9]+", "", clean)
     return clean.strip()

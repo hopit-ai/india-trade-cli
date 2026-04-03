@@ -52,8 +52,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 # Load .env + keychain at server startup
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 from config.credentials import load_all as _load_keychain
+
 _load_keychain()
 
 app = FastAPI(title="india-trade-cli", docs_url=None, redoc_url=None)
@@ -75,6 +77,7 @@ def _require_localhost(request: _Request) -> None:
             status_code=403,
             detail="This endpoint is only accessible from localhost.",
         )
+
 
 app.include_router(_skills_router)
 
@@ -201,74 +204,98 @@ def _page(title: str, body: str) -> str:
 
 # ── Credential / auth helpers ──────────────────────────────────
 
+
 def _env(key: str) -> str:
     return os.environ.get(key, "")
+
 
 # Zerodha
 def _has_zerodha() -> bool:
     return bool(_env("KITE_API_KEY") and _env("KITE_API_SECRET"))
 
+
 def _zerodha_auth() -> bool:
     try:
-        if not _has_zerodha(): return False
+        if not _has_zerodha():
+            return False
         from brokers.zerodha import ZerodhaAPI
+
         return ZerodhaAPI(_env("KITE_API_KEY"), _env("KITE_API_SECRET")).is_authenticated()
     except Exception:
         return False
+
 
 # Groww
 def _has_groww() -> bool:
     return bool(_env("GROWW_CLIENT_ID") and _env("GROWW_CLIENT_SECRET"))
 
+
 def _groww_auth() -> bool:
     try:
-        if not _has_groww(): return False
+        if not _has_groww():
+            return False
         from brokers.groww import GrowwAPI
+
         return GrowwAPI(_env("GROWW_CLIENT_ID"), _env("GROWW_CLIENT_SECRET")).is_authenticated()
     except Exception:
         return False
+
 
 # Angel One
 def _has_angelone() -> bool:
     return bool(_env("ANGEL_API_KEY") and _env("ANGEL_CLIENT_CODE") and _env("ANGEL_TOTP_SECRET"))
 
+
 def _angelone_auth() -> bool:
     try:
-        if not _has_angelone(): return False
+        if not _has_angelone():
+            return False
         from brokers.angelone import AngelOneAPI
+
         return AngelOneAPI(
-            api_key=_env("ANGEL_API_KEY"), client_code=_env("ANGEL_CLIENT_CODE"),
-            password=_env("ANGEL_PASSWORD"), totp_secret=_env("ANGEL_TOTP_SECRET"),
+            api_key=_env("ANGEL_API_KEY"),
+            client_code=_env("ANGEL_CLIENT_CODE"),
+            password=_env("ANGEL_PASSWORD"),
+            totp_secret=_env("ANGEL_TOTP_SECRET"),
         ).is_authenticated()
     except Exception:
         return False
+
 
 # Upstox
 def _has_upstox() -> bool:
     return bool(_env("UPSTOX_API_KEY") and _env("UPSTOX_API_SECRET"))
 
+
 def _upstox_auth() -> bool:
     try:
-        if not _has_upstox(): return False
+        if not _has_upstox():
+            return False
         from brokers.upstox import UpstoxAPI
+
         return UpstoxAPI(_env("UPSTOX_API_KEY"), _env("UPSTOX_API_SECRET")).is_authenticated()
     except Exception:
         return False
+
 
 # Fyers
 def _has_fyers() -> bool:
     return bool(_env("FYERS_APP_ID") and _env("FYERS_SECRET_KEY"))
 
+
 def _fyers_auth() -> bool:
     try:
-        if not _has_fyers(): return False
+        if not _has_fyers():
+            return False
         from brokers.fyers import FyersAPI
+
         return FyersAPI(_env("FYERS_APP_ID"), _env("FYERS_SECRET_KEY")).is_authenticated()
     except Exception:
         return False
 
 
 # ── Shared success card ───────────────────────────────────────
+
 
 def _success_card(broker_name: str, btn_cls: str, profile, funds, note: str) -> str:
     return f"""<div class="card">
@@ -289,27 +316,39 @@ def _success_card(broker_name: str, btn_cls: str, profile, funds, note: str) -> 
     </div>"""
 
 
-def _broker_btn(label: str, icon: str, cls: str, path: str, configured: bool, authenticated: bool) -> str:
-    tag   = f"✓ Connected — {label}" if authenticated else label
-    href  = f'href="{path}"' if configured else ""
-    dis   = "" if configured else 'disabled title="API keys not configured — run credentials setup"'
+def _broker_btn(
+    label: str, icon: str, cls: str, path: str, configured: bool, authenticated: bool
+) -> str:
+    tag = f"✓ Connected — {label}" if authenticated else label
+    href = f'href="{path}"' if configured else ""
+    dis = "" if configured else 'disabled title="API keys not configured — run credentials setup"'
     style = "pointer-events:none;opacity:.4" if not configured else ""
     return f'<a {href} class="btn {cls}" {dis} style="{style}">{icon}&nbsp; {tag}</a>'
 
 
 # ── Home / Login page ─────────────────────────────────────────
 
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    none_configured = not any([
-        _has_zerodha(), _has_groww(), _has_angelone(),
-        _has_upstox(), _has_fyers(),
-    ])
+    none_configured = not any(
+        [
+            _has_zerodha(),
+            _has_groww(),
+            _has_angelone(),
+            _has_upstox(),
+            _has_fyers(),
+        ]
+    )
 
-    warn = """<div class="warn-box">
+    warn = (
+        """<div class="warn-box">
         ⚠️ No broker API keys configured.<br>
         Run <code>credentials setup</code> in the terminal, or try Demo Mode below.
-    </div>""" if none_configured else ""
+    </div>"""
+        if none_configured
+        else ""
+    )
 
     free_brokers = """<div class="section-header">Free APIs — Recommended to start</div>"""
 
@@ -317,17 +356,52 @@ async def index():
       <h2>Connect your broker</h2>
       {warn}
       {free_brokers}
-      {_broker_btn("Login with Angel One (Free)", "🟠", "btn-angel",
-                    "/angelone/login", _has_angelone(), _angelone_auth())}
-      {_broker_btn("Login with Upstox (Free)", "🟣", "btn-upstox",
-                    "/upstox/login", _has_upstox(), _upstox_auth())}
-      {_broker_btn("Login with Fyers (Free)", "🔴", "btn-fyers",
-                    "/fyers/login", _has_fyers(), _fyers_auth())}
+      {
+        _broker_btn(
+            "Login with Angel One (Free)",
+            "🟠",
+            "btn-angel",
+            "/angelone/login",
+            _has_angelone(),
+            _angelone_auth(),
+        )
+    }
+      {
+        _broker_btn(
+            "Login with Upstox (Free)",
+            "🟣",
+            "btn-upstox",
+            "/upstox/login",
+            _has_upstox(),
+            _upstox_auth(),
+        )
+    }
+      {
+        _broker_btn(
+            "Login with Fyers (Free)",
+            "🔴",
+            "btn-fyers",
+            "/fyers/login",
+            _has_fyers(),
+            _fyers_auth(),
+        )
+    }
       <div class="section-header">Premium Brokers</div>
-      {_broker_btn("Login with Zerodha", "🔵", "btn-zerodha",
-                    "/zerodha/login", _has_zerodha(), _zerodha_auth())}
-      {_broker_btn("Login with Groww", "🟢", "btn-groww",
-                    "/groww/login", _has_groww(), _groww_auth())}
+      {
+        _broker_btn(
+            "Login with Zerodha",
+            "🔵",
+            "btn-zerodha",
+            "/zerodha/login",
+            _has_zerodha(),
+            _zerodha_auth(),
+        )
+    }
+      {
+        _broker_btn(
+            "Login with Groww", "🟢", "btn-groww", "/groww/login", _has_groww(), _groww_auth()
+        )
+    }
       <div class="divider">or</div>
       <a href="/demo" class="btn btn-demo">🎭&nbsp; Demo Mode (no credentials needed)</a>
     </div>
@@ -338,6 +412,7 @@ async def index():
 
 
 # ── Zerodha ───────────────────────────────────────────────────
+
 
 @app.get("/zerodha/login")
 async def zerodha_login():
@@ -361,20 +436,30 @@ async def zerodha_callback(request_token: str = "", status: str = ""):
         return HTMLResponse(_page("Failed", body), status_code=400)
     try:
         from brokers.zerodha import ZerodhaAPI
-        b       = ZerodhaAPI(api_key=_env("KITE_API_KEY"), api_secret=_env("KITE_API_SECRET"))
+
+        b = ZerodhaAPI(api_key=_env("KITE_API_KEY"), api_secret=_env("KITE_API_SECRET"))
         profile = b.complete_login(request_token=request_token)
-        funds   = b.get_funds()
+        funds = b.get_funds()
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
         return HTMLResponse(_page("Error", body), status_code=500)
-    return HTMLResponse(_page("Connected", _success_card(
-        "Zerodha", "btn-zerodha", profile, funds,
-        "Redirect URL: http://localhost:8765/zerodha/callback"
-    )))
+    return HTMLResponse(
+        _page(
+            "Connected",
+            _success_card(
+                "Zerodha",
+                "btn-zerodha",
+                profile,
+                funds,
+                "Redirect URL: http://localhost:8765/zerodha/callback",
+            ),
+        )
+    )
 
 
 # ── Groww ─────────────────────────────────────────────────────
+
 
 @app.get("/groww/login")
 async def groww_login():
@@ -403,22 +488,35 @@ async def groww_callback(code: str = "", error: str = ""):
         return HTMLResponse(_page("Failed", body), status_code=400)
     try:
         from brokers.groww import GrowwAPI
+
         redirect = _env("GROWW_REDIRECT_URL") or "http://localhost:8765/groww/callback"
-        b       = GrowwAPI(client_id=_env("GROWW_CLIENT_ID"),
-                           client_secret=_env("GROWW_CLIENT_SECRET"), redirect_uri=redirect)
+        b = GrowwAPI(
+            client_id=_env("GROWW_CLIENT_ID"),
+            client_secret=_env("GROWW_CLIENT_SECRET"),
+            redirect_uri=redirect,
+        )
         profile = b.complete_login(auth_code=code)
-        funds   = b.get_funds()
+        funds = b.get_funds()
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
         return HTMLResponse(_page("Error", body), status_code=500)
-    return HTMLResponse(_page("Connected", _success_card(
-        "Groww", "btn-groww", profile, funds,
-        "Redirect URL: http://localhost:8765/groww/callback"
-    )))
+    return HTMLResponse(
+        _page(
+            "Connected",
+            _success_card(
+                "Groww",
+                "btn-groww",
+                profile,
+                funds,
+                "Redirect URL: http://localhost:8765/groww/callback",
+            ),
+        )
+    )
 
 
 # ── Angel One (TOTP — no redirect) ───────────────────────────
+
 
 @app.get("/angelone/login", response_class=HTMLResponse)
 async def angelone_login():
@@ -440,23 +538,37 @@ async def angelone_login():
         return HTMLResponse(_page("Angel One Setup", body), status_code=400)
     try:
         from brokers.angelone import AngelOneAPI
-        b       = AngelOneAPI(api_key=_env("ANGEL_API_KEY"), client_code=_env("ANGEL_CLIENT_CODE"),
-                              password=_env("ANGEL_PASSWORD"), totp_secret=_env("ANGEL_TOTP_SECRET"))
+
+        b = AngelOneAPI(
+            api_key=_env("ANGEL_API_KEY"),
+            client_code=_env("ANGEL_CLIENT_CODE"),
+            password=_env("ANGEL_PASSWORD"),
+            totp_secret=_env("ANGEL_TOTP_SECRET"),
+        )
         profile = b.complete_login()
-        funds   = b.get_funds()
+        funds = b.get_funds()
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">
           ❌ Angel One login failed: {e}<br><br>
           Check ANGEL_CLIENT_CODE, ANGEL_PASSWORD, and ANGEL_TOTP_SECRET.
         </div><a href="/" class="btn btn-back">← Try again</a></div>"""
         return HTMLResponse(_page("Error", body), status_code=500)
-    return HTMLResponse(_page("Connected", _success_card(
-        "Angel One", "btn-angel", profile, funds,
-        "SmartAPI — free, TOTP auto-login, no redirect URI needed."
-    )))
+    return HTMLResponse(
+        _page(
+            "Connected",
+            _success_card(
+                "Angel One",
+                "btn-angel",
+                profile,
+                funds,
+                "SmartAPI — free, TOTP auto-login, no redirect URI needed.",
+            ),
+        )
+    )
 
 
 # ── Upstox ────────────────────────────────────────────────────
+
 
 @app.get("/upstox/login")
 async def upstox_login():
@@ -485,22 +597,35 @@ async def upstox_callback(code: str = "", error: str = ""):
         return HTMLResponse(_page("Failed", body), status_code=400)
     try:
         from brokers.upstox import UpstoxAPI
+
         redirect = _env("UPSTOX_REDIRECT_URL") or "http://localhost:8765/upstox/callback"
-        b       = UpstoxAPI(api_key=_env("UPSTOX_API_KEY"),
-                            api_secret=_env("UPSTOX_API_SECRET"), redirect_uri=redirect)
+        b = UpstoxAPI(
+            api_key=_env("UPSTOX_API_KEY"),
+            api_secret=_env("UPSTOX_API_SECRET"),
+            redirect_uri=redirect,
+        )
         profile = b.complete_login(auth_code=code)
-        funds   = b.get_funds()
+        funds = b.get_funds()
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
         return HTMLResponse(_page("Error", body), status_code=500)
-    return HTMLResponse(_page("Connected", _success_card(
-        "Upstox", "btn-upstox", profile, funds,
-        "Redirect URL: http://localhost:8765/upstox/callback"
-    )))
+    return HTMLResponse(
+        _page(
+            "Connected",
+            _success_card(
+                "Upstox",
+                "btn-upstox",
+                profile,
+                funds,
+                "Redirect URL: http://localhost:8765/upstox/callback",
+            ),
+        )
+    )
 
 
 # ── Fyers ─────────────────────────────────────────────────────
+
 
 @app.get("/fyers/login")
 async def fyers_login():
@@ -514,9 +639,11 @@ async def fyers_login():
         return HTMLResponse(_page("Error", body), status_code=400)
     try:
         from brokers.fyers import FyersAPI
+
         redirect = _env("FYERS_REDIRECT_URL") or "http://localhost:8765/fyers/callback"
-        b   = FyersAPI(app_id=_env("FYERS_APP_ID"), secret_key=_env("FYERS_SECRET_KEY"),
-                       redirect_uri=redirect)
+        b = FyersAPI(
+            app_id=_env("FYERS_APP_ID"), secret_key=_env("FYERS_SECRET_KEY"), redirect_uri=redirect
+        )
         url = b.get_login_url()
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ Could not generate login URL: {e}</div>
@@ -528,7 +655,7 @@ async def fyers_login():
 @app.get("/fyers/callback", response_class=HTMLResponse)
 async def fyers_callback(auth_code: str = "", state: str = "", s: str = ""):
     # Fyers sends ?auth_code= or sometimes ?code=
-    code  = auth_code
+    code = auth_code
     error = "" if code else "no auth_code received"
     if error:
         body = f"""<div class="card"><div class="err-box">❌ Fyers login failed: {error}.</div>
@@ -536,26 +663,38 @@ async def fyers_callback(auth_code: str = "", state: str = "", s: str = ""):
         return HTMLResponse(_page("Failed", body), status_code=400)
     try:
         from brokers.fyers import FyersAPI
+
         redirect = _env("FYERS_REDIRECT_URL") or "http://localhost:8765/fyers/callback"
-        b       = FyersAPI(app_id=_env("FYERS_APP_ID"), secret_key=_env("FYERS_SECRET_KEY"),
-                           redirect_uri=redirect)
+        b = FyersAPI(
+            app_id=_env("FYERS_APP_ID"), secret_key=_env("FYERS_SECRET_KEY"), redirect_uri=redirect
+        )
         profile = b.complete_login(auth_code=code)
-        funds   = b.get_funds()
+        funds = b.get_funds()
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
         return HTMLResponse(_page("Error", body), status_code=500)
-    return HTMLResponse(_page("Connected", _success_card(
-        "Fyers", "btn-fyers", profile, funds,
-        "Redirect URL: http://localhost:8765/fyers/callback"
-    )))
+    return HTMLResponse(
+        _page(
+            "Connected",
+            _success_card(
+                "Fyers",
+                "btn-fyers",
+                profile,
+                funds,
+                "Redirect URL: http://localhost:8765/fyers/callback",
+            ),
+        )
+    )
 
 
 # ── Demo mode ─────────────────────────────────────────────────
 
+
 @app.get("/demo", response_class=HTMLResponse)
 async def demo():
     from brokers.mock import MockBrokerAPI
+
     b = MockBrokerAPI()
     b.complete_login()
     p = b.get_profile()
@@ -586,14 +725,31 @@ async def demo():
 
 # ── Status page ───────────────────────────────────────────────
 
+
 @app.get("/status", response_class=HTMLResponse)
 async def status_page():
     _BROKERS = [
-        ("zerodha",  "Zerodha",   "badge-zerodha", "/zerodha/login",   "#58a6ff",  _has_zerodha,  _zerodha_auth),
-        ("groww",    "Groww",     "badge-groww",   "/groww/login",     "#00c48c",  _has_groww,    _groww_auth),
-        ("angelone", "Angel One", "badge-angel",   "/angelone/login",  "#ff6b35",  _has_angelone, _angelone_auth),
-        ("upstox",   "Upstox",    "badge-upstox",  "/upstox/login",    "#c4b5fd",  _has_upstox,   _upstox_auth),
-        ("fyers",    "Fyers",     "badge-fyers",   "/fyers/login",     "#fed7aa",  _has_fyers,    _fyers_auth),
+        (
+            "zerodha",
+            "Zerodha",
+            "badge-zerodha",
+            "/zerodha/login",
+            "#58a6ff",
+            _has_zerodha,
+            _zerodha_auth,
+        ),
+        ("groww", "Groww", "badge-groww", "/groww/login", "#00c48c", _has_groww, _groww_auth),
+        (
+            "angelone",
+            "Angel One",
+            "badge-angel",
+            "/angelone/login",
+            "#ff6b35",
+            _has_angelone,
+            _angelone_auth,
+        ),
+        ("upstox", "Upstox", "badge-upstox", "/upstox/login", "#c4b5fd", _has_upstox, _upstox_auth),
+        ("fyers", "Fyers", "badge-fyers", "/fyers/login", "#fed7aa", _has_fyers, _fyers_auth),
     ]
     rows = []
     for bkey, bname, badge_cls, login_path, color, has_fn, auth_fn in _BROKERS:
@@ -602,11 +758,15 @@ async def status_page():
             if auth_fn():
                 rows.append(f"<li>{badge} ✅ Connected</li>")
             else:
-                rows.append(f'<li>{badge} Configured — <a href="{login_path}" style="color:{color}">Login →</a></li>')
+                rows.append(
+                    f'<li>{badge} Configured — <a href="{login_path}" style="color:{color}">Login →</a></li>'
+                )
         else:
-            rows.append(f'<li><span class="badge {badge_cls}" style="opacity:.5">{bname}</span> '
-                        f'<span style="color:#484f58">Not configured — '
-                        f'<a href="{login_path}" style="color:{color}">Setup →</a></span></li>')
+            rows.append(
+                f'<li><span class="badge {badge_cls}" style="opacity:.5">{bname}</span> '
+                f'<span style="color:#484f58">Not configured — '
+                f'<a href="{login_path}" style="color:{color}">Setup →</a></span></li>'
+            )
 
     body = f"""<div class="card">
       <h2>Broker status</h2>
@@ -619,22 +779,23 @@ async def status_page():
 
 # ── JSON API ──────────────────────────────────────────────────
 
+
 @app.get("/api/status")
 async def api_status(request: Request):
     _require_localhost(request)
     return {
-        "zerodha":   {"configured": _has_zerodha(),   "authenticated": _zerodha_auth()},
-        "groww":     {"configured": _has_groww(),     "authenticated": _groww_auth()},
-        "angel_one": {"configured": _has_angelone(),  "authenticated": _angelone_auth()},
-        "upstox":    {"configured": _has_upstox(),    "authenticated": _upstox_auth()},
-        "fyers":     {"configured": _has_fyers(),     "authenticated": _fyers_auth()},
+        "zerodha": {"configured": _has_zerodha(), "authenticated": _zerodha_auth()},
+        "groww": {"configured": _has_groww(), "authenticated": _groww_auth()},
+        "angel_one": {"configured": _has_angelone(), "authenticated": _angelone_auth()},
+        "upstox": {"configured": _has_upstox(), "authenticated": _upstox_auth()},
+        "fyers": {"configured": _has_fyers(), "authenticated": _fyers_auth()},
     }
 
 
 @app.get("/api/portfolio")
 async def api_portfolio(request: Request):
     _require_localhost(request)
-    holdings:  list[dict] = []
+    holdings: list[dict] = []
     positions: list[dict] = []
     total_cash = total_margin = total_balance = 0.0
     active_brokers: list[str] = []
@@ -647,71 +808,114 @@ async def api_portfolio(request: Request):
                 return
             active_brokers.append(name)
             f = b.get_funds()
-            total_cash    += f.available_cash
-            total_margin  += f.used_margin
+            total_cash += f.available_cash
+            total_margin += f.used_margin
             total_balance += f.total_balance
             for h in b.get_holdings():
-                holdings.append({"broker": name, "symbol": h.symbol,
-                                  "qty": h.quantity, "avg_price": h.avg_price,
-                                  "ltp": h.last_price, "pnl": h.pnl,
-                                  "current_value": h.current_value})
+                holdings.append(
+                    {
+                        "broker": name,
+                        "symbol": h.symbol,
+                        "qty": h.quantity,
+                        "avg_price": h.avg_price,
+                        "ltp": h.last_price,
+                        "pnl": h.pnl,
+                        "current_value": h.current_value,
+                    }
+                )
             for p in b.get_positions():
-                positions.append({"broker": name, "symbol": p.symbol,
-                                   "product": p.product, "qty": p.quantity,
-                                   "avg_price": p.avg_price, "ltp": p.last_price,
-                                   "pnl": p.pnl})
+                positions.append(
+                    {
+                        "broker": name,
+                        "symbol": p.symbol,
+                        "product": p.product,
+                        "qty": p.quantity,
+                        "avg_price": p.avg_price,
+                        "ltp": p.last_price,
+                        "pnl": p.pnl,
+                    }
+                )
         except Exception:
             pass
 
     if _has_zerodha():
         from brokers.zerodha import ZerodhaAPI
+
         _try("zerodha", lambda: ZerodhaAPI(_env("KITE_API_KEY"), _env("KITE_API_SECRET")))
 
     if _has_groww():
         from brokers.groww import GrowwAPI
+
         _try("groww", lambda: GrowwAPI(_env("GROWW_CLIENT_ID"), _env("GROWW_CLIENT_SECRET")))
 
     if _has_angelone():
         from brokers.angelone import AngelOneAPI
-        _try("angel_one", lambda: AngelOneAPI(
-            _env("ANGEL_API_KEY"), _env("ANGEL_CLIENT_CODE"),
-            _env("ANGEL_PASSWORD"), _env("ANGEL_TOTP_SECRET")))
+
+        _try(
+            "angel_one",
+            lambda: AngelOneAPI(
+                _env("ANGEL_API_KEY"),
+                _env("ANGEL_CLIENT_CODE"),
+                _env("ANGEL_PASSWORD"),
+                _env("ANGEL_TOTP_SECRET"),
+            ),
+        )
 
     if _has_upstox():
         from brokers.upstox import UpstoxAPI
+
         _try("upstox", lambda: UpstoxAPI(_env("UPSTOX_API_KEY"), _env("UPSTOX_API_SECRET")))
 
     if _has_fyers():
         from brokers.fyers import FyersAPI
+
         _try("fyers", lambda: FyersAPI(_env("FYERS_APP_ID"), _env("FYERS_SECRET_KEY")))
 
     # Fallback: demo data if no broker authenticated
     if not active_brokers:
         from brokers.mock import MockBrokerAPI
-        m = MockBrokerAPI(); m.complete_login()
+
+        m = MockBrokerAPI()
+        m.complete_login()
         active_brokers.append("mock (demo)")
         f = m.get_funds()
         total_cash, total_margin, total_balance = f.available_cash, f.used_margin, f.total_balance
         for h in m.get_holdings():
-            holdings.append({"broker": "mock", "symbol": h.symbol, "qty": h.quantity,
-                              "avg_price": h.avg_price, "ltp": h.last_price, "pnl": h.pnl,
-                              "current_value": h.current_value})
+            holdings.append(
+                {
+                    "broker": "mock",
+                    "symbol": h.symbol,
+                    "qty": h.quantity,
+                    "avg_price": h.avg_price,
+                    "ltp": h.last_price,
+                    "pnl": h.pnl,
+                    "current_value": h.current_value,
+                }
+            )
         for p in m.get_positions():
-            positions.append({"broker": "mock", "symbol": p.symbol, "qty": p.quantity,
-                               "avg_price": p.avg_price, "ltp": p.last_price, "pnl": p.pnl})
+            positions.append(
+                {
+                    "broker": "mock",
+                    "symbol": p.symbol,
+                    "qty": p.quantity,
+                    "avg_price": p.avg_price,
+                    "ltp": p.last_price,
+                    "pnl": p.pnl,
+                }
+            )
 
     total_pnl = sum(h["pnl"] for h in holdings) + sum(p["pnl"] for p in positions)
     return {
-        "brokers":   active_brokers,
+        "brokers": active_brokers,
         "funds": {
             "available_cash": round(total_cash, 2),
-            "used_margin":    round(total_margin, 2),
-            "total_balance":  round(total_balance, 2),
-            "currency":       "INR",
+            "used_margin": round(total_margin, 2),
+            "total_balance": round(total_balance, 2),
+            "currency": "INR",
         },
-        "holdings":  holdings,
+        "holdings": holdings,
         "positions": positions,
         "total_pnl": round(total_pnl, 2),
-        "holding_count":  len(holdings),
+        "holding_count": len(holdings),
         "position_count": len(positions),
     }

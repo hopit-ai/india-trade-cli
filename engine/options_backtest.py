@@ -34,6 +34,7 @@ RISK_FREE_RATE = 0.065  # 6.5% RBI repo rate
 
 # ── Black-Scholes Premium ────────────────────────────────────
 
+
 def bs_premium(
     spot: float,
     strike: float,
@@ -67,8 +68,9 @@ def bs_premium(
 
     try:
         from scipy.stats import norm
+
         T = dte / 365.0
-        d1 = (math.log(spot / strike) + (rate + 0.5 * iv ** 2) * T) / (iv * math.sqrt(T))
+        d1 = (math.log(spot / strike) + (rate + 0.5 * iv**2) * T) / (iv * math.sqrt(T))
         d2 = d1 - iv * math.sqrt(T)
 
         if option_type.upper() == "CE":
@@ -87,54 +89,58 @@ def bs_premium(
 
 # ── Data Models ──────────────────────────────────────────────
 
+
 @dataclass
 class OptionsLeg:
     """One leg of an options trade."""
-    option_type:    str         # "CE" or "PE"
-    transaction:    str         # "BUY" or "SELL"
-    strike:         float
-    entry_premium:  float
-    exit_premium:   float = 0.0
-    lot_size:       int = 1
-    lots:           int = 1
-    pnl:            float = 0.0
+
+    option_type: str  # "CE" or "PE"
+    transaction: str  # "BUY" or "SELL"
+    strike: float
+    entry_premium: float
+    exit_premium: float = 0.0
+    lot_size: int = 1
+    lots: int = 1
+    pnl: float = 0.0
 
 
 @dataclass
 class OptionsTrade:
     """A complete options trade (entry + exit, potentially multi-leg)."""
-    entry_date:       str
-    exit_date:        str
+
+    entry_date: str
+    exit_date: str
     underlying_entry: float
-    underlying_exit:  float
-    legs:             list[OptionsLeg]
-    combined_pnl:     float
-    combined_pnl_pct: float     # % return on margin/premium deployed
-    hold_days:        int
-    strategy_name:    str = ""
+    underlying_exit: float
+    legs: list[OptionsLeg]
+    combined_pnl: float
+    combined_pnl_pct: float  # % return on margin/premium deployed
+    hold_days: int
+    strategy_name: str = ""
 
 
 @dataclass
 class OptionsBacktestResult:
     """Complete options backtest output."""
-    underlying:     str
-    strategy_name:  str
-    period:         str
-    start_date:     str
-    end_date:       str
 
-    total_return:   float = 0.0
-    total_pnl:      float = 0.0
-    total_trades:   int = 0
+    underlying: str
+    strategy_name: str
+    period: str
+    start_date: str
+    end_date: str
+
+    total_return: float = 0.0
+    total_pnl: float = 0.0
+    total_trades: int = 0
     winning_trades: int = 0
-    losing_trades:  int = 0
-    win_rate:       float = 0.0
-    avg_win:        float = 0.0
-    avg_loss:       float = 0.0
-    max_drawdown:   float = 0.0
-    sharpe_ratio:   float = 0.0
-    avg_hold_days:  float = 0.0
-    trades:         list[OptionsTrade] = field(default_factory=list)
+    losing_trades: int = 0
+    win_rate: float = 0.0
+    avg_win: float = 0.0
+    avg_loss: float = 0.0
+    max_drawdown: float = 0.0
+    sharpe_ratio: float = 0.0
+    avg_hold_days: float = 0.0
+    trades: list[OptionsTrade] = field(default_factory=list)
 
     def print_summary(self) -> None:
         ret_style = "green" if self.total_pnl >= 0 else "red"
@@ -158,11 +164,13 @@ class OptionsBacktestResult:
             f"  Avg Loss       : [red]₹{self.avg_loss:,.0f}[/red]",
             f"  Avg Hold       : {self.avg_hold_days:.1f} days",
         ]
-        console.print(Panel(
-            "\n".join(lines),
-            title=f"[bold cyan]Options Backtest: {self.strategy_name} on {self.underlying}[/bold cyan]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"[bold cyan]Options Backtest: {self.strategy_name} on {self.underlying}[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
     def print_trades(self, n: int = 20) -> None:
         trades = self.trades[-n:]
@@ -177,9 +185,7 @@ class OptionsBacktestResult:
                 f"({t.hold_days}d)  "
                 f"P&L: [{pnl_style}]₹{t.combined_pnl:,.0f} ({t.combined_pnl_pct:+.1f}%)[/{pnl_style}]"
             )
-            console.print(
-                f"    Underlying: ₹{t.underlying_entry:,.0f} → ₹{t.underlying_exit:,.0f}"
-            )
+            console.print(f"    Underlying: ₹{t.underlying_entry:,.0f} → ₹{t.underlying_exit:,.0f}")
             for leg in t.legs:
                 dir_color = "green" if leg.transaction == "BUY" else "red"
                 leg_pnl_style = "green" if leg.pnl >= 0 else "red"
@@ -194,13 +200,20 @@ class OptionsBacktestResult:
 
 # ── Options Strategy Interface ───────────────────────────────
 
+
 class OptionsStrategy(ABC):
     """Base class for options-specific strategies."""
+
     name: str = "Base"
 
     @abstractmethod
     def should_enter(
-        self, dt: date, spot: float, iv: float, dte: int, vix: float,
+        self,
+        dt: date,
+        spot: float,
+        iv: float,
+        dte: int,
+        vix: float,
     ) -> Optional[list[dict]]:
         """
         Return list of legs to enter, or None to skip.
@@ -228,6 +241,7 @@ class OptionsStrategy(ABC):
 
 # ── Built-in Strategies ──────────────────────────────────────
 
+
 class StraddleStrategy(OptionsStrategy):
     """
     Buy ATM Straddle — long CE + long PE at same strike.
@@ -235,6 +249,7 @@ class StraddleStrategy(OptionsStrategy):
     Entry: N days before expiry.
     Exit: On expiry, or stop-loss/profit-target hit.
     """
+
     name = "Straddle"
 
     def __init__(
@@ -272,6 +287,7 @@ class IronCondorStrategy(OptionsStrategy):
     Entry: At start of series (DTE >= min_dte), VIX below threshold.
     Exit: On expiry, stop-loss, or profit target.
     """
+
     name = "Iron Condor"
 
     def __init__(
@@ -298,9 +314,17 @@ class IronCondorStrategy(OptionsStrategy):
         if self.min_dte <= dte <= self.max_dte:
             return [
                 {"type": "CE", "transaction": "SELL", "strike_offset": self.short_offset},
-                {"type": "CE", "transaction": "BUY", "strike_offset": self.short_offset + self.wing_width},
+                {
+                    "type": "CE",
+                    "transaction": "BUY",
+                    "strike_offset": self.short_offset + self.wing_width,
+                },
                 {"type": "PE", "transaction": "SELL", "strike_offset": -self.short_offset},
-                {"type": "PE", "transaction": "BUY", "strike_offset": -(self.short_offset + self.wing_width)},
+                {
+                    "type": "PE",
+                    "transaction": "BUY",
+                    "strike_offset": -(self.short_offset + self.wing_width),
+                },
             ]
         return None
 
@@ -316,6 +340,7 @@ class IronCondorStrategy(OptionsStrategy):
 
 class CoveredCallStrategy(OptionsStrategy):
     """Sell OTM call monthly against holdings."""
+
     name = "Covered Call"
 
     def __init__(self, call_offset: int = 200, min_dte: int = 20, max_dte: int = 35):
@@ -336,6 +361,7 @@ class CoveredCallStrategy(OptionsStrategy):
 
 class ProtectivePutStrategy(OptionsStrategy):
     """Buy OTM put for portfolio protection when VIX is low."""
+
     name = "Protective Put"
 
     def __init__(self, put_offset: int = -300, max_vix_entry: float = 15.0, min_dte: int = 20):
@@ -366,6 +392,7 @@ class ShortStraddleStrategy(OptionsStrategy):
     Adjustment: if spot moves >= adjust_points from entry, re-center.
     Exit: on expiry, stop-loss, or profit target.
     """
+
     name = "Short Straddle"
 
     def __init__(
@@ -409,6 +436,7 @@ class ShortStrangleStrategy(OptionsStrategy):
     Entry: on expiry day (DTE = entry_dte).
     Wider breakevens than straddle, lower premium collected.
     """
+
     name = "Short Strangle"
 
     def __init__(
@@ -448,6 +476,7 @@ class ShortStrangleStrategy(OptionsStrategy):
 
 # ── Expiry Calendar ──────────────────────────────────────────
 
+
 def _get_weekly_expiries(start: date, end: date) -> list[date]:
     """Generate Thursday expiry dates (NSE weekly expiry = Thursday)."""
     expiries = []
@@ -476,15 +505,21 @@ def _round_strike(spot: float, step: float = 50.0) -> float:
 
 # Default lot sizes for popular Indian underlyings
 LOT_SIZES = {
-    "NIFTY": 25, "NIFTY50": 25, "NIFTY 50": 25,
-    "BANKNIFTY": 15, "NIFTY BANK": 15,
+    "NIFTY": 25,
+    "NIFTY50": 25,
+    "NIFTY 50": 25,
+    "BANKNIFTY": 15,
+    "NIFTY BANK": 15,
     "FINNIFTY": 25,
     "MIDCPNIFTY": 50,
 }
 
 STRIKE_STEPS = {
-    "NIFTY": 50, "NIFTY50": 50, "NIFTY 50": 50,
-    "BANKNIFTY": 100, "NIFTY BANK": 100,
+    "NIFTY": 50,
+    "NIFTY50": 50,
+    "NIFTY 50": 50,
+    "BANKNIFTY": 100,
+    "NIFTY BANK": 100,
     "FINNIFTY": 50,
 }
 
@@ -521,8 +556,13 @@ class OptionsBacktester:
         from market.history import get_ohlcv
 
         period_days = {
-            "1mo": 30, "3mo": 90, "6mo": 180,
-            "1y": 365, "2y": 730, "3y": 1095, "5y": 1825,
+            "1mo": 30,
+            "3mo": 90,
+            "6mo": 180,
+            "1y": 365,
+            "2y": 730,
+            "3y": 1095,
+            "5y": 1825,
         }
         days = period_days.get(self.period, 365)
 
@@ -556,8 +596,10 @@ class OptionsBacktester:
 
         spot_df = self._spot_data
         dates = spot_df.index
-        expiries = _get_weekly_expiries(dates[0].date() if hasattr(dates[0], 'date') else dates[0],
-                                         dates[-1].date() if hasattr(dates[-1], 'date') else dates[-1])
+        expiries = _get_weekly_expiries(
+            dates[0].date() if hasattr(dates[0], "date") else dates[0],
+            dates[-1].date() if hasattr(dates[-1], "date") else dates[-1],
+        )
 
         capital = self.initial_capital
         trades: list[OptionsTrade] = []
@@ -572,7 +614,7 @@ class OptionsBacktester:
 
         for i in range(len(dates)):
             dt = dates[i]
-            dt_date = dt.date() if hasattr(dt, 'date') else dt
+            dt_date = dt.date() if hasattr(dt, "date") else dt
             spot = float(spot_df.iloc[i]["close"])
             iv = self._get_iv(dt)
             vix = iv * 100  # convert back to VIX scale for strategy
@@ -596,11 +638,13 @@ class OptionsBacktester:
                         sign = 1 if spec["transaction"] == "BUY" else -1
                         entry_premium_total += sign * premium * self.lot_size
 
-                        active_legs.append({
-                            **spec,
-                            "strike": strike,
-                            "entry_premium": premium,
-                        })
+                        active_legs.append(
+                            {
+                                **spec,
+                                "strike": strike,
+                                "entry_premium": premium,
+                            }
+                        )
 
                     in_position = True
                     entry_date = str(dt_date)
@@ -621,7 +665,9 @@ class OptionsBacktester:
                 days_held = (dt_date - date.fromisoformat(entry_date)).days if entry_date else 0
 
                 # Check exit
-                if strategy.should_exit(dt_date, spot, iv, dte, entry_spot, days_held, unrealised_pct):
+                if strategy.should_exit(
+                    dt_date, spot, iv, dte, entry_spot, days_held, unrealised_pct
+                ):
                     # Close all legs
                     trade_legs = []
                     combined_pnl = 0.0
@@ -630,31 +676,35 @@ class OptionsBacktester:
                         sign = 1 if leg["transaction"] == "BUY" else -1
                         leg_pnl = sign * (exit_prem - leg["entry_premium"]) * self.lot_size
 
-                        trade_legs.append(OptionsLeg(
-                            option_type=leg["type"],
-                            transaction=leg["transaction"],
-                            strike=leg["strike"],
-                            entry_premium=round(leg["entry_premium"], 2),
-                            exit_premium=round(exit_prem, 2),
-                            lot_size=self.lot_size,
-                            pnl=round(leg_pnl, 2),
-                        ))
+                        trade_legs.append(
+                            OptionsLeg(
+                                option_type=leg["type"],
+                                transaction=leg["transaction"],
+                                strike=leg["strike"],
+                                entry_premium=round(leg["entry_premium"], 2),
+                                exit_premium=round(exit_prem, 2),
+                                lot_size=self.lot_size,
+                                pnl=round(leg_pnl, 2),
+                            )
+                        )
                         combined_pnl += leg_pnl
 
                     capital += combined_pnl
                     pnl_pct = (combined_pnl / premium_deployed) * 100 if premium_deployed else 0
 
-                    trades.append(OptionsTrade(
-                        entry_date=entry_date,
-                        exit_date=str(dt_date),
-                        underlying_entry=round(entry_spot, 2),
-                        underlying_exit=round(spot, 2),
-                        legs=trade_legs,
-                        combined_pnl=round(combined_pnl, 2),
-                        combined_pnl_pct=round(pnl_pct, 1),
-                        hold_days=days_held,
-                        strategy_name=strategy.name,
-                    ))
+                    trades.append(
+                        OptionsTrade(
+                            entry_date=entry_date,
+                            exit_date=str(dt_date),
+                            underlying_entry=round(entry_spot, 2),
+                            underlying_exit=round(spot, 2),
+                            legs=trade_legs,
+                            combined_pnl=round(combined_pnl, 2),
+                            combined_pnl_pct=round(pnl_pct, 1),
+                            hold_days=days_held,
+                            strategy_name=strategy.name,
+                        )
+                    )
 
                     in_position = False
                     active_legs = []

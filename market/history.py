@@ -12,34 +12,33 @@ Intervals supported (Zerodha notation):
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing   import Optional
+from typing import Optional
 
 import pandas as pd
-
 
 
 # ── Interval aliases ─────────────────────────────────────────
 
 INTERVAL_MAP = {
-    "1m":  "minute",
-    "3m":  "3minute",
-    "5m":  "5minute",
+    "1m": "minute",
+    "3m": "3minute",
+    "5m": "5minute",
     "10m": "10minute",
     "15m": "15minute",
     "30m": "30minute",
-    "1h":  "60minute",
-    "1d":  "day",
+    "1h": "60minute",
+    "1d": "day",
     "day": "day",
 }
 
 
 def get_ohlcv(
-    symbol:    str,
-    exchange:  str = "NSE",
-    interval:  str = "day",
+    symbol: str,
+    exchange: str = "NSE",
+    interval: str = "day",
     from_date: Optional[datetime] = None,
-    to_date:   Optional[datetime] = None,
-    days:      int = 365,
+    to_date: Optional[datetime] = None,
+    days: int = 365,
 ) -> pd.DataFrame:
     """
     Fetch historical OHLCV data as a DataFrame.
@@ -56,7 +55,7 @@ def get_ohlcv(
         DataFrame with columns: date, open, high, low, close, volume
         Index: date (datetime)
     """
-    to_date   = to_date   or datetime.now()
+    to_date = to_date or datetime.now()
     from_date = from_date or (to_date - timedelta(days=days))
 
     # Normalize interval alias
@@ -66,15 +65,16 @@ def get_ohlcv(
     raw = None
     try:
         from brokers.session import get_broker
+
         broker = get_broker()
         # Only use broker for real data — skip if it's the mock broker
-        if not getattr(broker, '_is_mock', False):
+        if not getattr(broker, "_is_mock", False):
             raw = broker.get_historical_data(
-                symbol    = symbol,
-                exchange  = exchange,
-                interval  = kite_interval,
-                from_date = from_date,
-                to_date   = to_date,
+                symbol=symbol,
+                exchange=exchange,
+                interval=kite_interval,
+                from_date=from_date,
+                to_date=to_date,
             )
         else:
             # Mock broker: still use yfinance for real market data
@@ -107,6 +107,7 @@ def _yfinance_fallback(
     """Try yfinance for real market data when broker API is unavailable."""
     try:
         from market.yfinance_provider import yf_get_ohlcv, yf_available
+
         if not yf_available():
             return []
         return yf_get_ohlcv(
@@ -123,6 +124,7 @@ def _yfinance_fallback(
 def _get_instrument_token(symbol: str, exchange: str) -> int:
     """Look up instrument token from broker's instrument list."""
     from brokers.session import get_broker
+
     broker = get_broker()
     if not hasattr(broker, "kite"):
         return 0
@@ -131,7 +133,6 @@ def _get_instrument_token(symbol: str, exchange: str) -> int:
         if inst["tradingsymbol"] == symbol:
             return inst["instrument_token"]
     raise ValueError(f"Instrument not found: {exchange}:{symbol}")
-
 
 
 # NOTE: _mock_ohlcv and get_ohlcv_mock were removed.

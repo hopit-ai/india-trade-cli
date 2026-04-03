@@ -1,11 +1,18 @@
 """Tests for engine/trader.py — TraderAgent, position sizing, strategy selection."""
 
 from engine.trader import (
-    TraderAgent, TradePlan, OrderLeg, ExitPlan, RISK_PROFILES, LOT_SIZES, _parse_synthesis_verdict,
+    TraderAgent,
+    TradePlan,
+    OrderLeg,
+    ExitPlan,
+    RISK_PROFILES,
+    LOT_SIZES,
+    _parse_synthesis_verdict,
 )
 
 
 # ── Risk Profiles ────────────────────────────────────────────
+
 
 class TestRiskProfiles:
     def test_all_three_profiles_exist(self):
@@ -30,6 +37,7 @@ class TestRiskProfiles:
 
 
 # ── TraderAgent construction ────────────────────────────────
+
 
 class TestTraderAgentInit:
     def test_default_capital(self):
@@ -59,6 +67,7 @@ class TestTraderAgentInit:
 
 # ── generate_plan ────────────────────────────────────────────
 
+
 class TestGeneratePlan:
     def test_hold_returns_none(self):
         t = TraderAgent(capital=200000)
@@ -68,8 +77,13 @@ class TestGeneratePlan:
     def test_buy_returns_plan(self):
         t = TraderAgent(capital=200000)
         plan = t.generate_plan(
-            "RELIANCE", verdict="BUY", confidence=75,
-            ltp=2500, atr=50, support=2400, resistance=2700,
+            "RELIANCE",
+            verdict="BUY",
+            confidence=75,
+            ltp=2500,
+            atr=50,
+            support=2400,
+            resistance=2700,
         )
         assert plan is not None
         assert isinstance(plan, TradePlan)
@@ -79,8 +93,11 @@ class TestGeneratePlan:
     def test_sell_returns_short_plan(self):
         t = TraderAgent(capital=200000)
         plan = t.generate_plan(
-            "RELIANCE", verdict="SELL", confidence=80,
-            ltp=2500, atr=50,
+            "RELIANCE",
+            verdict="SELL",
+            confidence=80,
+            ltp=2500,
+            atr=50,
         )
         assert plan is not None
         assert plan.direction == "SHORT"
@@ -93,8 +110,11 @@ class TestGeneratePlan:
     def test_plan_has_entry_orders(self):
         t = TraderAgent(capital=200000)
         plan = t.generate_plan(
-            "RELIANCE", verdict="BUY", confidence=75,
-            ltp=2500, atr=50,
+            "RELIANCE",
+            verdict="BUY",
+            confidence=75,
+            ltp=2500,
+            atr=50,
         )
         assert plan is not None
         assert len(plan.entry_orders) > 0
@@ -103,8 +123,11 @@ class TestGeneratePlan:
     def test_plan_has_exit_plan(self):
         t = TraderAgent(capital=200000)
         plan = t.generate_plan(
-            "RELIANCE", verdict="BUY", confidence=75,
-            ltp=2500, atr=50,
+            "RELIANCE",
+            verdict="BUY",
+            confidence=75,
+            ltp=2500,
+            atr=50,
         )
         assert plan is not None
         assert plan.exit_plan is not None
@@ -113,8 +136,11 @@ class TestGeneratePlan:
     def test_risk_amount_respects_capital(self):
         t = TraderAgent(capital=100000)
         plan = t.generate_plan(
-            "TCS", verdict="BUY", confidence=70,
-            ltp=3500, atr=70,
+            "TCS",
+            verdict="BUY",
+            confidence=70,
+            ltp=3500,
+            atr=70,
         )
         assert plan is not None
         assert plan.capital_deployed <= 100000
@@ -129,12 +155,16 @@ class TestGeneratePlan:
 
 # ── generate_all_plans ───────────────────────────────────────
 
+
 class TestGenerateAllPlans:
     def test_returns_three_personas(self):
         t = TraderAgent(capital=200000)
         plans = t.generate_all_plans(
-            "RELIANCE", verdict="BUY", confidence=75,
-            ltp=2500, atr=50,
+            "RELIANCE",
+            verdict="BUY",
+            confidence=75,
+            ltp=2500,
+            atr=50,
         )
         assert "aggressive" in plans
         assert "neutral" in plans
@@ -143,8 +173,11 @@ class TestGenerateAllPlans:
     def test_aggressive_deploys_more_capital(self):
         t = TraderAgent(capital=200000)
         plans = t.generate_all_plans(
-            "INFY", verdict="BUY", confidence=75,
-            ltp=1500, atr=30,
+            "INFY",
+            verdict="BUY",
+            confidence=75,
+            ltp=1500,
+            atr=30,
         )
         agg = plans["aggressive"]
         con = plans["conservative"]
@@ -153,6 +186,7 @@ class TestGenerateAllPlans:
 
 
 # ── _parse_synthesis_verdict ─────────────────────────────────
+
 
 class TestParseSynthesisVerdict:
     def test_buy_verdict(self):
@@ -179,6 +213,7 @@ class TestParseSynthesisVerdict:
 
 # ── Lot sizes ────────────────────────────────────────────────
 
+
 class TestLotSizes:
     def test_nifty_lot(self):
         assert LOT_SIZES["NIFTY"] == 75
@@ -193,11 +228,16 @@ class TestLotSizes:
 
 # ── Data classes ─────────────────────────────────────────────
 
+
 class TestDataClasses:
     def test_order_leg_creation(self):
         leg = OrderLeg(
-            action="BUY", instrument="RELIANCE", exchange="NSE",
-            product="CNC", order_type="MARKET", quantity=10,
+            action="BUY",
+            instrument="RELIANCE",
+            exchange="NSE",
+            product="CNC",
+            order_type="MARKET",
+            quantity=10,
         )
         assert leg.action == "BUY"
         assert leg.quantity == 10
@@ -205,27 +245,45 @@ class TestDataClasses:
 
     def test_exit_plan_creation(self):
         ep = ExitPlan(
-            stop_loss=2400, stop_loss_pct=-4.0, stop_loss_type="ATR_BASED",
-            target_1=2700, target_1_pct=8.0,
+            stop_loss=2400,
+            stop_loss_pct=-4.0,
+            stop_loss_type="ATR_BASED",
+            target_1=2700,
+            target_1_pct=8.0,
         )
         assert ep.stop_loss == 2400
         assert ep.target_2 is None
 
     def test_trade_plan_print_does_not_raise(self):
         plan = TradePlan(
-            symbol="TEST", exchange="NSE",
+            symbol="TEST",
+            exchange="NSE",
             timestamp="2026-01-01T00:00:00",
-            strategy_name="Test", direction="LONG",
-            instrument_type="EQUITY", timeframe="SWING",
-            capital_deployed=10000, capital_pct=5.0,
-            max_risk=2000, risk_pct=1.0, reward_risk=2.0,
-            entry_orders=[OrderLeg(
-                action="BUY", instrument="TEST", exchange="NSE",
-                product="CNC", order_type="MARKET", quantity=10,
-            )],
+            strategy_name="Test",
+            direction="LONG",
+            instrument_type="EQUITY",
+            timeframe="SWING",
+            capital_deployed=10000,
+            capital_pct=5.0,
+            max_risk=2000,
+            risk_pct=1.0,
+            reward_risk=2.0,
+            entry_orders=[
+                OrderLeg(
+                    action="BUY",
+                    instrument="TEST",
+                    exchange="NSE",
+                    product="CNC",
+                    order_type="MARKET",
+                    quantity=10,
+                )
+            ],
             exit_plan=ExitPlan(
-                stop_loss=95, stop_loss_pct=-5.0, stop_loss_type="FIXED",
-                target_1=110, target_1_pct=10.0,
+                stop_loss=95,
+                stop_loss_pct=-5.0,
+                stop_loss_type="FIXED",
+                target_1=110,
+                target_1_pct=10.0,
             ),
         )
         plan.print_plan()  # should not raise

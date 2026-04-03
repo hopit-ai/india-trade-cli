@@ -33,34 +33,37 @@ console = Console()
 @dataclass
 class AuditReport:
     """Post-mortem analysis of a single trade."""
-    trade_id:       str
-    symbol:         str
-    verdict:        str             # what we recommended
-    outcome:        str             # what actually happened
-    pnl:            Optional[float] = None
+
+    trade_id: str
+    symbol: str
+    verdict: str  # what we recommended
+    outcome: str  # what actually happened
+    pnl: Optional[float] = None
 
     # Analyst accuracy
     analyst_grades: list[dict] = field(default_factory=list)
     # [{analyst, score_at_time, was_correct, grade}]
-    most_accurate:  str = ""
-    most_wrong:     str = ""
+    most_accurate: str = ""
+    most_wrong: str = ""
 
     # What-if analysis
-    alt_verdict:    str = ""        # what verdict would have been with different weights
+    alt_verdict: str = ""  # what verdict would have been with different weights
     alt_would_help: bool = False
 
     # Execution analysis
-    entry_quality:  str = ""        # "GOOD" / "FAIR" / "POOR" (vs optimal)
-    sl_assessment:  str = ""        # "TOO_TIGHT" / "ADEQUATE" / "TOO_WIDE"
-    hold_assessment: str = ""       # "TOO_SHORT" / "ADEQUATE" / "TOO_LONG"
+    entry_quality: str = ""  # "GOOD" / "FAIR" / "POOR" (vs optimal)
+    sl_assessment: str = ""  # "TOO_TIGHT" / "ADEQUATE" / "TOO_WIDE"
+    hold_assessment: str = ""  # "TOO_SHORT" / "ADEQUATE" / "TOO_LONG"
 
     # Lessons
-    lessons:        list[str] = field(default_factory=list)
+    lessons: list[str] = field(default_factory=list)
 
     def print_report(self) -> None:
         if not self.outcome:
-            console.print(f"[dim]Trade {self.trade_id} has no outcome recorded. "
-                          f"Use: memory outcome {self.trade_id} WIN|LOSS [pnl][/dim]")
+            console.print(
+                f"[dim]Trade {self.trade_id} has no outcome recorded. "
+                f"Use: memory outcome {self.trade_id} WIN|LOSS [pnl][/dim]"
+            )
             return
 
         pnl_style = "green" if (self.pnl or 0) >= 0 else "red"
@@ -75,9 +78,9 @@ class AuditReport:
         if self.pnl is not None:
             lines.append(f"  P&L       : [{pnl_style}]{self.pnl:+,.0f}[/{pnl_style}]")
 
-        console.print(Panel("\n".join(lines),
-                            title="[bold cyan]Trade Audit[/bold cyan]",
-                            border_style="cyan"))
+        console.print(
+            Panel("\n".join(lines), title="[bold cyan]Trade Audit[/bold cyan]", border_style="cyan")
+        )
 
         # Analyst grades
         if self.analyst_grades:
@@ -90,7 +93,13 @@ class AuditReport:
 
             for ag in self.analyst_grades:
                 correct_style = "green" if ag.get("was_correct") else "red"
-                direction = "BULLISH" if ag.get("score_at_time", 0) > 0 else "BEARISH" if ag.get("score_at_time", 0) < 0 else "NEUTRAL"
+                direction = (
+                    "BULLISH"
+                    if ag.get("score_at_time", 0) > 0
+                    else "BEARISH"
+                    if ag.get("score_at_time", 0) < 0
+                    else "NEUTRAL"
+                )
                 table.add_row(
                     ag.get("analyst", ""),
                     f"{ag.get('score_at_time', 0):+.0f}",
@@ -119,7 +128,11 @@ class AuditReport:
         if self.alt_verdict:
             console.print("\n[bold]What-If:[/bold]")
             console.print(f"  With equal weights: {self.alt_verdict}")
-            help_str = "[green]YES — would have helped[/green]" if self.alt_would_help else "[dim]NO — same outcome[/dim]"
+            help_str = (
+                "[green]YES — would have helped[/green]"
+                if self.alt_would_help
+                else "[dim]NO — same outcome[/dim]"
+            )
             console.print(f"  Would it help?    : {help_str}")
 
         # Lessons
@@ -140,8 +153,13 @@ def audit_trade(trade_id: str) -> AuditReport:
 
     record = trade_memory.get_by_id(trade_id)
     if not record:
-        return AuditReport(trade_id=trade_id, symbol="?", verdict="?", outcome="",
-                           lessons=[f"Trade ID '{trade_id}' not found in memory"])
+        return AuditReport(
+            trade_id=trade_id,
+            symbol="?",
+            verdict="?",
+            outcome="",
+            lessons=[f"Trade ID '{trade_id}' not found in memory"],
+        )
 
     report = AuditReport(
         trade_id=trade_id,
@@ -184,12 +202,14 @@ def audit_trade(trade_id: str) -> AuditReport:
             else:
                 grade = "D"
 
-            report.analyst_grades.append({
-                "analyst": analyst,
-                "score_at_time": score,
-                "was_correct": was_correct,
-                "grade": grade,
-            })
+            report.analyst_grades.append(
+                {
+                    "analyst": analyst,
+                    "score_at_time": score,
+                    "was_correct": was_correct,
+                    "grade": grade,
+                }
+            )
 
         # Find best/worst
         correct_analysts = [a for a in report.analyst_grades if a["was_correct"]]
@@ -214,9 +234,9 @@ def audit_trade(trade_id: str) -> AuditReport:
 
         # Would equal weights have helped?
         if is_win:
-            report.alt_would_help = (report.alt_verdict == record.verdict)
+            report.alt_would_help = report.alt_verdict == record.verdict
         else:
-            report.alt_would_help = (report.alt_verdict != record.verdict)
+            report.alt_would_help = report.alt_verdict != record.verdict
 
     # Hold time assessment
     if record.hold_days is not None:
@@ -231,7 +251,11 @@ def audit_trade(trade_id: str) -> AuditReport:
     if not is_win:
         if report.most_wrong:
             wrong_score = next(
-                (a["score_at_time"] for a in report.analyst_grades if a["analyst"] == report.most_wrong),
+                (
+                    a["score_at_time"]
+                    for a in report.analyst_grades
+                    if a["analyst"] == report.most_wrong
+                ),
                 0,
             )
             report.lessons.append(
@@ -264,6 +288,7 @@ def audit_all() -> list[AuditReport]:
     """Audit all trades with outcomes."""
     try:
         from engine.memory import trade_memory
+
         records = [r for r in trade_memory._records if r.outcome]
         return [audit_trade(r.id) for r in records]
     except Exception:

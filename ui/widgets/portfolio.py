@@ -8,9 +8,9 @@ Shows a Broker column automatically when multiple brokers are connected.
 
 from __future__ import annotations
 
-from textual.app     import ComposeResult
+from textual.app import ComposeResult
 from textual.widgets import DataTable, Static, Label
-from rich.text       import Text
+from rich.text import Text
 
 
 class PortfolioWidget(Static):
@@ -62,7 +62,8 @@ class PortfolioWidget(Static):
         """Fetch fresh data from all connected brokers and redraw tables."""
         try:
             from engine.portfolio import get_multi_broker_summary
-            summ  = get_multi_broker_summary()
+
+            summ = get_multi_broker_summary()
             multi = summ.multi_broker
 
             # Re-setup columns if broker count changed
@@ -81,8 +82,8 @@ class PortfolioWidget(Static):
                 label.update("Portfolio")
 
         except Exception:
-            self.query_one("#holdings-table",  DataTable).clear()
-            self.query_one("#positions-table",  DataTable).clear()
+            self.query_one("#holdings-table", DataTable).clear()
+            self.query_one("#positions-table", DataTable).clear()
 
     def _render_holdings(self, holdings, multi: bool = False) -> None:
         t = self.query_one("#holdings-table", DataTable)

@@ -24,12 +24,20 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime
-from pathlib  import Path
-from typing   import Optional
+from pathlib import Path
+from typing import Optional
 
 from brokers.base import (
-    BrokerAPI, UserProfile, Funds, Holding, Position,
-    Quote, OptionsContract, OrderRequest, OrderResponse, Order,
+    BrokerAPI,
+    UserProfile,
+    Funds,
+    Holding,
+    Position,
+    Quote,
+    OptionsContract,
+    OrderRequest,
+    OrderResponse,
+    Order,
 )
 
 
@@ -50,19 +58,19 @@ class AngelOneAPI(BrokerAPI):
 
     def __init__(
         self,
-        api_key:     str,
+        api_key: str,
         client_code: str,
-        password:    str,
+        password: str,
         totp_secret: str = "",
     ) -> None:
-        self._api_key     = api_key
+        self._api_key = api_key
         self._client_code = client_code
-        self._password    = password
+        self._password = password
         self._totp_secret = totp_secret
-        self._obj         = None    # SmartConnect instance
-        self._auth_token:    str = ""
+        self._obj = None  # SmartConnect instance
+        self._auth_token: str = ""
         self._refresh_token: str = ""
-        self._feed_token:    str = ""
+        self._feed_token: str = ""
         self._profile_cache: Optional[UserProfile] = None
 
         # Try to restore a saved session
@@ -73,6 +81,7 @@ class AngelOneAPI(BrokerAPI):
     def _generate_totp(self) -> str:
         try:
             import pyotp
+
             return pyotp.TOTP(self._totp_secret).now()
         except ImportError:
             raise RuntimeError("pyotp not installed. Run: pip install pyotp")
@@ -81,9 +90,7 @@ class AngelOneAPI(BrokerAPI):
         try:
             from SmartApi import SmartConnect
         except ImportError:
-            raise RuntimeError(
-                "smartapi-python not installed. Run: pip install smartapi-python"
-            )
+            raise RuntimeError("smartapi-python not installed. Run: pip install smartapi-python")
         return SmartConnect(api_key=self._api_key)
 
     def get_login_url(self) -> str:
@@ -95,7 +102,7 @@ class AngelOneAPI(BrokerAPI):
         Auto-login using client code + password + TOTP.
         No browser interaction needed.
         """
-        obj  = self._smart_connect()
+        obj = self._smart_connect()
         totp = self._generate_totp()
 
         data = obj.generateSession(self._client_code, self._password, totp)
@@ -118,23 +125,23 @@ class AngelOneAPI(BrokerAPI):
             raise RuntimeError(f"Angel One login failed: {msg}{hint}")
 
         d = data.get("data", {})
-        self._auth_token    = d.get("jwtToken", "")
+        self._auth_token = d.get("jwtToken", "")
         self._refresh_token = d.get("refreshToken", "")
-        self._feed_token    = obj.getfeedToken() or ""
-        self._obj           = obj
+        self._feed_token = obj.getfeedToken() or ""
+        self._obj = obj
 
         # Fetch profile
         profile_data = obj.getProfile(self._refresh_token)
         pd = profile_data.get("data", {}) if profile_data else {}
 
-        name  = pd.get("name", self._client_code)
+        name = pd.get("name", self._client_code)
         email = pd.get("email", "")
 
         self._profile_cache = UserProfile(
-            user_id = self._client_code,
-            name    = name,
-            email   = email,
-            broker  = "ANGEL_ONE",
+            user_id=self._client_code,
+            name=name,
+            email=email,
+            broker="ANGEL_ONE",
         )
 
         # Save token
@@ -143,15 +150,20 @@ class AngelOneAPI(BrokerAPI):
 
     def _save_token(self) -> None:
         TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        TOKEN_FILE.write_text(json.dumps({
-            "auth_token":    self._auth_token,
-            "refresh_token": self._refresh_token,
-            "feed_token":    self._feed_token,
-            "client_code":   self._client_code,
-            "saved_at":      time.time(),
-            "name":          self._profile_cache.name  if self._profile_cache else "",
-            "email":         self._profile_cache.email if self._profile_cache else "",
-        }, indent=2))
+        TOKEN_FILE.write_text(
+            json.dumps(
+                {
+                    "auth_token": self._auth_token,
+                    "refresh_token": self._refresh_token,
+                    "feed_token": self._feed_token,
+                    "client_code": self._client_code,
+                    "saved_at": time.time(),
+                    "name": self._profile_cache.name if self._profile_cache else "",
+                    "email": self._profile_cache.email if self._profile_cache else "",
+                },
+                indent=2,
+            )
+        )
 
     def _load_token(self) -> None:
         if not TOKEN_FILE.exists():
@@ -161,9 +173,9 @@ class AngelOneAPI(BrokerAPI):
             # Angel One JWT tokens expire daily — consider stale after 20 hours
             if time.time() - d.get("saved_at", 0) > 20 * 3600:
                 return
-            self._auth_token    = d.get("auth_token", "")
+            self._auth_token = d.get("auth_token", "")
             self._refresh_token = d.get("refresh_token", "")
-            self._feed_token    = d.get("feed_token", "")
+            self._feed_token = d.get("feed_token", "")
             if self._auth_token:
                 obj = self._smart_connect()
                 # Re-attach the saved token to the SDK object
@@ -173,10 +185,10 @@ class AngelOneAPI(BrokerAPI):
                     pass
                 self._obj = obj
                 self._profile_cache = UserProfile(
-                    user_id = d.get("client_code", self._client_code),
-                    name    = d.get("name", self._client_code),
-                    email   = d.get("email", ""),
-                    broker  = "ANGEL_ONE",
+                    user_id=d.get("client_code", self._client_code),
+                    name=d.get("name", self._client_code),
+                    email=d.get("email", ""),
+                    broker="ANGEL_ONE",
                 )
         except Exception:
             pass
@@ -191,7 +203,7 @@ class AngelOneAPI(BrokerAPI):
         except Exception:
             pass
         self._auth_token = ""
-        self._obj        = None
+        self._obj = None
         if TOKEN_FILE.exists():
             TOKEN_FILE.unlink()
 
@@ -203,12 +215,12 @@ class AngelOneAPI(BrokerAPI):
         if not self._obj:
             raise RuntimeError("Not authenticated. Run the 'login' command first.")
         data = self._obj.getProfile(self._refresh_token)
-        pd   = data.get("data", {}) if data else {}
+        pd = data.get("data", {}) if data else {}
         self._profile_cache = UserProfile(
-            user_id = self._client_code,
-            name    = pd.get("name", self._client_code),
-            email   = pd.get("email", ""),
-            broker  = "ANGEL_ONE",
+            user_id=self._client_code,
+            name=pd.get("name", self._client_code),
+            email=pd.get("email", ""),
+            broker="ANGEL_ONE",
         )
         return self._profile_cache
 
@@ -216,16 +228,19 @@ class AngelOneAPI(BrokerAPI):
         if not self._obj:
             raise RuntimeError("Not authenticated. Run the 'login' command first.")
         data = self._obj.rmsLimit()
-        d    = data.get("data", {}) if data else {}
+        d = data.get("data", {}) if data else {}
+
         # Angel One returns strings — convert carefully
-        def _f(key): return float(d.get(key) or 0)
-        net       = _f("net")
-        used      = _f("utilisedAmount")
+        def _f(key):
+            return float(d.get(key) or 0)
+
+        net = _f("net")
+        used = _f("utilisedAmount")
         available = net - used if net > 0 else _f("availablecash")
         return Funds(
-            available_cash = round(available, 2),
-            used_margin    = round(used, 2),
-            total_balance  = round(net or available + used, 2),
+            available_cash=round(available, 2),
+            used_margin=round(used, 2),
+            total_balance=round(net or available + used, 2),
         )
 
     # ── Portfolio ─────────────────────────────────────────────
@@ -233,27 +248,29 @@ class AngelOneAPI(BrokerAPI):
     def get_holdings(self) -> list[Holding]:
         if not self._obj:
             raise RuntimeError("Not authenticated. Run the 'login' command first.")
-        data     = self._obj.holding()
+        data = self._obj.holding()
         holdings = data.get("data", []) if data else []
-        result   = []
-        for h in (holdings or []):
+        result = []
+        for h in holdings or []:
             try:
-                qty       = int(h.get("quantity", 0) or 0)
+                qty = int(h.get("quantity", 0) or 0)
                 avg_price = float(h.get("averageprice", 0) or 0)
-                ltp       = float(h.get("ltp", 0) or 0)
-                pnl       = round((ltp - avg_price) * qty, 2)
-                pnl_pct   = round((ltp - avg_price) / avg_price * 100, 2) if avg_price else 0.0
-                result.append(Holding(
-                    symbol        = h.get("tradingsymbol", ""),
-                    exchange      = h.get("exchange", "NSE"),
-                    quantity      = qty,
-                    avg_price     = avg_price,
-                    last_price    = ltp,
-                    pnl           = pnl,
-                    pnl_pct       = pnl_pct,
-                    day_change    = float(h.get("close", 0) or 0) - ltp,
-                    day_change_pct= 0.0,
-                ))
+                ltp = float(h.get("ltp", 0) or 0)
+                pnl = round((ltp - avg_price) * qty, 2)
+                pnl_pct = round((ltp - avg_price) / avg_price * 100, 2) if avg_price else 0.0
+                result.append(
+                    Holding(
+                        symbol=h.get("tradingsymbol", ""),
+                        exchange=h.get("exchange", "NSE"),
+                        quantity=qty,
+                        avg_price=avg_price,
+                        last_price=ltp,
+                        pnl=pnl,
+                        pnl_pct=pnl_pct,
+                        day_change=float(h.get("close", 0) or 0) - ltp,
+                        day_change_pct=0.0,
+                    )
+                )
             except Exception:
                 continue
         return result
@@ -261,28 +278,30 @@ class AngelOneAPI(BrokerAPI):
     def get_positions(self) -> list[Position]:
         if not self._obj:
             raise RuntimeError("Not authenticated. Run the 'login' command first.")
-        data      = self._obj.position()
+        data = self._obj.position()
         positions = data.get("data", []) if data else []
-        result    = []
-        for p in (positions or []):
+        result = []
+        for p in positions or []:
             try:
-                qty       = int(p.get("netqty", 0) or 0)
+                qty = int(p.get("netqty", 0) or 0)
                 avg_price = float(p.get("netavgprice", 0) or 0)
-                ltp       = float(p.get("ltp", 0) or 0)
-                pnl       = float(p.get("unrealised", 0) or 0)
-                result.append(Position(
-                    symbol          = p.get("tradingsymbol", ""),
-                    exchange        = p.get("exchange", "NSE"),
-                    product         = _map_product(p.get("producttype", "MIS")),
-                    quantity        = qty,
-                    avg_price       = avg_price,
-                    last_price      = ltp,
-                    pnl             = pnl,
-                    instrument_type = p.get("instrumenttype", "EQ"),
-                    expiry          = p.get("expirydate") or None,
-                    strike          = float(p.get("strikeprice", 0) or 0) or None,
-                    lot_size        = int(p.get("lotsize", 1) or 1),
-                ))
+                ltp = float(p.get("ltp", 0) or 0)
+                pnl = float(p.get("unrealised", 0) or 0)
+                result.append(
+                    Position(
+                        symbol=p.get("tradingsymbol", ""),
+                        exchange=p.get("exchange", "NSE"),
+                        product=_map_product(p.get("producttype", "MIS")),
+                        quantity=qty,
+                        avg_price=avg_price,
+                        last_price=ltp,
+                        pnl=pnl,
+                        instrument_type=p.get("instrumenttype", "EQ"),
+                        expiry=p.get("expirydate") or None,
+                        strike=float(p.get("strikeprice", 0) or 0) or None,
+                        lot_size=int(p.get("lotsize", 1) or 1),
+                    )
+                )
             except Exception:
                 continue
         return result
@@ -311,17 +330,17 @@ class AngelOneAPI(BrokerAPI):
             try:
                 # Angel One LTP API
                 data = self._obj.ltpData(exch, syms[0], "")
-                d    = data.get("data", {}) if data else {}
-                ltp  = float(d.get("ltp", 0) or 0)
-                key  = f"{exch}:{syms[0]}"
+                d = data.get("data", {}) if data else {}
+                ltp = float(d.get("ltp", 0) or 0)
+                key = f"{exch}:{syms[0]}"
                 result[key] = Quote(
-                    symbol     = syms[0],
-                    last_price = ltp,
-                    open       = float(d.get("open", ltp) or ltp),
-                    high       = float(d.get("high", ltp) or ltp),
-                    low        = float(d.get("low",  ltp) or ltp),
-                    close      = float(d.get("close", ltp) or ltp),
-                    volume     = int(d.get("tradedVolume", 0) or 0),
+                    symbol=syms[0],
+                    last_price=ltp,
+                    open=float(d.get("open", ltp) or ltp),
+                    high=float(d.get("high", ltp) or ltp),
+                    low=float(d.get("low", ltp) or ltp),
+                    close=float(d.get("close", ltp) or ltp),
+                    volume=int(d.get("tradedVolume", 0) or 0),
                 )
             except Exception:
                 pass
@@ -342,6 +361,7 @@ class AngelOneAPI(BrokerAPI):
         # delegate to the NSE public endpoint (already implemented in market/options.py)
         try:
             import httpx
+
             url = f"https://www.nseindia.com/api/option-chain-equities?symbol={underlying}"
             headers = {
                 "User-Agent": "Mozilla/5.0",
@@ -362,22 +382,24 @@ class AngelOneAPI(BrokerAPI):
                     if opt_type not in row:
                         continue
                     c = row[opt_type]
-                    contracts.append(OptionsContract(
-                        symbol      = f"{underlying}{expiry_target.replace('-','')}{opt_type}",
-                        underlying  = underlying,
-                        expiry      = expiry_target,
-                        strike      = float(row.get("strikePrice", 0)),
-                        option_type = opt_type,
-                        last_price  = float(c.get("lastPrice", 0)),
-                        oi          = int(c.get("openInterest", 0)),
-                        oi_change   = int(c.get("changeinOpenInterest", 0)),
-                        volume      = int(c.get("totalTradedVolume", 0)),
-                        iv          = float(c.get("impliedVolatility", 0)) or None,
-                        bid         = float(c.get("bidprice", 0)) or None,
-                        ask         = float(c.get("askPrice", 0)) or None,
-                        lot_size    = int(c.get("lotSize", 50) or 50),
-                        exchange    = "NFO",
-                    ))
+                    contracts.append(
+                        OptionsContract(
+                            symbol=f"{underlying}{expiry_target.replace('-', '')}{opt_type}",
+                            underlying=underlying,
+                            expiry=expiry_target,
+                            strike=float(row.get("strikePrice", 0)),
+                            option_type=opt_type,
+                            last_price=float(c.get("lastPrice", 0)),
+                            oi=int(c.get("openInterest", 0)),
+                            oi_change=int(c.get("changeinOpenInterest", 0)),
+                            volume=int(c.get("totalTradedVolume", 0)),
+                            iv=float(c.get("impliedVolatility", 0)) or None,
+                            bid=float(c.get("bidprice", 0)) or None,
+                            ask=float(c.get("askPrice", 0)) or None,
+                            lot_size=int(c.get("lotSize", 50) or 50),
+                            exchange="NFO",
+                        )
+                    )
             return contracts
         except Exception:
             return []
@@ -388,18 +410,18 @@ class AngelOneAPI(BrokerAPI):
         if not self._obj:
             raise RuntimeError("Not authenticated. Run the 'login' command first.")
         params = {
-            "variety":         "NORMAL",
-            "tradingsymbol":   order.symbol,
-            "symboltoken":     "",        # Angel One needs token; looked up separately
+            "variety": "NORMAL",
+            "tradingsymbol": order.symbol,
+            "symboltoken": "",  # Angel One needs token; looked up separately
             "transactiontype": order.transaction_type,
-            "exchange":        order.exchange,
-            "ordertype":       _map_order_type(order.order_type),
-            "producttype":     _map_product_reverse(order.product),
-            "duration":        order.validity,
-            "price":           str(order.price or "0"),
-            "squareoff":       "0",
-            "stoploss":        str(order.trigger_price or "0"),
-            "quantity":        str(order.quantity),
+            "exchange": order.exchange,
+            "ordertype": _map_order_type(order.order_type),
+            "producttype": _map_product_reverse(order.product),
+            "duration": order.validity,
+            "price": str(order.price or "0"),
+            "squareoff": "0",
+            "stoploss": str(order.trigger_price or "0"),
+            "quantity": str(order.quantity),
         }
         data = self._obj.placeOrder(params)
         if not data or data.get("status") is False:
@@ -410,34 +432,36 @@ class AngelOneAPI(BrokerAPI):
                 "Run 'funds' to check available margin, or 'positions' to review open positions."
             )
         return OrderResponse(
-            order_id = data.get("data", {}).get("orderid", ""),
-            status   = "OPEN",
-            message  = data.get("message", ""),
+            order_id=data.get("data", {}).get("orderid", ""),
+            status="OPEN",
+            message=data.get("message", ""),
         )
 
     def get_orders(self) -> list[Order]:
         if not self._obj:
             raise RuntimeError("Not authenticated. Run the 'login' command first.")
-        data   = self._obj.orderBook()
+        data = self._obj.orderBook()
         orders = data.get("data", []) if data else []
         result = []
-        for o in (orders or []):
+        for o in orders or []:
             try:
-                result.append(Order(
-                    order_id         = o.get("orderid", ""),
-                    symbol           = o.get("tradingsymbol", ""),
-                    exchange         = o.get("exchange", "NSE"),
-                    transaction_type = o.get("transactiontype", ""),
-                    quantity         = int(o.get("quantity", 0) or 0),
-                    order_type       = o.get("ordertype", ""),
-                    product          = _map_product(o.get("producttype", "")),
-                    status           = _map_status(o.get("status", "")),
-                    price            = float(o.get("price", 0) or 0) or None,
-                    average_price    = float(o.get("averageprice", 0) or 0) or None,
-                    filled_quantity  = int(o.get("filledshares", 0) or 0),
-                    placed_at        = o.get("ordercreatetime"),
-                    tag              = o.get("ordertag"),
-                ))
+                result.append(
+                    Order(
+                        order_id=o.get("orderid", ""),
+                        symbol=o.get("tradingsymbol", ""),
+                        exchange=o.get("exchange", "NSE"),
+                        transaction_type=o.get("transactiontype", ""),
+                        quantity=int(o.get("quantity", 0) or 0),
+                        order_type=o.get("ordertype", ""),
+                        product=_map_product(o.get("producttype", "")),
+                        status=_map_status(o.get("status", "")),
+                        price=float(o.get("price", 0) or 0) or None,
+                        average_price=float(o.get("averageprice", 0) or 0) or None,
+                        filled_quantity=int(o.get("filledshares", 0) or 0),
+                        placed_at=o.get("ordercreatetime"),
+                        tag=o.get("ordertag"),
+                    )
+                )
             except Exception:
                 continue
         return result
@@ -452,25 +476,25 @@ class AngelOneAPI(BrokerAPI):
 
     def get_historical_data(
         self,
-        symbol:    str,
-        exchange:  str = "NSE",
-        interval:  str = "day",
+        symbol: str,
+        exchange: str = "NSE",
+        interval: str = "day",
         from_date: Optional[datetime] = None,
-        to_date:   Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
     ) -> list[dict]:
         if not self._obj:
             raise RuntimeError("Not authenticated. Run the 'login' command first.")
 
         interval_map = {
-            "day":      "ONE_DAY",
-            "minute":   "ONE_MINUTE",
-            "5minute":  "FIVE_MINUTE",
+            "day": "ONE_DAY",
+            "minute": "ONE_MINUTE",
+            "5minute": "FIVE_MINUTE",
             "15minute": "FIFTEEN_MINUTE",
             "30minute": "THIRTY_MINUTE",
             "60minute": "ONE_HOUR",
         }
         angel_interval = interval_map.get(interval, "ONE_DAY")
-        to_date   = to_date   or datetime.now()
+        to_date = to_date or datetime.now()
         from_date = from_date or datetime(to_date.year - 1, to_date.month, to_date.day)
 
         try:
@@ -482,11 +506,11 @@ class AngelOneAPI(BrokerAPI):
             symbol_token = scrip_list[0].get("symboltoken", "")
 
             params = {
-                "exchange":    exchange,
+                "exchange": exchange,
                 "symboltoken": symbol_token,
-                "interval":    angel_interval,
-                "fromdate":    from_date.strftime("%Y-%m-%d %H:%M"),
-                "todate":      to_date.strftime("%Y-%m-%d %H:%M"),
+                "interval": angel_interval,
+                "fromdate": from_date.strftime("%Y-%m-%d %H:%M"),
+                "todate": to_date.strftime("%Y-%m-%d %H:%M"),
             }
             data = self._obj.getCandleData(params)
             candles = data.get("data", []) if data else []
@@ -494,11 +518,11 @@ class AngelOneAPI(BrokerAPI):
             # Each candle: [timestamp, open, high, low, close, volume]
             return [
                 {
-                    "date":   candle[0],
-                    "open":   candle[1],
-                    "high":   candle[2],
-                    "low":    candle[3],
-                    "close":  candle[4],
+                    "date": candle[0],
+                    "open": candle[1],
+                    "high": candle[2],
+                    "low": candle[3],
+                    "close": candle[4],
                     "volume": candle[5],
                 }
                 for candle in candles
@@ -512,6 +536,7 @@ class AngelOneAPI(BrokerAPI):
 
 # ── Field mapping helpers ─────────────────────────────────────
 
+
 def _map_product(angel_type: str) -> str:
     return {
         "DELIVERY": "CNC",
@@ -523,26 +548,26 @@ def _map_product(angel_type: str) -> str:
 
 def _map_product_reverse(product: str) -> str:
     return {
-        "CNC":  "DELIVERY",
+        "CNC": "DELIVERY",
         "NRML": "CARRYFORWARD",
-        "MIS":  "INTRADAY",
+        "MIS": "INTRADAY",
     }.get(product.upper(), "INTRADAY")
 
 
 def _map_order_type(order_type: str) -> str:
     return {
         "MARKET": "MARKET",
-        "LIMIT":  "LIMIT",
-        "SL":     "STOPLOSS_LIMIT",
-        "SL-M":   "STOPLOSS_MARKET",
+        "LIMIT": "LIMIT",
+        "SL": "STOPLOSS_LIMIT",
+        "SL-M": "STOPLOSS_MARKET",
     }.get(order_type.upper(), "MARKET")
 
 
 def _map_status(status: str) -> str:
     return {
-        "complete":  "COMPLETE",
-        "rejected":  "REJECTED",
+        "complete": "COMPLETE",
+        "rejected": "REJECTED",
         "cancelled": "CANCELLED",
-        "open":      "OPEN",
-        "pending":   "OPEN",
+        "open": "OPEN",
+        "pending": "OPEN",
     }.get((status or "").lower(), status.upper())

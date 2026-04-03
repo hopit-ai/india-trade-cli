@@ -44,18 +44,19 @@ console = Console()
 @dataclass
 class EarningsEntry:
     """A single stock's earnings event."""
-    symbol:        str
-    company_name:  str = ""
-    result_date:   str = ""       # YYYY-MM-DD or "TBD"
-    quarter:       str = ""       # "Q3FY26", "Q4FY26"
-    status:        str = "UPCOMING"  # UPCOMING / REPORTED / MISSED
+
+    symbol: str
+    company_name: str = ""
+    result_date: str = ""  # YYYY-MM-DD or "TBD"
+    quarter: str = ""  # "Q3FY26", "Q4FY26"
+    status: str = "UPCOMING"  # UPCOMING / REPORTED / MISSED
     # Pre-earnings data
-    iv_rank:       Optional[float] = None
+    iv_rank: Optional[float] = None
     iv_percentile: Optional[float] = None
-    avg_move:      Optional[float] = None   # historical avg post-earnings move %
+    avg_move: Optional[float] = None  # historical avg post-earnings move %
     # Post-earnings data (filled after results)
-    surprise:      Optional[str] = None     # "BEAT" / "MISS" / "INLINE"
-    actual_move:   Optional[float] = None   # actual % move on result day
+    surprise: Optional[str] = None  # "BEAT" / "MISS" / "INLINE"
+    actual_move: Optional[float] = None  # actual % move on result day
 
 
 # ── NIFTY 50 Earnings Calendar ───────────────────────────────
@@ -64,40 +65,50 @@ class EarningsEntry:
 
 _NIFTY50_EARNINGS_MONTHS = {
     # Company: [typical result months (1-indexed)]
-    "RELIANCE":   [1, 4, 7, 10],
-    "TCS":        [1, 4, 7, 10],  # TCS is usually first to report
-    "HDFCBANK":   [1, 4, 7, 10],
-    "INFY":       [1, 4, 7, 10],  # Infosys reports early (mid-month)
-    "ICICIBANK":  [1, 4, 7, 10],
-    "SBIN":       [2, 5, 8, 11],  # PSU banks report slightly later
+    "RELIANCE": [1, 4, 7, 10],
+    "TCS": [1, 4, 7, 10],  # TCS is usually first to report
+    "HDFCBANK": [1, 4, 7, 10],
+    "INFY": [1, 4, 7, 10],  # Infosys reports early (mid-month)
+    "ICICIBANK": [1, 4, 7, 10],
+    "SBIN": [2, 5, 8, 11],  # PSU banks report slightly later
     "BHARTIARTL": [1, 4, 7, 10],
-    "ITC":        [1, 4, 7, 10],
-    "KOTAKBANK":  [1, 4, 7, 10],
-    "LT":         [1, 4, 7, 10],
-    "AXISBANK":   [1, 4, 7, 10],
+    "ITC": [1, 4, 7, 10],
+    "KOTAKBANK": [1, 4, 7, 10],
+    "LT": [1, 4, 7, 10],
+    "AXISBANK": [1, 4, 7, 10],
     "TATAMOTORS": [2, 5, 8, 11],
-    "MARUTI":     [1, 4, 7, 10],
-    "SUNPHARMA":  [2, 5, 8, 11],
+    "MARUTI": [1, 4, 7, 10],
+    "SUNPHARMA": [2, 5, 8, 11],
     "BAJFINANCE": [1, 4, 7, 10],
-    "TITAN":      [2, 5, 8, 11],
-    "WIPRO":      [1, 4, 7, 10],
+    "TITAN": [2, 5, 8, 11],
+    "WIPRO": [1, 4, 7, 10],
     "ASIANPAINT": [1, 4, 7, 10],
     "ULTRACEMCO": [1, 4, 7, 10],
-    "TATASTEEL":  [2, 5, 8, 11],
+    "TATASTEEL": [2, 5, 8, 11],
     "HINDUNILVR": [1, 4, 7, 10],
-    "M&M":        [2, 5, 8, 11],
-    "DRREDDY":    [2, 5, 8, 11],
-    "ADANIENT":   [2, 5, 8, 11],
-    "NTPC":       [2, 5, 8, 11],
-    "POWERGRID":  [2, 5, 8, 11],
+    "M&M": [2, 5, 8, 11],
+    "DRREDDY": [2, 5, 8, 11],
+    "ADANIENT": [2, 5, 8, 11],
+    "NTPC": [2, 5, 8, 11],
+    "POWERGRID": [2, 5, 8, 11],
 }
 
 # Historical average post-earnings move (absolute %) for major stocks
 _AVG_EARNINGS_MOVE = {
-    "TCS": 3.5, "INFY": 4.2, "RELIANCE": 2.8, "HDFCBANK": 2.5,
-    "ICICIBANK": 3.0, "SBIN": 4.0, "BHARTIARTL": 3.5, "ITC": 2.0,
-    "TATAMOTORS": 5.0, "BAJFINANCE": 4.5, "WIPRO": 3.8,
-    "MARUTI": 3.0, "TITAN": 3.5, "SUNPHARMA": 3.2,
+    "TCS": 3.5,
+    "INFY": 4.2,
+    "RELIANCE": 2.8,
+    "HDFCBANK": 2.5,
+    "ICICIBANK": 3.0,
+    "SBIN": 4.0,
+    "BHARTIARTL": 3.5,
+    "ITC": 2.0,
+    "TATAMOTORS": 5.0,
+    "BAJFINANCE": 4.5,
+    "WIPRO": 3.8,
+    "MARUTI": 3.0,
+    "TITAN": 3.5,
+    "SUNPHARMA": 3.2,
 }
 
 
@@ -132,8 +143,7 @@ def is_earnings_season() -> bool:
     day = today.day
     # Earnings season: roughly 10th of Jan/Apr/Jul/Oct to end of following month
     return month in (1, 2, 4, 5, 7, 8, 10, 11) and (
-        (month in (1, 4, 7, 10) and day >= 10) or
-        (month in (2, 5, 8, 11) and day <= 15)
+        (month in (1, 4, 7, 10) and day >= 10) or (month in (2, 5, 8, 11) and day <= 15)
     )
 
 
@@ -158,10 +168,7 @@ def get_earnings_calendar(
         months = _NIFTY50_EARNINGS_MONTHS.get(sym, [])
 
         # Check if this stock reports in the current or next month
-        is_upcoming = any(
-            abs(today.month - m) <= 1 or abs(today.month - m) == 11
-            for m in months
-        )
+        is_upcoming = any(abs(today.month - m) <= 1 or abs(today.month - m) == 11 for m in months)
 
         if is_upcoming or symbols:  # always include if specifically requested
             entry = EarningsEntry(
@@ -197,6 +204,7 @@ def get_pre_earnings_iv(symbol: str) -> dict:
 
     try:
         from agent.tools import build_registry
+
         reg = build_registry()
         iv_result = reg.execute("get_iv_rank", {"symbol": symbol})
         iv_rank = iv_result.get("iv_rank", 50) if isinstance(iv_result, dict) else 50
@@ -228,6 +236,7 @@ def _fetch_earnings_date_nse(symbol: str) -> Optional[str]:
     """Try to get the actual earnings date from NSE corporate filings."""
     try:
         import httpx
+
         url = "https://www.nseindia.com/api/corporate-board-meetings"
         headers = {
             "User-Agent": "Mozilla/5.0",
@@ -271,12 +280,17 @@ def predict_earnings_surprise(symbol: str) -> dict:
     # 1. Pre-earnings technical momentum
     try:
         from analysis.technical import analyse as tech_analyse
+
         snap = tech_analyse(symbol)
         if snap.score > 30:
-            signals.append(f"Strong technical momentum (score: {snap.score:+d}) — stocks rallying into earnings often beat")
+            signals.append(
+                f"Strong technical momentum (score: {snap.score:+d}) — stocks rallying into earnings often beat"
+            )
             bullish_count += 1
         elif snap.score < -30:
-            signals.append(f"Weak technical setup (score: {snap.score:+d}) — bearish momentum pre-earnings")
+            signals.append(
+                f"Weak technical setup (score: {snap.score:+d}) — bearish momentum pre-earnings"
+            )
             bearish_count += 1
         else:
             signals.append(f"Neutral technicals (score: {snap.score:+d})")
@@ -284,7 +298,9 @@ def predict_earnings_surprise(symbol: str) -> dict:
         if snap.rsi > 65:
             signals.append(f"RSI {snap.rsi:.0f} — overbought, limited upside on beat")
         elif snap.rsi < 35:
-            signals.append(f"RSI {snap.rsi:.0f} — oversold, positive surprise could trigger sharp rally")
+            signals.append(
+                f"RSI {snap.rsi:.0f} — oversold, positive surprise could trigger sharp rally"
+            )
             bullish_count += 1
     except Exception:
         pass
@@ -301,9 +317,18 @@ def predict_earnings_surprise(symbol: str) -> dict:
 
     # 3. Historical beat/miss tendency
     _BEAT_TENDENCY = {
-        "TCS": 0.7, "INFY": 0.65, "RELIANCE": 0.6, "HDFCBANK": 0.65,
-        "ICICIBANK": 0.6, "BHARTIARTL": 0.55, "ITC": 0.7, "BAJFINANCE": 0.55,
-        "MARUTI": 0.5, "TATAMOTORS": 0.5, "WIPRO": 0.45, "SBIN": 0.5,
+        "TCS": 0.7,
+        "INFY": 0.65,
+        "RELIANCE": 0.6,
+        "HDFCBANK": 0.65,
+        "ICICIBANK": 0.6,
+        "BHARTIARTL": 0.55,
+        "ITC": 0.7,
+        "BAJFINANCE": 0.55,
+        "MARUTI": 0.5,
+        "TATAMOTORS": 0.5,
+        "WIPRO": 0.45,
+        "SBIN": 0.5,
     }
     beat_prob = _BEAT_TENDENCY.get(symbol, 0.5)
     if beat_prob > 0.6:

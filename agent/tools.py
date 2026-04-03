@@ -19,30 +19,31 @@ from typing import Any, Callable
 
 # ── Tool registry ─────────────────────────────────────────────
 
+
 class ToolRegistry:
     """Holds all tools with their schemas and Python implementations."""
 
     def __init__(self) -> None:
-        self._tools: dict[str, dict] = {}   # name → {fn, description, params}
+        self._tools: dict[str, dict] = {}  # name → {fn, description, params}
 
     def register(
         self,
-        name:        str,
+        name: str,
         description: str,
-        parameters:  dict,           # JSON Schema object for the params
-        fn:          Callable,
+        parameters: dict,  # JSON Schema object for the params
+        fn: Callable,
     ) -> None:
         self._tools[name] = {
-            "fn":          fn,
+            "fn": fn,
             "description": description,
-            "parameters":  parameters,
+            "parameters": parameters,
         }
 
     def anthropic_schema(self) -> list[dict]:
         return [
             {
-                "name":         name,
-                "description":  t["description"],
+                "name": name,
+                "description": t["description"],
                 "input_schema": t["parameters"],
             }
             for name, t in self._tools.items()
@@ -53,9 +54,9 @@ class ToolRegistry:
             {
                 "type": "function",
                 "function": {
-                    "name":        name,
+                    "name": name,
                     "description": t["description"],
-                    "parameters":  t["parameters"],
+                    "parameters": t["parameters"],
                 },
             }
             for name, t in self._tools.items()
@@ -78,6 +79,7 @@ class ToolRegistry:
 
 # ── Serialiser ────────────────────────────────────────────────
 
+
 def _serialise(obj: Any) -> Any:
     """Convert dataclasses, DataFrames, dates etc. to JSON-safe types."""
     import dataclasses
@@ -94,12 +96,13 @@ def _serialise(obj: Any) -> Any:
         return obj.reset_index().to_dict(orient="records")
     if isinstance(obj, (date, datetime)):
         return obj.isoformat()
-    if isinstance(obj, float) and (obj != obj):   # NaN
+    if isinstance(obj, float) and (obj != obj):  # NaN
         return None
     return obj
 
 
 # ── Tool builder ──────────────────────────────────────────────
+
 
 def build_registry() -> ToolRegistry:
     """Create and populate the tool registry with all platform functions."""
@@ -137,7 +140,7 @@ def build_registry() -> ToolRegistry:
     )
 
     # ── Market Data ───────────────────────────────────────────
-    from market.quotes  import get_quote
+    from market.quotes import get_quote
     from market.indices import get_market_snapshot, get_vix, get_sector_snapshot
     from market.options import get_options_chain, get_pcr, get_max_pain
 
@@ -218,7 +221,7 @@ def build_registry() -> ToolRegistry:
             "type": "object",
             "properties": {
                 "underlying": {"type": "string"},
-                "expiry":     {"type": "string", "description": "Optional expiry date YYYY-MM-DD"},
+                "expiry": {"type": "string", "description": "Optional expiry date YYYY-MM-DD"},
             },
             "required": ["underlying"],
         },
@@ -235,7 +238,7 @@ def build_registry() -> ToolRegistry:
             "type": "object",
             "properties": {
                 "underlying": {"type": "string"},
-                "expiry":     {"type": "string"},
+                "expiry": {"type": "string"},
             },
             "required": ["underlying"],
         },
@@ -243,10 +246,11 @@ def build_registry() -> ToolRegistry:
     )
 
     # ── Analysis ──────────────────────────────────────────────
-    from analysis.technical    import analyse as tech_analyse
-    from analysis.fundamental  import analyse as fund_analyse
-    from analysis.options      import (
-        compute_greeks, payoff as calc_payoff,
+    from analysis.technical import analyse as tech_analyse
+    from analysis.fundamental import analyse as fund_analyse
+    from analysis.options import (
+        compute_greeks,
+        payoff as calc_payoff,
         PayoffLeg,
     )
 
@@ -260,7 +264,7 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "symbol":   {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
                 "exchange": {"type": "string", "default": "NSE"},
             },
             "required": ["symbol"],
@@ -295,11 +299,11 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "spot":        {"type": "number", "description": "Current spot price"},
-                "strike":      {"type": "number"},
-                "expiry":      {"type": "string", "description": "YYYY-MM-DD"},
+                "spot": {"type": "number", "description": "Current spot price"},
+                "strike": {"type": "number"},
+                "expiry": {"type": "string", "description": "YYYY-MM-DD"},
                 "option_type": {"type": "string", "enum": ["CE", "PE"]},
-                "ltp":         {"type": "number", "description": "Last traded price of option"},
+                "ltp": {"type": "number", "description": "Last traded price of option"},
             },
             "required": ["spot", "strike", "expiry", "option_type", "ltp"],
         },
@@ -322,7 +326,9 @@ def build_registry() -> ToolRegistry:
             "required": ["symbol"],
         },
         fn=lambda symbol: {
-            "iv_rank": __import__("analysis.options", fromlist=["compute_iv_rank_from_history"]).compute_iv_rank_from_history(symbol),
+            "iv_rank": __import__(
+                "analysis.options", fromlist=["compute_iv_rank_from_history"]
+            ).compute_iv_rank_from_history(symbol),
             "method": "30-day rolling realized volatility ranked over 52 weeks",
         },
     )
@@ -345,10 +351,10 @@ def build_registry() -> ToolRegistry:
                         "properties": {
                             "option_type": {"type": "string", "enum": ["CE", "PE", "STOCK"]},
                             "transaction": {"type": "string", "enum": ["BUY", "SELL"]},
-                            "strike":      {"type": "number"},
-                            "premium":     {"type": "number"},
-                            "lot_size":    {"type": "integer"},
-                            "lots":        {"type": "integer", "default": 1},
+                            "strike": {"type": "number"},
+                            "premium": {"type": "number"},
+                            "lot_size": {"type": "integer"},
+                            "lots": {"type": "integer", "default": 1},
                         },
                         "required": ["option_type", "transaction", "strike", "premium", "lot_size"],
                     },
@@ -368,8 +374,8 @@ def build_registry() -> ToolRegistry:
     )
 
     # ── News & Events ─────────────────────────────────────────
-    from market.news      import get_market_news, get_stock_news
-    from market.events    import get_upcoming_events, get_earnings_calendar
+    from market.news import get_market_news, get_stock_news
+    from market.events import get_upcoming_events, get_earnings_calendar
     from market.sentiment import get_fii_dii_data, get_market_breadth
 
     reg.register(
@@ -392,7 +398,7 @@ def build_registry() -> ToolRegistry:
             "type": "object",
             "properties": {
                 "symbol": {"type": "string"},
-                "n":      {"type": "integer", "default": 8},
+                "n": {"type": "integer", "default": 8},
             },
             "required": ["symbol"],
         },
@@ -454,16 +460,18 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "symbol":    {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
                 "condition": {"type": "string", "enum": ["ABOVE", "BELOW", "CROSSES"]},
                 "threshold": {"type": "number", "description": "Price level"},
-                "exchange":  {"type": "string", "default": "NSE"},
+                "exchange": {"type": "string", "default": "NSE"},
             },
             "required": ["symbol", "condition", "threshold"],
         },
         fn=lambda symbol, condition, threshold, exchange="NSE": {
             "status": "created",
-            "alert": alert_manager.add_price_alert(symbol, condition, threshold, exchange).describe(),
+            "alert": alert_manager.add_price_alert(
+                symbol, condition, threshold, exchange
+            ).describe(),
         },
     )
 
@@ -476,11 +484,11 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "symbol":    {"type": "string"},
+                "symbol": {"type": "string"},
                 "indicator": {"type": "string", "enum": ["RSI", "MACD", "ADX", "ATR"]},
                 "condition": {"type": "string", "enum": ["ABOVE", "BELOW"]},
                 "threshold": {"type": "number"},
-                "exchange":  {"type": "string", "default": "NSE"},
+                "exchange": {"type": "string", "default": "NSE"},
             },
             "required": ["symbol", "indicator", "condition", "threshold"],
         },
@@ -532,9 +540,12 @@ def build_registry() -> ToolRegistry:
                         "type": "object",
                         "properties": {
                             "condition_type": {"type": "string", "enum": ["PRICE", "TECHNICAL"]},
-                            "condition":      {"type": "string", "enum": ["ABOVE", "BELOW"]},
-                            "threshold":      {"type": "number"},
-                            "indicator":      {"type": "string", "description": "For TECHNICAL: RSI, MACD, ADX, ATR"},
+                            "condition": {"type": "string", "enum": ["ABOVE", "BELOW"]},
+                            "threshold": {"type": "number"},
+                            "indicator": {
+                                "type": "string",
+                                "description": "For TECHNICAL: RSI, MACD, ADX, ATR",
+                            },
                         },
                         "required": ["condition_type", "condition", "threshold"],
                     },
@@ -592,8 +603,13 @@ def build_registry() -> ToolRegistry:
             "required": [],
         },
         fn=lambda symbols=None: [
-            {"symbol": e.symbol, "date": e.result_date, "quarter": e.quarter,
-             "avg_move": e.avg_move, "status": e.status}
+            {
+                "symbol": e.symbol,
+                "date": e.result_date,
+                "quarter": e.quarter,
+                "avg_move": e.avg_move,
+                "status": e.status,
+            }
             for e in get_earnings_calendar(symbols)
         ],
     )
@@ -621,10 +637,7 @@ def build_registry() -> ToolRegistry:
             "momentum, and a trading signal. E.g. 'FII selling 5 days straight, -8000 Cr'."
         ),
         parameters={"type": "object", "properties": {}, "required": []},
-        fn=lambda: {
-            k: v for k, v in get_flow_analysis().__dict__.items()
-            if k != "raw_data"
-        },
+        fn=lambda: {k: v for k, v in get_flow_analysis().__dict__.items() if k != "raw_data"},
     )
 
     reg.register(
@@ -641,8 +654,14 @@ def build_registry() -> ToolRegistry:
             "required": [],
         },
         fn=lambda days_ahead=7: [
-            {"event": s.event, "date": s.event_date, "days": s.days_away,
-             "strategy": s.strategy, "risk": s.risk_level, "rationale": s.rationale}
+            {
+                "event": s.event,
+                "date": s.event_date,
+                "days": s.days_away,
+                "strategy": s.strategy,
+                "risk": s.risk_level,
+                "rationale": s.rationale,
+            }
             for s in get_event_strategies(days_ahead=days_ahead)
         ],
     )
@@ -661,16 +680,23 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "symbol":   {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
-                "strategy": {"type": "string", "enum": ["rsi", "ma", "macd", "bb"],
-                             "description": "Strategy to test"},
-                "period":   {"type": "string", "default": "1y",
-                             "description": "Lookback: 1y, 2y, 3y, 5y"},
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
+                "strategy": {
+                    "type": "string",
+                    "enum": ["rsi", "ma", "macd", "bb"],
+                    "description": "Strategy to test",
+                },
+                "period": {
+                    "type": "string",
+                    "default": "1y",
+                    "description": "Lookback: 1y, 2y, 3y, 5y",
+                },
             },
             "required": ["symbol", "strategy"],
         },
         fn=lambda symbol, strategy="rsi", period="1y": {
-            k: v for k, v in run_backtest(symbol, strategy, period=period).__dict__.items()
+            k: v
+            for k, v in run_backtest(symbol, strategy, period=period).__dict__.items()
             if k not in ("trades", "equity_curve")
         },
     )
@@ -703,7 +729,7 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "symbol":     {"type": "string", "description": "Stock symbol"},
+                "symbol": {"type": "string", "description": "Stock symbol"},
                 "change_pct": {"type": "number", "description": "% change (negative for drop)"},
             },
             "required": ["symbol", "change_pct"],
@@ -715,6 +741,7 @@ def build_registry() -> ToolRegistry:
 
     def _find_similar(description: str) -> list:
         from engine.strategy_builder import find_similar_strategies
+
         return find_similar_strategies(description)
 
     reg.register(
@@ -723,7 +750,10 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "description": {"type": "string", "description": "Plain-English description of the strategy idea"},
+                "description": {
+                    "type": "string",
+                    "description": "Plain-English description of the strategy idea",
+                },
             },
             "required": ["description"],
         },
@@ -733,13 +763,16 @@ def build_registry() -> ToolRegistry:
     def _backtest_user_strategy(name: str, symbol: str = "", period: str = "1y") -> dict:
         from engine.strategy_builder import strategy_store
         from engine.backtest import Backtester
+
         strategy = strategy_store.load_strategy(name)
         meta = strategy_store.get_metadata(name)
         sym = symbol or (meta.get("default_symbol", "RELIANCE") if meta else "RELIANCE")
         bt = Backtester(symbol=sym, period=period)
         result = bt.run(strategy)
         return {
-            "symbol": sym, "period": period, "strategy": name,
+            "symbol": sym,
+            "period": period,
+            "strategy": name,
             "total_return": round(result.total_return, 2),
             "sharpe": round(result.sharpe_ratio, 2),
             "win_rate": round(result.win_rate, 1),
@@ -754,9 +787,15 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "name":   {"type": "string", "description": "Name of the saved strategy"},
-                "symbol": {"type": "string", "description": "Stock symbol (default: strategy's default)"},
-                "period": {"type": "string", "description": "Backtest period: 1y, 2y, 3y, 5y (default: 1y)"},
+                "name": {"type": "string", "description": "Name of the saved strategy"},
+                "symbol": {
+                    "type": "string",
+                    "description": "Stock symbol (default: strategy's default)",
+                },
+                "period": {
+                    "type": "string",
+                    "description": "Backtest period: 1y, 2y, 3y, 5y (default: 1y)",
+                },
             },
             "required": ["name"],
         },
@@ -765,6 +804,7 @@ def build_registry() -> ToolRegistry:
 
     def _list_user_strategies() -> list:
         from engine.strategy_builder import strategy_store
+
         return strategy_store.list_strategies()
 
     reg.register(
@@ -778,6 +818,7 @@ def build_registry() -> ToolRegistry:
 
     def _backtest_options(underlying: str, strategy: str = "straddle", period: str = "1y") -> dict:
         from engine.options_backtest import run_options_backtest
+
         result = run_options_backtest(underlying, strategy, period=period)
         return {
             "underlying": result.underlying,
@@ -802,9 +843,18 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "underlying": {"type": "string", "description": "Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE)"},
-                "strategy":   {"type": "string", "description": "Options strategy: straddle, iron-condor, covered-call, protective-put"},
-                "period":     {"type": "string", "description": "Backtest period: 1y, 2y, 3y (default: 1y)"},
+                "underlying": {
+                    "type": "string",
+                    "description": "Underlying symbol (e.g., NIFTY, BANKNIFTY, RELIANCE)",
+                },
+                "strategy": {
+                    "type": "string",
+                    "description": "Options strategy: straddle, iron-condor, covered-call, protective-put",
+                },
+                "period": {
+                    "type": "string",
+                    "description": "Backtest period: 1y, 2y, 3y (default: 1y)",
+                },
             },
             "required": ["underlying", "strategy"],
         },
@@ -816,6 +866,7 @@ def build_registry() -> ToolRegistry:
     def _suggest_delta_hedge(target_delta: float = 0.0) -> dict:
         from engine.portfolio import get_position_greeks
         from engine.greeks_manager import compute_delta_hedge
+
         pg = get_position_greeks()
         s = compute_delta_hedge(pg.net_delta, target_delta)
         return {
@@ -831,7 +882,10 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "target_delta": {"type": "number", "description": "Target delta (default 0 = delta-neutral)"},
+                "target_delta": {
+                    "type": "number",
+                    "description": "Target delta (default 0 = delta-neutral)",
+                },
             },
         },
         fn=_suggest_delta_hedge,
@@ -840,13 +894,17 @@ def build_registry() -> ToolRegistry:
     def _get_greeks_dashboard() -> dict:
         from engine.portfolio import get_position_greeks
         from engine.greeks_manager import build_dashboard
+
         pg = get_position_greeks()
         d = build_dashboard(pg.net_delta, pg.net_theta, pg.net_vega, pg.net_gamma)
         return {
-            "net_delta": d.net_delta, "net_theta": d.net_theta,
-            "net_vega": d.net_vega, "net_gamma": d.net_gamma,
+            "net_delta": d.net_delta,
+            "net_theta": d.net_theta,
+            "net_vega": d.net_vega,
+            "net_gamma": d.net_gamma,
             "risk_level": d.risk_level,
-            "warnings": d.warnings, "actions": d.actions,
+            "warnings": d.warnings,
+            "actions": d.actions,
         }
 
     reg.register(
@@ -860,7 +918,10 @@ def build_registry() -> ToolRegistry:
 
     def _get_shareholding(symbol: str) -> dict:
         from analysis.fundamental import _fetch_nse_shareholding
-        return _fetch_nse_shareholding(symbol) or {"error": "Shareholding data unavailable for this symbol"}
+
+        return _fetch_nse_shareholding(symbol) or {
+            "error": "Shareholding data unavailable for this symbol"
+        }
 
     reg.register(
         name="get_shareholding_pattern",
@@ -872,7 +933,10 @@ def build_registry() -> ToolRegistry:
         parameters={
             "type": "object",
             "properties": {
-                "symbol": {"type": "string", "description": "Stock symbol (e.g., RELIANCE, HDFCBANK)"},
+                "symbol": {
+                    "type": "string",
+                    "description": "Stock symbol (e.g., RELIANCE, HDFCBANK)",
+                },
             },
             "required": ["symbol"],
         },
@@ -881,9 +945,18 @@ def build_registry() -> ToolRegistry:
 
     def _get_most_active(by: str = "volume") -> list:
         from market.active_stocks import get_most_active
+
         stocks = get_most_active(by=by, limit=10)
-        return [{"symbol": s.symbol, "volume": s.volume, "value_cr": s.value_cr,
-                 "ltp": s.ltp, "change_pct": s.change_pct} for s in stocks]
+        return [
+            {
+                "symbol": s.symbol,
+                "volume": s.volume,
+                "value_cr": s.value_cr,
+                "ltp": s.ltp,
+                "change_pct": s.change_pct,
+            }
+            for s in stocks
+        ]
 
     reg.register(
         name="get_most_active_stocks",
@@ -902,31 +975,65 @@ def build_registry() -> ToolRegistry:
     reg.register(
         name="get_oi_profile",
         description="Get OI profile for an underlying — per-strike OI, max call/put OI (resistance/support), PCR.",
-        parameters={"type": "object", "properties": {"underlying": {"type": "string"}}, "required": ["underlying"]},
-        fn=lambda underlying: __import__("market.oi_profile", fromlist=["get_oi_profile"]).get_oi_profile(underlying),
+        parameters={
+            "type": "object",
+            "properties": {"underlying": {"type": "string"}},
+            "required": ["underlying"],
+        },
+        fn=lambda underlying: __import__(
+            "market.oi_profile", fromlist=["get_oi_profile"]
+        ).get_oi_profile(underlying),
     )
 
     reg.register(
         name="get_gex_analysis",
         description="Gamma Exposure (GEX) analysis — dealer gamma positioning, flip point, regime (POSITIVE=pinning, NEGATIVE=breakout).",
-        parameters={"type": "object", "properties": {"underlying": {"type": "string"}}, "required": ["underlying"]},
-        fn=lambda underlying: __import__("analysis.gex", fromlist=["get_gex_analysis"]).get_gex_analysis(underlying),
+        parameters={
+            "type": "object",
+            "properties": {"underlying": {"type": "string"}},
+            "required": ["underlying"],
+        },
+        fn=lambda underlying: __import__(
+            "analysis.gex", fromlist=["get_gex_analysis"]
+        ).get_gex_analysis(underlying),
     )
 
     reg.register(
         name="scan_options",
         description="Scan F&O stocks for: high IV rank (sell premium), unusual OI buildup, heavy put writing. Returns actionable setups.",
-        parameters={"type": "object", "properties": {"quick": {"type": "boolean", "description": "Quick scan (NIFTY+BANKNIFTY only)"}}},
-        fn=lambda quick=True: __import__("market.options_scanner", fromlist=["scan_options"]).scan_options(quick=quick),
+        parameters={
+            "type": "object",
+            "properties": {
+                "quick": {"type": "boolean", "description": "Quick scan (NIFTY+BANKNIFTY only)"}
+            },
+        },
+        fn=lambda quick=True: __import__(
+            "market.options_scanner", fromlist=["scan_options"]
+        ).scan_options(quick=quick),
     )
 
     reg.register(
         name="get_bulk_block_deals",
         description="Get recent bulk and block deals from NSE — large institutional/promoter buy/sell transactions.",
-        parameters={"type": "object", "properties": {"symbol": {"type": "string", "description": "Filter by symbol (optional)"}}},
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Filter by symbol (optional)"}
+            },
+        },
         fn=lambda symbol=None: {
-            "block": [d.__dict__ for d in __import__("market.bulk_deals", fromlist=["get_block_deals"]).get_block_deals()],
-            "bulk": [d.__dict__ for d in __import__("market.bulk_deals", fromlist=["get_bulk_deals"]).get_bulk_deals(symbol=symbol)],
+            "block": [
+                d.__dict__
+                for d in __import__(
+                    "market.bulk_deals", fromlist=["get_block_deals"]
+                ).get_block_deals()
+            ],
+            "bulk": [
+                d.__dict__
+                for d in __import__(
+                    "market.bulk_deals", fromlist=["get_bulk_deals"]
+                ).get_bulk_deals(symbol=symbol)
+            ],
         },
     )
 
@@ -944,11 +1051,20 @@ def build_registry() -> ToolRegistry:
             "type": "object",
             "properties": {
                 "symbol": {"type": "string", "description": "Stock symbol (e.g., RELIANCE, TCS)"},
-                "growth_rate": {"type": "number", "description": "Override growth rate % (optional, auto-detected if omitted)"},
-                "wacc": {"type": "number", "description": "Override WACC % (optional, auto-computed if omitted)"},
+                "growth_rate": {
+                    "type": "number",
+                    "description": "Override growth rate % (optional, auto-detected if omitted)",
+                },
+                "wacc": {
+                    "type": "number",
+                    "description": "Override WACC % (optional, auto-computed if omitted)",
+                },
             },
             "required": ["symbol"],
         },
-        fn=lambda symbol, growth_rate=None, wacc=None: __import__("analysis.dcf", fromlist=["dcf_for_symbol"]).dcf_for_symbol(symbol, growth_rate, wacc),    )
+        fn=lambda symbol, growth_rate=None, wacc=None: __import__(
+            "analysis.dcf", fromlist=["dcf_for_symbol"]
+        ).dcf_for_symbol(symbol, growth_rate, wacc),
+    )
 
     return reg

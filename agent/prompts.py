@@ -319,7 +319,9 @@ IMPORTANT:
 - Keep the code clean and well-commented
 """
 
-STRATEGY_BUILDER_SIMPLE_PROMPT = STRATEGY_BUILDER_PROMPT + """
+STRATEGY_BUILDER_SIMPLE_PROMPT = (
+    STRATEGY_BUILDER_PROMPT
+    + """
 
 ## SIMPLE MODE (--simple)
 
@@ -334,3 +336,4 @@ Rules:
 - Use everyday analogies (sports, cooking, driving) to explain concepts.
 - After generating the strategy, explain what it does in one simple paragraph.
 """
+)

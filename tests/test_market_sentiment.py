@@ -9,15 +9,27 @@ class TestFIIDIIVerdict:
     def test_fii_buying(self):
         """FII net > 500 → FII_BUYING."""
         d = FIIDIIData(
-            date="2025-04-01", fii_buy=15000, fii_sell=10000, fii_net=5000,
-            dii_buy=8000, dii_sell=9000, dii_net=-1000, verdict="FII_BUYING",
+            date="2025-04-01",
+            fii_buy=15000,
+            fii_sell=10000,
+            fii_net=5000,
+            dii_buy=8000,
+            dii_sell=9000,
+            dii_net=-1000,
+            verdict="FII_BUYING",
         )
         assert d.verdict == "FII_BUYING"
 
     def test_fii_selling(self):
         d = FIIDIIData(
-            date="2025-04-01", fii_buy=10000, fii_sell=18000, fii_net=-8000,
-            dii_buy=8000, dii_sell=5000, dii_net=3000, verdict="FII_SELLING",
+            date="2025-04-01",
+            fii_buy=10000,
+            fii_sell=18000,
+            fii_net=-8000,
+            dii_buy=8000,
+            dii_sell=5000,
+            dii_net=3000,
+            verdict="FII_SELLING",
         )
         assert d.verdict == "FII_SELLING"
 

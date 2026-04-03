@@ -33,41 +33,86 @@ console = Console()
 
 @dataclass
 class Deal:
-    date:        str
-    symbol:      str
-    client:      str
-    deal_type:   str      # "BUY" or "SELL"
-    quantity:    int
-    price:       float
-    entity_type: str      # "FII", "MF", "DII", "PROMOTER", "OTHER"
-    deal_class:  str      # "BLOCK" or "BULK"
+    date: str
+    symbol: str
+    client: str
+    deal_type: str  # "BUY" or "SELL"
+    quantity: int
+    price: float
+    entity_type: str  # "FII", "MF", "DII", "PROMOTER", "OTHER"
+    deal_class: str  # "BLOCK" or "BULK"
 
 
 # ── Entity classification ────────────────────────────────────
 
 _FII_PATTERNS = [
-    "GOLDMAN", "MORGAN STANLEY", "JPMORGAN", "CITIGROUP", "BARCLAYS",
-    "CREDIT SUISSE", "UBS", "NOMURA", "HSBC", "DEUTSCHE", "BNP",
-    "SOCIETE", "CLSA", "MACQUARIE", "VANGUARD", "BLACKROCK", "FIDELITY",
-    "PTE LTD", "LLC", "FPI", "FII", "SINGAPORE", "MAURITIUS",
-    "ABERDEEN", "TEMPLETON", "SCHRODERS",
+    "GOLDMAN",
+    "MORGAN STANLEY",
+    "JPMORGAN",
+    "CITIGROUP",
+    "BARCLAYS",
+    "CREDIT SUISSE",
+    "UBS",
+    "NOMURA",
+    "HSBC",
+    "DEUTSCHE",
+    "BNP",
+    "SOCIETE",
+    "CLSA",
+    "MACQUARIE",
+    "VANGUARD",
+    "BLACKROCK",
+    "FIDELITY",
+    "PTE LTD",
+    "LLC",
+    "FPI",
+    "FII",
+    "SINGAPORE",
+    "MAURITIUS",
+    "ABERDEEN",
+    "TEMPLETON",
+    "SCHRODERS",
 ]
 
 _MF_PATTERNS = [
-    "MUTUAL FUND", "ASSET MANAGEMENT", "AMC", "SBI MF", "HDFC MF",
-    "ICICI PRUDENTIAL", "KOTAK MF", "AXIS MF", "NIPPON", "UTI",
-    "SUNDARAM", "MOTILAL", "MIRAE", "DSP", "TATA MF", "PGIM",
-    "EDELWEISS MF", "INVESCO",
+    "MUTUAL FUND",
+    "ASSET MANAGEMENT",
+    "AMC",
+    "SBI MF",
+    "HDFC MF",
+    "ICICI PRUDENTIAL",
+    "KOTAK MF",
+    "AXIS MF",
+    "NIPPON",
+    "UTI",
+    "SUNDARAM",
+    "MOTILAL",
+    "MIRAE",
+    "DSP",
+    "TATA MF",
+    "PGIM",
+    "EDELWEISS MF",
+    "INVESCO",
 ]
 
 _DII_PATTERNS = [
-    "LIC", "LIFE INSURANCE", "GENERAL INSURANCE", "NEW INDIA ASSURANCE",
-    "NATIONAL INSURANCE", "ORIENTAL INSURANCE", "UNITED INDIA",
-    "EMPLOYEES PROVIDENT", "PROVIDENT FUND", "PENSION FUND",
+    "LIC",
+    "LIFE INSURANCE",
+    "GENERAL INSURANCE",
+    "NEW INDIA ASSURANCE",
+    "NATIONAL INSURANCE",
+    "ORIENTAL INSURANCE",
+    "UNITED INDIA",
+    "EMPLOYEES PROVIDENT",
+    "PROVIDENT FUND",
+    "PENSION FUND",
 ]
 
 _PROMOTER_PATTERNS = [
-    "PROMOTER", "FOUNDER", "FAMILY TRUST", "FAMILY OFFICE",
+    "PROMOTER",
+    "FOUNDER",
+    "FAMILY TRUST",
+    "FAMILY OFFICE",
 ]
 
 
@@ -134,6 +179,7 @@ def _nse_session() -> httpx.Client:
 
 # ── Parse helpers ────────────────────────────────────────────
 
+
 def _parse_deal_item(item: dict, deal_class: str) -> Deal:
     """Parse a single deal item from any NSE response format.
 
@@ -142,18 +188,8 @@ def _parse_deal_item(item: dict, deal_class: str) -> Deal:
       HistoricalOR: BD_DT_DATE, BD_SYMBOL, BD_CLIENT_NAME, BD_BUY_SELL, BD_QTY_TRD, BD_TP_WATP
       Legacy:      dealDate, symbol, clientName, buySell, quantity, tradedPrice
     """
-    client = (
-        item.get("clientName")
-        or item.get("BD_CLIENT_NAME")
-        or item.get("clientname")
-        or ""
-    )
-    buy_sell = (
-        item.get("buySell")
-        or item.get("BD_BUY_SELL")
-        or item.get("buysell")
-        or ""
-    )
+    client = item.get("clientName") or item.get("BD_CLIENT_NAME") or item.get("clientname") or ""
+    buy_sell = item.get("buySell") or item.get("BD_BUY_SELL") or item.get("buysell") or ""
     # Quantity: try qty (snapshot) → quantity (legacy) → BD_QTY_TRD (historical)
     raw_qty = item.get("qty") or item.get("quantity") or item.get("BD_QTY_TRD") or 0
     # Price: try watp (snapshot) → tradedPrice (legacy) → BD_TP_WATP (historical)
@@ -172,6 +208,7 @@ def _parse_deal_item(item: dict, deal_class: str) -> Deal:
 
 
 # ── Block deals ──────────────────────────────────────────────
+
 
 def get_block_deals() -> list[Deal]:
     """Fetch today's block deals from NSE."""
@@ -203,6 +240,7 @@ def get_block_deals() -> list[Deal]:
 
 # ── Bulk deals ───────────────────────────────────────────────
 
+
 def _bulk_via_snapshot(session: httpx.Client) -> list[Deal]:
     """Try the snapshot endpoint for today's bulk deals."""
     r = session.get(
@@ -216,9 +254,7 @@ def _bulk_via_snapshot(session: httpx.Client) -> list[Deal]:
     return [_parse_deal_item(it, "BULK") for it in items]
 
 
-def _bulk_via_historical(
-    session: httpx.Client, days: int, symbol: Optional[str]
-) -> list[Deal]:
+def _bulk_via_historical(session: httpx.Client, days: int, symbol: Optional[str]) -> list[Deal]:
     """Try historical bulk-deals endpoints with date range.
 
     NSE migrated from /api/historical/bulk-deals to
@@ -281,16 +317,18 @@ def _bulk_via_csv() -> list[Deal]:
         for _, row in df.iterrows():
             client = str(row.get("Client Name", ""))
             buy_sell = str(row.get("Buy / Sell", "")).strip().upper()
-            deals.append(Deal(
-                date=str(row.get("Date", ""))[:12],
-                symbol=str(row.get("Symbol", "")),
-                client=client,
-                deal_type=buy_sell,
-                quantity=int(row.get("Quantity Traded", 0) or 0),
-                price=float(row.get("Trade Price / Wght. Avg. Price", 0) or 0),
-                entity_type=classify_entity(client),
-                deal_class="BULK",
-            ))
+            deals.append(
+                Deal(
+                    date=str(row.get("Date", ""))[:12],
+                    symbol=str(row.get("Symbol", "")),
+                    client=client,
+                    deal_type=buy_sell,
+                    quantity=int(row.get("Quantity Traded", 0) or 0),
+                    price=float(row.get("Trade Price / Wght. Avg. Price", 0) or 0),
+                    entity_type=classify_entity(client),
+                    deal_class="BULK",
+                )
+            )
         return deals
     except Exception:
         return []
@@ -345,6 +383,7 @@ def get_bulk_deals(days: int = 5, symbol: Optional[str] = None) -> list[Deal]:
 
 # ── Display ──────────────────────────────────────────────────
 
+
 def print_deals(symbol: Optional[str] = None, days: int = 5) -> None:
     """Display bulk and block deals."""
     block = get_block_deals()
@@ -370,7 +409,9 @@ def print_deals(symbol: Optional[str] = None, days: int = 5) -> None:
 
     for d in all_deals:
         action_color = "green" if d.deal_type == "BUY" else "red"
-        entity_color = {"FII": "yellow", "MF": "cyan", "DII": "blue", "PROMOTER": "green"}.get(d.entity_type, "dim")
+        entity_color = {"FII": "yellow", "MF": "cyan", "DII": "blue", "PROMOTER": "green"}.get(
+            d.entity_type, "dim"
+        )
         table.add_row(
             d.date[:12],
             d.deal_class,

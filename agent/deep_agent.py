@@ -34,8 +34,10 @@ from rich.table import Table
 
 from agent.tools import ToolRegistry
 from agent.multi_agent import (
-    AnalystReport, MultiAgentAnalyzer,
-    compute_scorecard, console,
+    AnalystReport,
+    MultiAgentAnalyzer,
+    compute_scorecard,
+    console,
 )
 
 
@@ -199,6 +201,7 @@ KEY_POINTS:
 
 # ── Deep Analyzer ────────────────────────────────────────────
 
+
 class DeepAnalyzer:
     """
     Full LLM multi-agent analysis — every analyst is LLM-powered.
@@ -273,10 +276,13 @@ class DeepAnalyzer:
         # ── Trade plans ──────────────────────────────────────
         try:
             from engine.trader import TraderAgent
+
             trader = TraderAgent()
             all_plans = trader.generate_all_plans(
-                symbol=symbol, exchange=exchange,
-                reports=reports, synthesis=synthesis,
+                symbol=symbol,
+                exchange=exchange,
+                reports=reports,
+                synthesis=synthesis,
             )
             if any(p for p in all_plans.values()):
                 TraderAgent.print_all_plans(all_plans)
@@ -286,9 +292,12 @@ class DeepAnalyzer:
         # ── Memory ───────────────────────────────────────────
         try:
             from engine.memory import trade_memory
+
             record = trade_memory.store_from_analysis(
-                symbol=symbol, exchange=exchange,
-                analyst_reports=reports, debate=debate,
+                symbol=symbol,
+                exchange=exchange,
+                analyst_reports=reports,
+                debate=debate,
                 synthesis=synthesis,
             )
             if self.verbose:
@@ -322,33 +331,43 @@ class DeepAnalyzer:
 
         full_parts.append(f"\nSCORECARD: {scorecard.summary()}\n")
 
-        full_parts.extend([
-            "=" * 60,
-            "BULL/BEAR DEBATE",
-            "=" * 60,
-            "",
-            "--- BULL CASE (Round 1) ---",
-            debate.bull_argument,
-            "",
-            "--- BEAR CASE (Round 1) ---",
-            debate.bear_argument,
-            "",
-        ])
+        full_parts.extend(
+            [
+                "=" * 60,
+                "BULL/BEAR DEBATE",
+                "=" * 60,
+                "",
+                "--- BULL CASE (Round 1) ---",
+                debate.bull_argument,
+                "",
+                "--- BEAR CASE (Round 1) ---",
+                debate.bear_argument,
+                "",
+            ]
+        )
         if debate.bull_rebuttal:
             full_parts.extend(["--- BULL REBUTTAL (Round 2) ---", debate.bull_rebuttal, ""])
         if debate.bear_rebuttal:
             full_parts.extend(["--- BEAR REBUTTAL (Round 2) ---", debate.bear_rebuttal, ""])
         if debate.facilitator:
-            full_parts.extend(["--- FACILITATOR SUMMARY ---", debate.facilitator,
-                               f"Debate Winner: {debate.winner}", ""])
+            full_parts.extend(
+                [
+                    "--- FACILITATOR SUMMARY ---",
+                    debate.facilitator,
+                    f"Debate Winner: {debate.winner}",
+                    "",
+                ]
+            )
 
-        full_parts.extend([
-            "=" * 60,
-            "FUND MANAGER SYNTHESIS",
-            "=" * 60,
-            "",
-            synthesis,
-        ])
+        full_parts.extend(
+            [
+                "=" * 60,
+                "FUND MANAGER SYNTHESIS",
+                "=" * 60,
+                "",
+                synthesis,
+            ]
+        )
 
         self.last_full_report = "\n".join(full_parts)
         return self.last_full_report
@@ -362,15 +381,20 @@ class DeepAnalyzer:
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
         import os
+
         os.environ["_CLI_BATCH_MODE"] = "1"
 
         analysts = [
-            ("Technical",    DEEP_TECHNICAL_PROMPT,    ["technical_analyse", "get_quote"]),
-            ("Fundamental",  DEEP_FUNDAMENTAL_PROMPT,  ["fundamental_analyse"]),
-            ("DCF Valuation", DEEP_DCF_PROMPT,         ["compute_dcf"]),
-            ("Options",      DEEP_OPTIONS_PROMPT,      ["get_pcr", "get_max_pain", "get_iv_rank"]),
-            ("Sentiment",    DEEP_SENTIMENT_PROMPT,    ["get_stock_news", "get_fii_dii_data", "get_market_breadth"]),
-            ("Risk",         DEEP_RISK_PROMPT,         ["get_vix", "get_quote", "get_upcoming_events"]),
+            ("Technical", DEEP_TECHNICAL_PROMPT, ["technical_analyse", "get_quote"]),
+            ("Fundamental", DEEP_FUNDAMENTAL_PROMPT, ["fundamental_analyse"]),
+            ("DCF Valuation", DEEP_DCF_PROMPT, ["compute_dcf"]),
+            ("Options", DEEP_OPTIONS_PROMPT, ["get_pcr", "get_max_pain", "get_iv_rank"]),
+            (
+                "Sentiment",
+                DEEP_SENTIMENT_PROMPT,
+                ["get_stock_news", "get_fii_dii_data", "get_market_breadth"],
+            ),
+            ("Risk", DEEP_RISK_PROMPT, ["get_vix", "get_quote", "get_upcoming_events"]),
         ]
 
         if self.verbose:
@@ -383,11 +407,17 @@ class DeepAnalyzer:
                 tool_data_parts = []
                 for tool_name in tools:
                     args = {}
-                    if "symbol" in str(self.registry._tools.get(tool_name, {}).get("parameters", {})):
+                    if "symbol" in str(
+                        self.registry._tools.get(tool_name, {}).get("parameters", {})
+                    ):
                         args["symbol"] = symbol
-                    elif "underlying" in str(self.registry._tools.get(tool_name, {}).get("parameters", {})):
+                    elif "underlying" in str(
+                        self.registry._tools.get(tool_name, {}).get("parameters", {})
+                    ):
                         args["underlying"] = symbol
-                    elif "instruments" in str(self.registry._tools.get(tool_name, {}).get("parameters", {})):
+                    elif "instruments" in str(
+                        self.registry._tools.get(tool_name, {}).get("parameters", {})
+                    ):
                         args["instruments"] = [f"{exchange}:{symbol}"]
 
                     result = self.registry.execute(tool_name, args)
@@ -399,7 +429,9 @@ class DeepAnalyzer:
 
                 # Phase B: LLM reasoning
                 prompt = prompt_template.format(
-                    symbol=symbol, exchange=exchange, tool_data=tool_data,
+                    symbol=symbol,
+                    exchange=exchange,
+                    tool_data=tool_data,
                 )
                 response = self.llm.chat(
                     messages=[{"role": "user", "content": prompt}],
@@ -409,17 +441,17 @@ class DeepAnalyzer:
 
             except Exception as e:
                 return AnalystReport(
-                    analyst=name, verdict="UNKNOWN", confidence=0,
-                    score=0, error=str(e),
+                    analyst=name,
+                    verdict="UNKNOWN",
+                    confidence=0,
+                    score=0,
+                    error=str(e),
                 )
 
         # Submit all analysts concurrently; collect in original order
         name_to_report: dict[str, AnalystReport] = {}
         with ThreadPoolExecutor(max_workers=len(analysts)) as pool:
-            future_to_name = {
-                pool.submit(_run_one, spec): spec[0]
-                for spec in analysts
-            }
+            future_to_name = {pool.submit(_run_one, spec): spec[0] for spec in analysts}
             for future in as_completed(future_to_name):
                 name = future_to_name[future]
                 report = future.result()
@@ -460,7 +492,7 @@ class DeepAnalyzer:
 
             # Match VERDICT with flexible formatting:
             # "VERDICT: BEARISH", "VERDICT : NEUTRAL (leaning bullish)", etc.
-            verdict_match = re.match(r'VERDICT\s*:\s*(.+)', upper)
+            verdict_match = re.match(r"VERDICT\s*:\s*(.+)", upper)
             if verdict_match:
                 val = verdict_match.group(1)
                 for v in ("BULLISH", "BEARISH", "NEUTRAL"):
@@ -470,7 +502,7 @@ class DeepAnalyzer:
 
             # Match CONFIDENCE with flexible formatting:
             # "CONFIDENCE: 62%", "CONFIDENCE : 55%", "CONFIDENCE: 62"
-            conf_match = re.match(r'CONFIDENCE\s*:\s*(\d+)', upper)
+            conf_match = re.match(r"CONFIDENCE\s*:\s*(\d+)", upper)
             if conf_match:
                 try:
                     confidence = int(conf_match.group(1))
@@ -479,7 +511,7 @@ class DeepAnalyzer:
 
             # Match SCORE with flexible formatting:
             # "SCORE: -23", "SCORE : +30", "SCORE: -15"
-            score_match = re.match(r'SCORE\s*:\s*([+\-]?\d+(?:\.\d+)?)', upper)
+            score_match = re.match(r"SCORE\s*:\s*([+\-]?\d+(?:\.\d+)?)", upper)
             if score_match:
                 try:
                     score = float(score_match.group(1))
@@ -503,11 +535,11 @@ class DeepAnalyzer:
                 verdict = "BULLISH"
 
             # Try to find confidence/score anywhere in response
-            all_conf = re.findall(r'CONFIDENCE\s*:?\s*(\d+)\s*%?', resp_upper)
+            all_conf = re.findall(r"CONFIDENCE\s*:?\s*(\d+)\s*%?", resp_upper)
             if all_conf:
                 confidence = int(all_conf[-1])  # take last occurrence
 
-            all_scores = re.findall(r'SCORE\s*:?\s*([+\-]?\d+(?:\.\d+)?)', resp_upper)
+            all_scores = re.findall(r"SCORE\s*:?\s*([+\-]?\d+(?:\.\d+)?)", resp_upper)
             if all_scores:
                 score = float(all_scores[-1])
 
@@ -523,7 +555,9 @@ class DeepAnalyzer:
         """Display LLM analyst results."""
         table = Table(
             title=f"Deep LLM Analyst Reports ({elapsed:.1f}s)",
-            show_header=True, header_style="bold magenta", show_lines=True,
+            show_header=True,
+            header_style="bold magenta",
+            show_lines=True,
         )
         table.add_column("Analyst", style="bold", width=14)
         table.add_column("Verdict", width=10)

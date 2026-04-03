@@ -5,14 +5,21 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from config.credentials import (
-    _kr_get, _kr_set, _kr_delete,
-    get_credential, set_credential, load_all,
-    SERVICE, KNOWN_CREDENTIALS, _KNOWN_KEYS,
+    _kr_get,
+    _kr_set,
+    _kr_delete,
+    get_credential,
+    set_credential,
+    load_all,
+    SERVICE,
+    KNOWN_CREDENTIALS,
+    _KNOWN_KEYS,
     cmd_credentials,
 )
 
 
 # ── Constants ────────────────────────────────────────────────
+
 
 class TestConstants:
     def test_service_name(self):
@@ -41,6 +48,7 @@ class TestConstants:
 
 # ── Keyring helpers (mocked) ────────────────────────────────
 
+
 class TestKeyringHelpers:
     def test_kr_get_returns_none_without_keyring(self):
         with patch.dict("sys.modules", {"keyring": None}):
@@ -62,6 +70,7 @@ class TestKeyringHelpers:
 
 
 # ── get_credential ───────────────────────────────────────────
+
 
 class TestGetCredential:
     def test_from_env(self, monkeypatch):
@@ -104,6 +113,7 @@ class TestGetCredential:
 
 # ── set_credential ───────────────────────────────────────────
 
+
 class TestSetCredential:
     def test_sets_env(self, monkeypatch):
         monkeypatch.delenv("SET_TEST_KEY", raising=False)
@@ -115,6 +125,7 @@ class TestSetCredential:
 
 
 # ── load_all ─────────────────────────────────────────────────
+
 
 class TestLoadAll:
     def test_does_not_overwrite_existing_env(self, monkeypatch):
@@ -140,6 +151,7 @@ class TestLoadAll:
 
 
 # ── cmd_credentials ──────────────────────────────────────────
+
 
 class TestCmdCredentials:
     def test_list_does_not_raise(self):

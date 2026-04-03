@@ -32,14 +32,15 @@ console = Console()
 @dataclass
 class EventStrategy:
     """A recommended strategy for an upcoming event."""
-    event:          str          # "Weekly Expiry", "RBI Policy", "RELIANCE Earnings"
-    event_date:     str          # YYYY-MM-DD
-    days_away:      int          # days until event
-    timing:         str          # "PRE" or "POST"
-    strategy:       str          # "Sell NIFTY Straddle", "Buy BANKNIFTY Puts"
-    rationale:      str
-    risk_level:     str          # "LOW" / "MEDIUM" / "HIGH"
-    instruments:    list[str] = field(default_factory=list)  # suggested instruments
+
+    event: str  # "Weekly Expiry", "RBI Policy", "RELIANCE Earnings"
+    event_date: str  # YYYY-MM-DD
+    days_away: int  # days until event
+    timing: str  # "PRE" or "POST"
+    strategy: str  # "Sell NIFTY Straddle", "Buy BANKNIFTY Puts"
+    rationale: str
+    risk_level: str  # "LOW" / "MEDIUM" / "HIGH"
+    instruments: list[str] = field(default_factory=list)  # suggested instruments
 
 
 def get_event_strategies(
@@ -86,42 +87,48 @@ def _expiry_strategies(today: date, days_ahead: int) -> list[EventStrategy]:
         is_monthly = next_week.month != next_expiry.month
 
         if is_monthly:
-            strategies.append(EventStrategy(
-                event="Monthly F&O Expiry",
-                event_date=next_expiry.isoformat(),
-                days_away=days_away,
-                timing="PRE",
-                strategy="Roll existing positions to next series. Consider selling high-IV options.",
-                rationale="Monthly settlement causes OI unwinding and max pain convergence. "
-                          "Last 2 hours extremely volatile. Roll by Wednesday.",
-                risk_level="HIGH",
-                instruments=["NIFTY", "BANKNIFTY"],
-            ))
-        else:
-            if days_away <= 2:
-                strategies.append(EventStrategy(
-                    event="Weekly Expiry",
+            strategies.append(
+                EventStrategy(
+                    event="Monthly F&O Expiry",
                     event_date=next_expiry.isoformat(),
                     days_away=days_away,
                     timing="PRE",
-                    strategy="Sell OTM options expiring today/tomorrow. Max pain play.",
-                    rationale="Theta decay accelerates. Options lose 50%+ value in last 2 days. "
-                              "Sell OTM options near max pain strike.",
-                    risk_level="MEDIUM",
-                    instruments=["NIFTY", "BANKNIFTY"],
-                ))
-
-            if days_away == 0:
-                strategies.append(EventStrategy(
-                    event="Expiry Day",
-                    event_date=next_expiry.isoformat(),
-                    days_away=0,
-                    timing="PRE",
-                    strategy="Gamma scalping or close all expiring positions by 2:30 PM.",
-                    rationale="Extreme gamma risk. Avoid holding naked short options past 2:30 PM.",
+                    strategy="Roll existing positions to next series. Consider selling high-IV options.",
+                    rationale="Monthly settlement causes OI unwinding and max pain convergence. "
+                    "Last 2 hours extremely volatile. Roll by Wednesday.",
                     risk_level="HIGH",
                     instruments=["NIFTY", "BANKNIFTY"],
-                ))
+                )
+            )
+        else:
+            if days_away <= 2:
+                strategies.append(
+                    EventStrategy(
+                        event="Weekly Expiry",
+                        event_date=next_expiry.isoformat(),
+                        days_away=days_away,
+                        timing="PRE",
+                        strategy="Sell OTM options expiring today/tomorrow. Max pain play.",
+                        rationale="Theta decay accelerates. Options lose 50%+ value in last 2 days. "
+                        "Sell OTM options near max pain strike.",
+                        risk_level="MEDIUM",
+                        instruments=["NIFTY", "BANKNIFTY"],
+                    )
+                )
+
+            if days_away == 0:
+                strategies.append(
+                    EventStrategy(
+                        event="Expiry Day",
+                        event_date=next_expiry.isoformat(),
+                        days_away=0,
+                        timing="PRE",
+                        strategy="Gamma scalping or close all expiring positions by 2:30 PM.",
+                        rationale="Extreme gamma risk. Avoid holding naked short options past 2:30 PM.",
+                        risk_level="HIGH",
+                        instruments=["NIFTY", "BANKNIFTY"],
+                    )
+                )
 
     return strategies
 
@@ -130,8 +137,12 @@ def _rbi_strategies(today: date, days_ahead: int) -> list[EventStrategy]:
     """Strategies around RBI MPC meetings."""
     # RBI MPC meetings in 2026 (approximate dates — typically bi-monthly)
     rbi_dates = [
-        date(2026, 2, 5), date(2026, 4, 8), date(2026, 6, 4),
-        date(2026, 8, 5), date(2026, 10, 7), date(2026, 12, 3),
+        date(2026, 2, 5),
+        date(2026, 4, 8),
+        date(2026, 6, 4),
+        date(2026, 8, 5),
+        date(2026, 10, 7),
+        date(2026, 12, 3),
     ]
 
     strategies = []
@@ -139,30 +150,34 @@ def _rbi_strategies(today: date, days_ahead: int) -> list[EventStrategy]:
         days_away = (rbi_date - today).days
         if 0 <= days_away <= days_ahead:
             if days_away >= 2:
-                strategies.append(EventStrategy(
-                    event="RBI MPC Policy",
-                    event_date=rbi_date.isoformat(),
-                    days_away=days_away,
-                    timing="PRE",
-                    strategy="Buy BANKNIFTY straddle or hedge bank positions.",
-                    rationale="Rate-sensitive sectors (banks, NBFCs, realty) swing 2-4% on RBI day. "
-                              "Buy straddle 2-3 days before to capture IV expansion.",
-                    risk_level="MEDIUM",
-                    instruments=["BANKNIFTY", "HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK"],
-                ))
+                strategies.append(
+                    EventStrategy(
+                        event="RBI MPC Policy",
+                        event_date=rbi_date.isoformat(),
+                        days_away=days_away,
+                        timing="PRE",
+                        strategy="Buy BANKNIFTY straddle or hedge bank positions.",
+                        rationale="Rate-sensitive sectors (banks, NBFCs, realty) swing 2-4% on RBI day. "
+                        "Buy straddle 2-3 days before to capture IV expansion.",
+                        risk_level="MEDIUM",
+                        instruments=["BANKNIFTY", "HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK"],
+                    )
+                )
             elif days_away == 0:
-                strategies.append(EventStrategy(
-                    event="RBI MPC Decision Day",
-                    event_date=rbi_date.isoformat(),
-                    days_away=0,
-                    timing="PRE",
-                    strategy="Do NOT enter new positions before 10 AM announcement. "
-                              "After announcement: sell straddle to capture IV crush.",
-                    rationale="Decision at ~10 AM. IV crush after announcement is significant. "
-                              "If you have pre-event straddles, exit immediately after announcement.",
-                    risk_level="HIGH",
-                    instruments=["BANKNIFTY", "NIFTY BANK"],
-                ))
+                strategies.append(
+                    EventStrategy(
+                        event="RBI MPC Decision Day",
+                        event_date=rbi_date.isoformat(),
+                        days_away=0,
+                        timing="PRE",
+                        strategy="Do NOT enter new positions before 10 AM announcement. "
+                        "After announcement: sell straddle to capture IV crush.",
+                        rationale="Decision at ~10 AM. IV crush after announcement is significant. "
+                        "If you have pre-event straddles, exit immediately after announcement.",
+                        risk_level="HIGH",
+                        instruments=["BANKNIFTY", "NIFTY BANK"],
+                    )
+                )
 
     return strategies
 
@@ -173,6 +188,7 @@ def _earnings_strategies(
     """Strategies around earnings announcements."""
     try:
         from market.earnings import get_earnings_calendar, get_pre_earnings_iv
+
         calendar = get_earnings_calendar(symbols, days_ahead=days_ahead)
 
         strategies = []
@@ -190,7 +206,9 @@ def _earnings_strategies(
                     avg_move = entry.avg_move or 3.0
 
                     if iv_rank > 60:
-                        strategy = f"Sell {entry.symbol} straddle/strangle — IV elevated (rank: {iv_rank})"
+                        strategy = (
+                            f"Sell {entry.symbol} straddle/strangle — IV elevated (rank: {iv_rank})"
+                        )
                         risk = "MEDIUM"
                     elif iv_rank < 30:
                         strategy = f"Buy {entry.symbol} straddle — IV cheap (rank: {iv_rank}), avg move ±{avg_move:.1f}%"
@@ -199,16 +217,18 @@ def _earnings_strategies(
                         strategy = f"Iron condor on {entry.symbol} — neutral IV, expected move ±{avg_move:.1f}%"
                         risk = "LOW"
 
-                    strategies.append(EventStrategy(
-                        event=f"{entry.symbol} Earnings ({entry.quarter})",
-                        event_date=entry.result_date,
-                        days_away=days_away,
-                        timing="PRE",
-                        strategy=strategy,
-                        rationale=f"IV rank: {iv_rank}, historical avg move: ±{avg_move:.1f}%",
-                        risk_level=risk,
-                        instruments=[entry.symbol],
-                    ))
+                    strategies.append(
+                        EventStrategy(
+                            event=f"{entry.symbol} Earnings ({entry.quarter})",
+                            event_date=entry.result_date,
+                            days_away=days_away,
+                            timing="PRE",
+                            strategy=strategy,
+                            rationale=f"IV rank: {iv_rank}, historical avg move: ±{avg_move:.1f}%",
+                            risk_level=risk,
+                            instruments=[entry.symbol],
+                        )
+                    )
 
         return strategies
     except Exception:
@@ -227,18 +247,20 @@ def _budget_strategies(today: date) -> list[EventStrategy]:
     days_away = (budget_date - today).days
 
     if days_away <= 14 and days_away > 0:
-        strategies.append(EventStrategy(
-            event="Union Budget",
-            event_date=budget_date.isoformat(),
-            days_away=days_away,
-            timing="PRE",
-            strategy="Buy NIFTY straddle for budget day volatility. "
-                      "Position in infra/defence/PSU for potential allocation boosts.",
-            rationale="Budget day: 2-3% NIFTY swing. Infra/defence stocks rally on capex announcements. "
-                      "Don't trade the first reaction — let it settle for 30 minutes.",
-            risk_level="HIGH",
-            instruments=["NIFTY", "LT", "NTPC", "POWERGRID", "BEL"],
-        ))
+        strategies.append(
+            EventStrategy(
+                event="Union Budget",
+                event_date=budget_date.isoformat(),
+                days_away=days_away,
+                timing="PRE",
+                strategy="Buy NIFTY straddle for budget day volatility. "
+                "Position in infra/defence/PSU for potential allocation boosts.",
+                rationale="Budget day: 2-3% NIFTY swing. Infra/defence stocks rally on capex announcements. "
+                "Don't trade the first reaction — let it settle for 30 minutes.",
+                risk_level="HIGH",
+                instruments=["NIFTY", "LT", "NTPC", "POWERGRID", "BEL"],
+            )
+        )
 
     return strategies
 
@@ -276,8 +298,11 @@ def print_event_strategies(days_ahead: int = 7) -> None:
     for s in strategies:
         risk_style = {"LOW": "green", "MEDIUM": "yellow", "HIGH": "red"}.get(s.risk_level, "white")
         table.add_row(
-            s.event, s.event_date, str(s.days_away),
-            s.strategy[:60], f"[{risk_style}]{s.risk_level}[/{risk_style}]",
+            s.event,
+            s.event_date,
+            str(s.days_away),
+            s.strategy[:60],
+            f"[{risk_style}]{s.risk_level}[/{risk_style}]",
         )
 
     console.print(table)

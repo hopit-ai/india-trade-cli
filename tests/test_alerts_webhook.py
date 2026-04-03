@@ -23,18 +23,27 @@ from engine.alerts import (
 
 # ── Alert dataclass ───────────────────────────────────────────
 
+
 class TestAlertDataclass:
     def test_webhook_url_defaults_to_none(self):
         a = Alert(
-            id="test01", alert_type="PRICE", symbol="RELIANCE",
-            exchange="NSE", condition="ABOVE", threshold=2800.0,
+            id="test01",
+            alert_type="PRICE",
+            symbol="RELIANCE",
+            exchange="NSE",
+            condition="ABOVE",
+            threshold=2800.0,
         )
         assert a.webhook_url is None
 
     def test_webhook_url_stored(self):
         a = Alert(
-            id="test02", alert_type="PRICE", symbol="TCS",
-            exchange="NSE", condition="BELOW", threshold=3500.0,
+            id="test02",
+            alert_type="PRICE",
+            symbol="TCS",
+            exchange="NSE",
+            condition="BELOW",
+            threshold=3500.0,
             webhook_url="https://agent.example.com/callback",
         )
         assert a.webhook_url == "https://agent.example.com/callback"
@@ -70,12 +79,15 @@ class TestAlertDataclass:
 
 # ── add_price_alert ───────────────────────────────────────────
 
+
 class TestAddPriceAlertWebhook:
     def test_webhook_url_stored_on_price_alert(self, tmp_path):
         with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
             mgr = AlertManager()
             alert = mgr.add_price_alert(
-                symbol="RELIANCE", condition="ABOVE", threshold=2800.0,
+                symbol="RELIANCE",
+                condition="ABOVE",
+                threshold=2800.0,
                 webhook_url="https://example.com/hook",
             )
         assert alert.webhook_url == "https://example.com/hook"
@@ -92,7 +104,9 @@ class TestAddPriceAlertWebhook:
         with patch("engine.alerts.ALERTS_FILE", alerts_file):
             mgr = AlertManager()
             mgr.add_price_alert(
-                "RELIANCE", "ABOVE", 2800.0,
+                "RELIANCE",
+                "ABOVE",
+                2800.0,
                 webhook_url="https://example.com/hook",
             )
         saved = json.loads(alerts_file.read_text())
@@ -101,12 +115,16 @@ class TestAddPriceAlertWebhook:
 
 # ── add_technical_alert ───────────────────────────────────────
 
+
 class TestAddTechnicalAlertWebhook:
     def test_webhook_url_stored(self, tmp_path):
         with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
             mgr = AlertManager()
             alert = mgr.add_technical_alert(
-                symbol="INFY", indicator="RSI", condition="ABOVE", threshold=70.0,
+                symbol="INFY",
+                indicator="RSI",
+                condition="ABOVE",
+                threshold=70.0,
                 webhook_url="https://example.com/rsi-hook",
             )
         assert alert.webhook_url == "https://example.com/rsi-hook"
@@ -121,16 +139,28 @@ class TestAddTechnicalAlertWebhook:
 
 # ── add_conditional_alert ─────────────────────────────────────
 
+
 class TestAddConditionalAlertWebhook:
     def test_webhook_url_stored(self, tmp_path):
         conditions = [
-            {"condition_type": "PRICE",     "condition": "ABOVE", "threshold": 2800.0, "indicator": None},
-            {"condition_type": "TECHNICAL", "condition": "ABOVE", "threshold": 60.0,   "indicator": "RSI"},
+            {
+                "condition_type": "PRICE",
+                "condition": "ABOVE",
+                "threshold": 2800.0,
+                "indicator": None,
+            },
+            {
+                "condition_type": "TECHNICAL",
+                "condition": "ABOVE",
+                "threshold": 60.0,
+                "indicator": "RSI",
+            },
         ]
         with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
             mgr = AlertManager()
             alert = mgr.add_conditional_alert(
-                symbol="RELIANCE", conditions=conditions,
+                symbol="RELIANCE",
+                conditions=conditions,
                 webhook_url="https://example.com/cond-hook",
             )
         assert alert.webhook_url == "https://example.com/cond-hook"
@@ -139,12 +169,18 @@ class TestAddConditionalAlertWebhook:
 
 # ── _webhook_notify ───────────────────────────────────────────
 
+
 class TestWebhookNotify:
     def test_posts_to_webhook_url(self):
         alert = Alert(
-            id="wh001", alert_type="PRICE", symbol="RELIANCE",
-            exchange="NSE", condition="ABOVE", threshold=2800.0,
-            triggered=True, triggered_at="2026-04-03T11:00:00",
+            id="wh001",
+            alert_type="PRICE",
+            symbol="RELIANCE",
+            exchange="NSE",
+            condition="ABOVE",
+            threshold=2800.0,
+            triggered=True,
+            triggered_at="2026-04-03T11:00:00",
             webhook_url="https://example.com/callback",
         )
 
@@ -154,10 +190,12 @@ class TestWebhookNotify:
             pass
 
         def fake_urlopen(req, timeout=10):
-            posted.append({
-                "url": req.full_url,
-                "body": json.loads(req.data),
-            })
+            posted.append(
+                {
+                    "url": req.full_url,
+                    "body": json.loads(req.data),
+                }
+            )
             return FakeResponse()
 
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
@@ -174,9 +212,14 @@ class TestWebhookNotify:
 
     def test_posts_correct_content_type(self):
         alert = Alert(
-            id="wh002", alert_type="PRICE", symbol="TCS",
-            exchange="NSE", condition="BELOW", threshold=3500.0,
-            triggered=True, triggered_at="2026-04-03T12:00:00",
+            id="wh002",
+            alert_type="PRICE",
+            symbol="TCS",
+            exchange="NSE",
+            condition="BELOW",
+            threshold=3500.0,
+            triggered=True,
+            triggered_at="2026-04-03T12:00:00",
             webhook_url="https://example.com/cb",
         )
 
@@ -195,25 +238,36 @@ class TestWebhookNotify:
     def test_webhook_failure_does_not_raise(self):
         """If the webhook endpoint is unreachable, _webhook_notify must not crash."""
         alert = Alert(
-            id="wh003", alert_type="PRICE", symbol="INFY",
-            exchange="NSE", condition="ABOVE", threshold=1600.0,
-            triggered=True, triggered_at="2026-04-03T12:00:00",
+            id="wh003",
+            alert_type="PRICE",
+            symbol="INFY",
+            exchange="NSE",
+            condition="ABOVE",
+            threshold=1600.0,
+            triggered=True,
+            triggered_at="2026-04-03T12:00:00",
             webhook_url="https://unreachable.invalid/cb",
         )
         with patch("urllib.request.urlopen", side_effect=Exception("connection refused")):
-            _webhook_notify(alert)   # must not raise
+            _webhook_notify(alert)  # must not raise
             time.sleep(0.1)
 
 
 # ── _notify fires webhook when alert triggers ─────────────────
 
+
 class TestNotifyIntegration:
     def test_notify_calls_webhook_when_url_set(self, tmp_path):
         """AlertManager._notify should call _webhook_notify for alerts with webhook_url."""
         alert = Alert(
-            id="ni001", alert_type="PRICE", symbol="RELIANCE",
-            exchange="NSE", condition="ABOVE", threshold=2800.0,
-            triggered=True, triggered_at="2026-04-03T13:00:00",
+            id="ni001",
+            alert_type="PRICE",
+            symbol="RELIANCE",
+            exchange="NSE",
+            condition="ABOVE",
+            threshold=2800.0,
+            triggered=True,
+            triggered_at="2026-04-03T13:00:00",
             webhook_url="https://example.com/fire",
         )
 
@@ -232,9 +286,14 @@ class TestNotifyIntegration:
     def test_notify_skips_webhook_when_no_url(self, tmp_path):
         """AlertManager._notify should NOT call _webhook_notify if webhook_url is None."""
         alert = Alert(
-            id="ni002", alert_type="PRICE", symbol="TCS",
-            exchange="NSE", condition="ABOVE", threshold=3800.0,
-            triggered=True, triggered_at="2026-04-03T13:00:00",
+            id="ni002",
+            alert_type="PRICE",
+            symbol="TCS",
+            exchange="NSE",
+            condition="ABOVE",
+            threshold=3800.0,
+            triggered=True,
+            triggered_at="2026-04-03T13:00:00",
             webhook_url=None,
         )
 

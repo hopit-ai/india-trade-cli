@@ -13,8 +13,8 @@ import threading
 from typing import Optional
 
 _lock = threading.Lock()
-_active_command: Optional[str] = None   # e.g. "/analyze RELIANCE"
-_pending_count: int = 0                  # how many commands in flight
+_active_command: Optional[str] = None  # e.g. "/analyze RELIANCE"
+_pending_count: int = 0  # how many commands in flight
 
 
 def set_active(command: str) -> None:

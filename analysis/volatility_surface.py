@@ -25,30 +25,32 @@ console = Console()
 
 # ── Skew & Term Structure Classification ─────────────────────
 
+
 def classify_skew(otm_put_iv: float, atm_iv: float, otm_call_iv: float) -> str:
     """Classify the IV smile shape."""
     put_skew = otm_put_iv - atm_iv
     call_skew = otm_call_iv - atm_iv
 
     if put_skew > 3.0 and put_skew > call_skew + 2.0:
-        return "PUT_SKEW"       # Crash protection premium — market fears downside
+        return "PUT_SKEW"  # Crash protection premium — market fears downside
     elif call_skew > 3.0 and call_skew > put_skew + 2.0:
-        return "CALL_SKEW"      # Rally expectation — market fears missing upside
+        return "CALL_SKEW"  # Rally expectation — market fears missing upside
     else:
-        return "SYMMETRIC"      # Normal smile — balanced expectations
+        return "SYMMETRIC"  # Normal smile — balanced expectations
 
 
 def classify_term_structure(near_iv: float, far_iv: float) -> str:
     """Classify IV term structure."""
     diff = far_iv - near_iv
     if diff > 1.5:
-        return "CONTANGO"       # Normal — far expiry IV higher
+        return "CONTANGO"  # Normal — far expiry IV higher
     elif diff < -1.5:
         return "BACKWARDATION"  # Event risk — near expiry IV higher (unusual)
     return "FLAT"
 
 
 # ── IV Smile Computation ────────────────────────────────────
+
 
 def compute_iv_smile(underlying: str, expiry: Optional[str] = None) -> Optional[pd.DataFrame]:
     """
@@ -81,6 +83,7 @@ def compute_iv_smile(underlying: str, expiry: Optional[str] = None) -> Optional[
             if (iv_val is None or iv_val <= 0) and c.last_price > 0:
                 try:
                     from analysis.options import compute_greeks
+
                     exp_str = c.expiry if c.expiry else expiry
                     if exp_str:
                         g = compute_greeks(spot, s, exp_str, c.option_type, c.last_price)
@@ -135,6 +138,7 @@ def compute_iv_term_structure(underlying: str) -> Optional[pd.DataFrame]:
                     if (iv is None or iv <= 0) and c.last_price > 0:
                         try:
                             from analysis.options import compute_greeks
+
                             g = compute_greeks(spot, atm, exp, c.option_type, c.last_price)
                             iv = g.iv_pct
                         except Exception:
@@ -146,13 +150,16 @@ def compute_iv_term_structure(underlying: str) -> Optional[pd.DataFrame]:
 
             if ce_iv or pe_iv:
                 from analysis.options import _dte_days
-                rows.append({
-                    "expiry": exp,
-                    "dte": _dte_days(exp),
-                    "atm_strike": atm,
-                    "ce_iv": ce_iv,
-                    "pe_iv": pe_iv,
-                })
+
+                rows.append(
+                    {
+                        "expiry": exp,
+                        "dte": _dte_days(exp),
+                        "atm_strike": atm,
+                        "ce_iv": ce_iv,
+                        "pe_iv": pe_iv,
+                    }
+                )
 
         return pd.DataFrame(rows) if rows else None
     except Exception:
@@ -175,8 +182,8 @@ def print_iv_smile(underlying: str, expiry: Optional[str] = None) -> None:
     for _, row in df.iterrows():
         table.add_row(
             f"{row['strike']:,.0f}",
-            f"{row['ce_iv']:.1f}%" if pd.notna(row.get('ce_iv')) and row['ce_iv'] else "—",
-            f"{row['pe_iv']:.1f}%" if pd.notna(row.get('pe_iv')) and row['pe_iv'] else "—",
+            f"{row['ce_iv']:.1f}%" if pd.notna(row.get("ce_iv")) and row["ce_iv"] else "—",
+            f"{row['pe_iv']:.1f}%" if pd.notna(row.get("pe_iv")) and row["pe_iv"] else "—",
             f"{row['moneyness']:+.1f}%",
         )
 
@@ -187,7 +194,15 @@ def print_iv_smile(underlying: str, expiry: Optional[str] = None) -> None:
     if len(valid) >= 3:
         atm_idx = valid["moneyness"].abs().idxmin()
         atm_iv = valid.loc[atm_idx, "pe_iv"] or valid.loc[atm_idx, "ce_iv"] or 0
-        otm_put = valid[valid["moneyness"] < -3]["pe_iv"].mean() if len(valid[valid["moneyness"] < -3]) else atm_iv
-        otm_call = valid[valid["moneyness"] > 3]["ce_iv"].mean() if len(valid[valid["moneyness"] > 3]) else atm_iv
+        otm_put = (
+            valid[valid["moneyness"] < -3]["pe_iv"].mean()
+            if len(valid[valid["moneyness"] < -3])
+            else atm_iv
+        )
+        otm_call = (
+            valid[valid["moneyness"] > 3]["ce_iv"].mean()
+            if len(valid[valid["moneyness"] > 3])
+            else atm_iv
+        )
         skew = classify_skew(otm_put, atm_iv, otm_call)
         console.print(f"  Skew: [bold]{skew}[/bold]")

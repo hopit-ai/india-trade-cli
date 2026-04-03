@@ -27,9 +27,11 @@ console = Console()
 
 # ── Lightweight Greeks container (for testing without broker) ─
 
+
 @dataclass
 class _PortfolioGreeksLike:
     """Minimal Greeks container matching PortfolioGreeks interface."""
+
     net_delta: float = 0.0
     net_theta: float = 0.0
     net_vega: float = 0.0
@@ -40,12 +42,13 @@ class _PortfolioGreeksLike:
 
 # ── Delta Hedge ──────────────────────────────────────────────
 
+
 @dataclass
 class DeltaHedgeSuggestion:
     current_delta: float
     target_delta: float
-    gap: float                # how much delta to add (positive) or remove (negative)
-    suggestions: list[dict]   # [{"action", "instrument", "lots", "delta_change"}]
+    gap: float  # how much delta to add (positive) or remove (negative)
+    suggestions: list[dict]  # [{"action", "instrument", "lots", "delta_change"}]
     cost_estimate: float = 0.0
 
 
@@ -87,41 +90,49 @@ def compute_delta_hedge(
 
     if gap > 0:
         # Need positive delta: BUY futures
-        suggestions.append({
-            "action": "BUY",
-            "instrument": f"{underlying} FUT (nearest expiry)",
-            "lots": lots_rounded,
-            "delta_change": f"+{lots_rounded * delta_per_lot:.0f}",
-            "note": f"Adds +{lots_rounded * delta_per_lot:.0f} delta",
-        })
+        suggestions.append(
+            {
+                "action": "BUY",
+                "instrument": f"{underlying} FUT (nearest expiry)",
+                "lots": lots_rounded,
+                "delta_change": f"+{lots_rounded * delta_per_lot:.0f}",
+                "note": f"Adds +{lots_rounded * delta_per_lot:.0f} delta",
+            }
+        )
     else:
         # Need negative delta: SELL futures
-        suggestions.append({
-            "action": "SELL",
-            "instrument": f"{underlying} FUT (nearest expiry)",
-            "lots": lots_rounded,
-            "delta_change": f"-{lots_rounded * delta_per_lot:.0f}",
-            "note": f"Reduces delta by {lots_rounded * delta_per_lot:.0f}",
-        })
+        suggestions.append(
+            {
+                "action": "SELL",
+                "instrument": f"{underlying} FUT (nearest expiry)",
+                "lots": lots_rounded,
+                "delta_change": f"-{lots_rounded * delta_per_lot:.0f}",
+                "note": f"Reduces delta by {lots_rounded * delta_per_lot:.0f}",
+            }
+        )
 
     # Also suggest options alternative
     if abs(gap) > 50:
         if gap > 0:
-            suggestions.append({
-                "action": "BUY",
-                "instrument": f"{underlying} ATM CE (alternative)",
-                "lots": lots_rounded * 2,  # delta ~0.5 per option
-                "delta_change": f"+{lots_rounded * delta_per_lot:.0f}",
-                "note": "Options: ~0.5 delta per lot, need 2x lots",
-            })
+            suggestions.append(
+                {
+                    "action": "BUY",
+                    "instrument": f"{underlying} ATM CE (alternative)",
+                    "lots": lots_rounded * 2,  # delta ~0.5 per option
+                    "delta_change": f"+{lots_rounded * delta_per_lot:.0f}",
+                    "note": "Options: ~0.5 delta per lot, need 2x lots",
+                }
+            )
         else:
-            suggestions.append({
-                "action": "BUY",
-                "instrument": f"{underlying} ATM PE (alternative)",
-                "lots": lots_rounded * 2,
-                "delta_change": f"-{lots_rounded * delta_per_lot:.0f}",
-                "note": "Options: ~-0.5 delta per lot, need 2x lots",
-            })
+            suggestions.append(
+                {
+                    "action": "BUY",
+                    "instrument": f"{underlying} ATM PE (alternative)",
+                    "lots": lots_rounded * 2,
+                    "delta_change": f"-{lots_rounded * delta_per_lot:.0f}",
+                    "note": "Options: ~-0.5 delta per lot, need 2x lots",
+                }
+            )
 
     return DeltaHedgeSuggestion(
         current_delta=net_delta,
@@ -133,6 +144,7 @@ def compute_delta_hedge(
 
 # ── Roll Suggestions ─────────────────────────────────────────
 
+
 @dataclass
 class RollSuggestion:
     current_symbol: str
@@ -141,8 +153,8 @@ class RollSuggestion:
     current_premium: float
     next_expiry: str
     next_premium: float
-    roll_cost: float          # positive = credit, negative = debit
-    recommendation: str       # "ROLL" | "LET EXPIRE" | "CLOSE"
+    roll_cost: float  # positive = credit, negative = debit
+    recommendation: str  # "ROLL" | "LET EXPIRE" | "CLOSE"
     reason: str
 
 
@@ -198,22 +210,25 @@ def compute_roll_suggestions(
 
         roll_cost = next_premium_estimate - ltp if rec == "ROLL" else 0
 
-        suggestions.append(RollSuggestion(
-            current_symbol=pos.get("symbol", ""),
-            current_expiry=expiry_str,
-            current_dte=dte,
-            current_premium=ltp,
-            next_expiry=next_expiry.isoformat(),
-            next_premium=round(next_premium_estimate, 2),
-            roll_cost=round(roll_cost, 2),
-            recommendation=rec,
-            reason=reason,
-        ))
+        suggestions.append(
+            RollSuggestion(
+                current_symbol=pos.get("symbol", ""),
+                current_expiry=expiry_str,
+                current_dte=dte,
+                current_premium=ltp,
+                next_expiry=next_expiry.isoformat(),
+                next_premium=round(next_premium_estimate, 2),
+                roll_cost=round(roll_cost, 2),
+                recommendation=rec,
+                reason=reason,
+            )
+        )
 
     return suggestions
 
 
 # ── Greeks Dashboard ─────────────────────────────────────────
+
 
 @dataclass
 class GreeksDashboard:
@@ -227,10 +242,10 @@ class GreeksDashboard:
 
 
 # Thresholds for warnings
-DELTA_WARN = 200      # net delta above this = directionally exposed
-THETA_WARN = -500     # daily theta below this = heavy time decay
-GAMMA_WARN = 1.0      # gamma above this = high gamma risk
-VEGA_WARN = 500       # vega above this = significant IV exposure
+DELTA_WARN = 200  # net delta above this = directionally exposed
+THETA_WARN = -500  # daily theta below this = heavy time decay
+GAMMA_WARN = 1.0  # gamma above this = high gamma risk
+VEGA_WARN = 500  # vega above this = significant IV exposure
 
 
 def build_dashboard(
@@ -271,21 +286,15 @@ def build_dashboard(
             f"Heavy theta decay: ₹{abs(net_theta):,.0f}/day — "
             f"losing ₹{abs(net_theta) * 5:,.0f}/week in time value"
         )
-        actions.append(
-            "Close or roll short-dated positions to reduce theta bleed"
-        )
+        actions.append("Close or roll short-dated positions to reduce theta bleed")
         risk_score += 2
 
     # Gamma check
     if abs(net_gamma) > GAMMA_WARN:
         warnings.append(
-            f"High gamma: {net_gamma:+.2f} — "
-            f"delta will change rapidly with price moves"
+            f"High gamma: {net_gamma:+.2f} — delta will change rapidly with price moves"
         )
-        actions.append(
-            "Reduce gamma exposure before expiry — "
-            "close or roll near-expiry options"
-        )
+        actions.append("Reduce gamma exposure before expiry — close or roll near-expiry options")
         risk_score += 3
 
     # Vega check
@@ -323,6 +332,7 @@ def build_dashboard(
 
 # ── Display Functions ────────────────────────────────────────
 
+
 def print_delta_hedge(suggestion: DeltaHedgeSuggestion) -> None:
     """Display delta hedge suggestions as Rich panel."""
     lines = [
@@ -344,11 +354,13 @@ def print_delta_hedge(suggestion: DeltaHedgeSuggestion) -> None:
             if s.get("note"):
                 lines.append(f"    [dim]{s['note']}[/dim]")
 
-    console.print(Panel(
-        "\n".join(lines),
-        title="[bold cyan]Delta Hedge Suggestion[/bold cyan]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold cyan]Delta Hedge Suggestion[/bold cyan]",
+            border_style="cyan",
+        )
+    )
 
 
 def print_roll_suggestions(suggestions: list[RollSuggestion]) -> None:
@@ -366,7 +378,9 @@ def print_roll_suggestions(suggestions: list[RollSuggestion]) -> None:
     table.add_column("Reason")
 
     for s in suggestions:
-        rec_color = {"ROLL": "yellow", "LET EXPIRE": "dim", "CLOSE": "red"}.get(s.recommendation, "white")
+        rec_color = {"ROLL": "yellow", "LET EXPIRE": "dim", "CLOSE": "red"}.get(
+            s.recommendation, "white"
+        )
         table.add_row(
             s.current_symbol[:20],
             s.current_expiry[:10],
@@ -402,8 +416,10 @@ def print_dashboard(dash: GreeksDashboard) -> None:
         for a in dash.actions:
             lines.append(f"    → {a}")
 
-    console.print(Panel(
-        "\n".join(lines),
-        title="[bold cyan]Greeks Dashboard[/bold cyan]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold cyan]Greeks Dashboard[/bold cyan]",
+            border_style="cyan",
+        )
+    )

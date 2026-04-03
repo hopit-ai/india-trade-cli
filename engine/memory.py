@@ -50,56 +50,59 @@ from rich.table import Table
 console = Console()
 
 MEMORY_FILE = Path.home() / ".trading_platform" / "trade_memory.json"
-MAX_MEMORIES = 500   # cap to prevent unbounded growth
+MAX_MEMORIES = 500  # cap to prevent unbounded growth
 
 
 # ── Data Model ───────────────────────────────────────────────
 
+
 @dataclass
 class TradeRecord:
     """A single analysis + recommendation, with optional outcome."""
-    id:            str                        # unique ID
-    timestamp:     str                        # ISO format
-    symbol:        str
-    exchange:      str
+
+    id: str  # unique ID
+    timestamp: str  # ISO format
+    symbol: str
+    exchange: str
 
     # Analysis context (market state at time of analysis)
-    verdict:       str                        # STRONG_BUY / BUY / HOLD / SELL / STRONG_SELL
-    confidence:    int                        # 0-100
-    analyst_scores: dict = field(default_factory=dict)   # {"Technical": 45, "Fundamental": 72, ...}
+    verdict: str  # STRONG_BUY / BUY / HOLD / SELL / STRONG_SELL
+    confidence: int  # 0-100
+    analyst_scores: dict = field(default_factory=dict)  # {"Technical": 45, "Fundamental": 72, ...}
 
     # Market context snapshot
-    vix:           Optional[float] = None
-    nifty_level:   Optional[float] = None
-    nifty_change:  Optional[float] = None     # % change on analysis day
-    fii_net:       Optional[float] = None     # FII net buy/sell in Cr
-    sector:        Optional[str] = None
+    vix: Optional[float] = None
+    nifty_level: Optional[float] = None
+    nifty_change: Optional[float] = None  # % change on analysis day
+    fii_net: Optional[float] = None  # FII net buy/sell in Cr
+    sector: Optional[str] = None
 
     # Recommendation
-    strategy:      str = ""                   # e.g. "Bull Call Spread", "Delivery Buy"
-    entry_price:   Optional[float] = None
-    stop_loss:     Optional[float] = None
-    target_price:  Optional[float] = None
-    risk_reward:   Optional[str] = None
+    strategy: str = ""  # e.g. "Bull Call Spread", "Delivery Buy"
+    entry_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    target_price: Optional[float] = None
+    risk_reward: Optional[str] = None
 
     # Debate summary
-    debate_winner: str = ""                   # "BULL" or "BEAR"
-    bull_summary:  str = ""                   # 1-2 sentence summary
-    bear_summary:  str = ""
+    debate_winner: str = ""  # "BULL" or "BEAR"
+    bull_summary: str = ""  # 1-2 sentence summary
+    bear_summary: str = ""
 
     # Outcome (filled later when trade is closed)
-    outcome:       Optional[str] = None       # "WIN" / "LOSS" / "BREAKEVEN" / "EXPIRED"
-    actual_pnl:    Optional[float] = None     # realized P&L
-    exit_price:    Optional[float] = None
-    exit_date:     Optional[str] = None
-    hold_days:     Optional[int] = None
+    outcome: Optional[str] = None  # "WIN" / "LOSS" / "BREAKEVEN" / "EXPIRED"
+    actual_pnl: Optional[float] = None  # realized P&L
+    exit_price: Optional[float] = None
+    exit_date: Optional[str] = None
+    hold_days: Optional[int] = None
     outcome_notes: str = ""
 
     # Tags for filtering
-    tags:          list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
 
 # ── Trade Memory Manager ─────────────────────────────────────
+
 
 class TradeMemory:
     """Persistent store for trade analyses and their outcomes."""
@@ -169,9 +172,9 @@ class TradeMemory:
         self,
         symbol: str,
         exchange: str,
-        analyst_reports: list,   # list of AnalystReport
-        debate: Any,             # DebateResult
-        synthesis: str,          # raw LLM output
+        analyst_reports: list,  # list of AnalystReport
+        debate: Any,  # DebateResult
+        synthesis: str,  # raw LLM output
     ) -> TradeRecord:
         """
         Store a record directly from multi-agent pipeline output.
@@ -183,15 +186,15 @@ class TradeMemory:
         fii_net = None
 
         for report in analyst_reports:
-            if hasattr(report, 'analyst') and hasattr(report, 'score'):
+            if hasattr(report, "analyst") and hasattr(report, "score"):
                 scores[report.analyst] = report.score
 
                 # Extract market context from Risk Manager
-                if report.analyst == "Risk Manager" and hasattr(report, 'data'):
+                if report.analyst == "Risk Manager" and hasattr(report, "data"):
                     vix = report.data.get("vix")
 
                 # Extract FII data from News & Macro
-                if report.analyst == "News & Macro" and hasattr(report, 'data'):
+                if report.analyst == "News & Macro" and hasattr(report, "data"):
                     fii_dii = report.data.get("fii_dii", [])
                     if fii_dii and isinstance(fii_dii, list) and fii_dii:
                         latest = fii_dii[0] if isinstance(fii_dii[0], dict) else {}
@@ -205,11 +208,11 @@ class TradeMemory:
         bull_summary = ""
         bear_summary = ""
         if debate:
-            if hasattr(debate, 'bull_argument'):
+            if hasattr(debate, "bull_argument"):
                 bull_summary = _truncate(debate.bull_argument, 200)
-            if hasattr(debate, 'bear_argument'):
+            if hasattr(debate, "bear_argument"):
                 bear_summary = _truncate(debate.bear_argument, 200)
-            if hasattr(debate, 'winner'):
+            if hasattr(debate, "winner"):
                 debate_winner = debate.winner
 
         return self.store(
@@ -232,7 +235,7 @@ class TradeMemory:
     def record_outcome(
         self,
         trade_id: str,
-        outcome: str = "",          # WIN / LOSS / BREAKEVEN
+        outcome: str = "",  # WIN / LOSS / BREAKEVEN
         actual_pnl: Optional[float] = None,
         exit_price: Optional[float] = None,
         notes: str = "",
@@ -292,6 +295,7 @@ class TradeMemory:
             cutoff = datetime.now().isoformat(timespec="seconds")
             try:
                 from datetime import timedelta
+
                 cutoff_dt = datetime.now() - timedelta(days=days_back)
                 cutoff = cutoff_dt.isoformat(timespec="seconds")
                 results = [r for r in results if r.timestamp >= cutoff]
@@ -375,10 +379,7 @@ class TradeMemory:
         top_symbols = sorted(symbols.items(), key=lambda x: -x[1])[:5]
 
         # Average confidence
-        avg_confidence = (
-            sum(r.confidence for r in self._records) / total
-            if total else 0
-        )
+        avg_confidence = sum(r.confidence for r in self._records) / total if total else 0
 
         return {
             "total_analyses": total,
@@ -417,13 +418,18 @@ class TradeMemory:
 
         for r in recent:
             verdict_style = {
-                "STRONG_BUY": "bold green", "BUY": "green",
-                "HOLD": "yellow", "SELL": "red", "STRONG_SELL": "bold red",
+                "STRONG_BUY": "bold green",
+                "BUY": "green",
+                "HOLD": "yellow",
+                "SELL": "red",
+                "STRONG_SELL": "bold red",
             }.get(r.verdict, "white")
 
             outcome_str = ""
             if r.outcome:
-                o_style = "green" if r.outcome == "WIN" else "red" if r.outcome == "LOSS" else "yellow"
+                o_style = (
+                    "green" if r.outcome == "WIN" else "red" if r.outcome == "LOSS" else "yellow"
+                )
                 outcome_str = f"[{o_style}]{r.outcome}[/{o_style}]"
 
             pnl_str = ""
@@ -434,7 +440,9 @@ class TradeMemory:
             date_str = r.timestamp[:10] if r.timestamp else ""
 
             table.add_row(
-                r.id, date_str, r.symbol,
+                r.id,
+                date_str,
+                r.symbol,
                 f"[{verdict_style}]{r.verdict}[/{verdict_style}]",
                 f"{r.confidence}%",
                 r.strategy[:20] if r.strategy else "-",
@@ -451,25 +459,27 @@ class TradeMemory:
         lines = []
         lines.append(f"  Total Analyses : {stats['total_analyses']}")
         lines.append(f"  With Outcomes  : {stats['with_outcome']}")
-        if stats['with_outcome']:
+        if stats["with_outcome"]:
             lines.append(f"  Win Rate       : {stats['win_rate']}%")
             lines.append(f"  Total P&L      : {stats['total_pnl']:+,.0f}")
             lines.append(f"  Avg P&L/Trade  : {stats['avg_pnl']:+,.0f}")
         lines.append(f"  Avg Confidence : {stats['avg_confidence']}%")
 
-        if stats['top_symbols']:
-            syms = ", ".join(f"{s}({c})" for s, c in stats['top_symbols'])
+        if stats["top_symbols"]:
+            syms = ", ".join(f"{s}({c})" for s, c in stats["top_symbols"])
             lines.append(f"  Top Symbols    : {syms}")
 
-        if stats['verdict_distribution']:
-            vd = ", ".join(f"{k}:{v}" for k, v in stats['verdict_distribution'].items())
+        if stats["verdict_distribution"]:
+            vd = ", ".join(f"{k}:{v}" for k, v in stats["verdict_distribution"].items())
             lines.append(f"  Verdicts       : {vd}")
 
-        console.print(Panel(
-            "\n".join(lines),
-            title="[bold cyan]Trade Memory Stats[/bold cyan]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold cyan]Trade Memory Stats[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
     # ── Context for LLM ──────────────────────────────────────
 
@@ -542,6 +552,7 @@ class TradeMemory:
 
 # ── Helpers ──────────────────────────────────────────────────
 
+
 def _parse_synthesis(text: str) -> tuple[str, int, str]:
     """Extract verdict, confidence, and strategy from synthesis LLM output."""
     verdict = "HOLD"
@@ -574,7 +585,7 @@ def _truncate(text: str, max_len: int) -> str:
     """Truncate text to max_len, adding ellipsis if needed."""
     if len(text) <= max_len:
         return text
-    return text[:max_len - 3] + "..."
+    return text[: max_len - 3] + "..."
 
 
 # ── Singleton ────────────────────────────────────────────────

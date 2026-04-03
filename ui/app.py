@@ -32,24 +32,28 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing   import ClassVar
+from typing import ClassVar
 
 import pytz
-from textual          import on, work
-from textual.app      import App, ComposeResult
-from textual.binding  import Binding
+from textual import on, work
+from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets  import (
-    Header, Footer, Input, Static, Label,
+from textual.widgets import (
+    Header,
+    Footer,
+    Input,
+    Static,
+    Label,
     RichLog,
 )
 
-from ui.widgets.portfolio    import PortfolioWidget
-from ui.widgets.risk_meter   import RiskMeterWidget
+from ui.widgets.portfolio import PortfolioWidget
+from ui.widgets.risk_meter import RiskMeterWidget
 
 IST = pytz.timezone("Asia/Kolkata")
 
-REFRESH_INTERVAL = 30   # seconds between auto-refresh of market panels
+REFRESH_INTERVAL = 30  # seconds between auto-refresh of market panels
 
 
 class MarketTickerWidget(Static):
@@ -81,8 +85,9 @@ class MarketTickerWidget(Static):
     def refresh_data(self) -> None:
         try:
             from market.indices import get_market_snapshot
+
             snap = get_market_snapshot()
-            now  = datetime.now(IST).strftime("%H:%M")
+            now = datetime.now(IST).strftime("%H:%M")
 
             def _row(name, val, chg):
                 c = "green" if chg >= 0 else "red"
@@ -134,7 +139,7 @@ class TradingTUI(App):
     the AI agent's guidance appears.
     """
 
-    TITLE   = "TradeAI — Guided Trading Terminal"
+    TITLE = "TradeAI — Guided Trading Terminal"
     SUB_TITLE = f"Paper Mode | {datetime.now(IST).strftime('%d %b %Y')}"
 
     CSS = """
@@ -190,11 +195,11 @@ class TradingTUI(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("ctrl+b",  "morning_brief",   "Brief",    show=True),
-        Binding("ctrl+o",  "options_chain",   "Options",  show=True),
-        Binding("ctrl+r",  "refresh_all",     "Refresh",  show=True),
-        Binding("ctrl+q",  "quit",            "Quit",     show=True),
-        Binding("f1",      "show_help",       "Help",     show=True),
+        Binding("ctrl+b", "morning_brief", "Brief", show=True),
+        Binding("ctrl+o", "options_chain", "Options", show=True),
+        Binding("ctrl+r", "refresh_all", "Refresh", show=True),
+        Binding("ctrl+q", "quit", "Quit", show=True),
+        Binding("f1", "show_help", "Help", show=True),
     ]
 
     def compose(self) -> ComposeResult:
@@ -244,6 +249,7 @@ class TradingTUI(App):
     def init_agent(self) -> None:
         try:
             from agent.core import get_agent
+
             get_agent()
         except Exception:
             pass
@@ -285,6 +291,7 @@ class TradingTUI(App):
 
             class TUIConsole(_rc.Console):
                 """Intercept rich prints and write to chat panel."""
+
                 def __init__(self_inner, *args, **kwargs):
                     super().__init__(*args, **kwargs)
 
@@ -325,9 +332,9 @@ class TradingTUI(App):
 
     def action_refresh_all(self) -> None:
         try:
-            self.query_one("#market-ticker",    MarketTickerWidget).refresh_data()
+            self.query_one("#market-ticker", MarketTickerWidget).refresh_data()
             self.query_one("#portfolio-widget", PortfolioWidget).refresh_data()
-            self.query_one("#risk-widget",      RiskMeterWidget).refresh_data()
+            self.query_one("#risk-widget", RiskMeterWidget).refresh_data()
         except Exception:
             pass
 

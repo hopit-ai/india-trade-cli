@@ -16,48 +16,51 @@ from typing import Optional
 
 # ── Shared dataclasses ────────────────────────────────────────────────────────
 
+
 @dataclass
 class UserProfile:
     user_id: str
     name: str
     email: str
-    broker: str                     # "ZERODHA" | "GROWW" | "PAPER"
+    broker: str  # "ZERODHA" | "GROWW" | "PAPER"
 
 
 @dataclass
 class Funds:
-    available_cash: float           # Cash available to trade
-    used_margin: float              # Margin currently blocked
-    total_balance: float            # Net account value
+    available_cash: float  # Cash available to trade
+    used_margin: float  # Margin currently blocked
+    total_balance: float  # Net account value
     currency: str = "INR"
 
 
 @dataclass
 class Holding:
     """A long-term delivery (CNC) position in the portfolio."""
+
     symbol: str
-    exchange: str                   # NSE | BSE
+    exchange: str  # NSE | BSE
     quantity: int
     avg_price: float
     last_price: float
-    pnl: float                      # Unrealised P&L in INR
-    pnl_pct: float                  # Unrealised P&L as %
-    day_change: float = 0.0         # Today's change in INR
+    pnl: float  # Unrealised P&L in INR
+    pnl_pct: float  # Unrealised P&L as %
+    day_change: float = 0.0  # Today's change in INR
     day_change_pct: float = 0.0
 
 
 @dataclass
 class Position:
     """An open intraday or F&O position."""
+
     symbol: str
-    exchange: str                   # NSE | BSE | NFO | MCX
-    product: str                    # CNC | MIS | NRML
-    quantity: int                   # Positive = long, negative = short
+    exchange: str  # NSE | BSE | NFO | MCX
+    product: str  # CNC | MIS | NRML
+    quantity: int  # Positive = long, negative = short
     avg_price: float
     last_price: float
     pnl: float
-    instrument_type: str = "EQ"     # EQ | CE | PE | FUT
-    expiry: Optional[str] = None    # For F&O: "YYYY-MM-DD"
+    instrument_type: str = "EQ"  # EQ | CE | PE | FUT
+    expiry: Optional[str] = None  # For F&O: "YYYY-MM-DD"
     strike: Optional[float] = None  # For options
     lot_size: int = 1
 
@@ -65,33 +68,35 @@ class Position:
 @dataclass
 class Quote:
     """Live market snapshot for a single instrument."""
+
     symbol: str
     last_price: float
     open: float
     high: float
     low: float
-    close: float                    # Previous close
+    close: float  # Previous close
     volume: int
-    oi: Optional[int] = None        # Open Interest (F&O only)
+    oi: Optional[int] = None  # Open Interest (F&O only)
     bid: Optional[float] = None
     ask: Optional[float] = None
-    change: float = 0.0             # Change from prev close in INR
-    change_pct: float = 0.0         # Change as %
+    change: float = 0.0  # Change from prev close in INR
+    change_pct: float = 0.0  # Change as %
 
 
 @dataclass
 class OptionsContract:
     """A single row in the options chain."""
-    symbol: str                     # Trading symbol e.g. NIFTY24APR22800CE
-    underlying: str                 # e.g. NIFTY
-    expiry: str                     # "YYYY-MM-DD"
+
+    symbol: str  # Trading symbol e.g. NIFTY24APR22800CE
+    underlying: str  # e.g. NIFTY
+    expiry: str  # "YYYY-MM-DD"
     strike: float
-    option_type: str                # CE | PE
+    option_type: str  # CE | PE
     last_price: float
-    oi: int                         # Open interest
-    oi_change: int                  # OI change vs prev day
+    oi: int  # Open interest
+    oi_change: int  # OI change vs prev day
     volume: int
-    iv: Optional[float] = None      # Implied Volatility (%)
+    iv: Optional[float] = None  # Implied Volatility (%)
     bid: Optional[float] = None
     ask: Optional[float] = None
     lot_size: int = 1
@@ -101,23 +106,25 @@ class OptionsContract:
 @dataclass
 class OrderRequest:
     """Parameters for placing an order."""
+
     symbol: str
-    exchange: str                   # NSE | BSE | NFO | MCX
-    transaction_type: str           # BUY | SELL
+    exchange: str  # NSE | BSE | NFO | MCX
+    transaction_type: str  # BUY | SELL
     quantity: int
-    order_type: str                 # MARKET | LIMIT | SL | SL-M
-    product: str                    # CNC | MIS | NRML
-    price: Optional[float] = None   # Required for LIMIT / SL
+    order_type: str  # MARKET | LIMIT | SL | SL-M
+    product: str  # CNC | MIS | NRML
+    price: Optional[float] = None  # Required for LIMIT / SL
     trigger_price: Optional[float] = None  # Required for SL / SL-M
-    validity: str = "DAY"           # DAY | IOC
-    tag: Optional[str] = None       # Custom tag for tracking
+    validity: str = "DAY"  # DAY | IOC
+    tag: Optional[str] = None  # Custom tag for tracking
 
 
 @dataclass
 class OrderResponse:
     """Result of placing an order."""
+
     order_id: str
-    status: str                     # OPEN | COMPLETE | REJECTED | CANCELLED
+    status: str  # OPEN | COMPLETE | REJECTED | CANCELLED
     message: str = ""
     average_price: Optional[float] = None
     filled_quantity: int = 0
@@ -126,6 +133,7 @@ class OrderResponse:
 @dataclass
 class Order:
     """A historical or in-flight order."""
+
     order_id: str
     symbol: str
     exchange: str
@@ -142,6 +150,7 @@ class Order:
 
 
 # ── Abstract broker interface ─────────────────────────────────────────────────
+
 
 class BrokerAPI(ABC):
     """
@@ -247,11 +256,11 @@ class BrokerAPI(ABC):
 
     def get_historical_data(
         self,
-        symbol:    str,
-        exchange:  str = "NSE",
-        interval:  str = "day",
+        symbol: str,
+        exchange: str = "NSE",
+        interval: str = "day",
         from_date: Optional[datetime] = None,
-        to_date:   Optional[datetime] = None,
+        to_date: Optional[datetime] = None,
     ) -> list[dict]:
         """
         Return historical OHLCV candles as list of dicts.
@@ -261,9 +270,7 @@ class BrokerAPI(ABC):
         Override in broker subclasses that support historical data.
         Falls back to NotImplementedError so the caller can use mock data.
         """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} does not support historical data"
-        )
+        raise NotImplementedError(f"{self.__class__.__name__} does not support historical data")
 
     # ── Convenience helpers (non-abstract, shared by all) ─────
 
@@ -274,6 +281,6 @@ class BrokerAPI(ABC):
 
     def get_net_pnl(self) -> float:
         """Sum of unrealised P&L across holdings + positions."""
-        holdings_pnl  = sum(h.pnl for h in self.get_holdings())
+        holdings_pnl = sum(h.pnl for h in self.get_holdings())
         positions_pnl = sum(p.pnl for p in self.get_positions())
         return round(holdings_pnl + positions_pnl, 2)

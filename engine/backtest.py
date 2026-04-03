@@ -41,52 +41,55 @@ console = Console()
 
 # ── Data Models ──────────────────────────────────────────────
 
+
 @dataclass
 class Trade:
     """A single completed trade (entry + exit)."""
-    entry_date:  str
-    exit_date:   str
-    direction:   str        # "LONG" or "SHORT"
+
+    entry_date: str
+    exit_date: str
+    direction: str  # "LONG" or "SHORT"
     entry_price: float
-    exit_price:  float
-    quantity:    int
-    pnl:         float
-    pnl_pct:     float
-    hold_days:   int
-    signal:      str = ""   # what triggered this trade
+    exit_price: float
+    quantity: int
+    pnl: float
+    pnl_pct: float
+    hold_days: int
+    signal: str = ""  # what triggered this trade
 
 
 @dataclass
 class BacktestResult:
     """Complete backtest output."""
-    symbol:         str
-    strategy_name:  str
-    period:         str
-    start_date:     str
-    end_date:       str
+
+    symbol: str
+    strategy_name: str
+    period: str
+    start_date: str
+    end_date: str
 
     # Performance
-    total_return:   float       # %
-    cagr:           float       # %
-    sharpe_ratio:   float
-    max_drawdown:   float       # %
+    total_return: float  # %
+    cagr: float  # %
+    sharpe_ratio: float
+    max_drawdown: float  # %
     max_drawdown_date: str = ""
 
     # Trade stats
-    total_trades:   int = 0
+    total_trades: int = 0
     winning_trades: int = 0
-    losing_trades:  int = 0
-    win_rate:       float = 0.0
-    avg_win:        float = 0.0   # %
-    avg_loss:       float = 0.0   # %
-    profit_factor:  float = 0.0
-    avg_hold_days:  float = 0.0
+    losing_trades: int = 0
+    win_rate: float = 0.0
+    avg_win: float = 0.0  # %
+    avg_loss: float = 0.0  # %
+    profit_factor: float = 0.0
+    avg_hold_days: float = 0.0
 
     # Comparison
     buy_hold_return: float = 0.0  # %
 
-    trades:         list[Trade] = field(default_factory=list)
-    equity_curve:   list[float] = field(default_factory=list)
+    trades: list[Trade] = field(default_factory=list)
+    equity_curve: list[float] = field(default_factory=list)
 
     def print_summary(self) -> None:
         """Display backtest results as a Rich panel."""
@@ -119,11 +122,13 @@ class BacktestResult:
             f"  Avg Hold       : {self.avg_hold_days:.1f} days",
         ]
 
-        console.print(Panel(
-            "\n".join(lines),
-            title=f"[bold cyan]Backtest: {self.strategy_name} on {self.symbol}[/bold cyan]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"[bold cyan]Backtest: {self.strategy_name} on {self.symbol}[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
     def print_trades(self, n: int = 20) -> None:
         """Show individual trades."""
@@ -144,8 +149,11 @@ class BacktestResult:
         for t in trades:
             pnl_style = "green" if t.pnl >= 0 else "red"
             table.add_row(
-                t.entry_date[:10], t.exit_date[:10], t.direction,
-                f"{t.entry_price:,.1f}", f"{t.exit_price:,.1f}",
+                t.entry_date[:10],
+                t.exit_date[:10],
+                t.direction,
+                f"{t.entry_price:,.1f}",
+                f"{t.exit_price:,.1f}",
                 f"[{pnl_style}]{t.pnl_pct:+.2f}%[/{pnl_style}]",
                 str(t.hold_days),
             )
@@ -153,6 +161,7 @@ class BacktestResult:
 
 
 # ── Strategy Interface ───────────────────────────────────────
+
 
 class Strategy(ABC):
     """Base class for backtesting strategies."""
@@ -191,6 +200,7 @@ class RSIStrategy(Strategy):
 
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         from analysis.technical import rsi
+
         rsi_values = rsi(df["close"], self.period)
         signals = pd.Series(0, index=df.index)
         signals[rsi_values < self.buy_level] = 1
@@ -208,6 +218,7 @@ class MACrossStrategy(Strategy):
 
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         from analysis.technical import ema
+
         fast_ema = ema(df["close"], self.fast)
         slow_ema = ema(df["close"], self.slow)
         signals = pd.Series(0, index=df.index)
@@ -227,6 +238,7 @@ class MACDStrategy(Strategy):
 
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         from analysis.technical import ema
+
         ema12 = ema(df["close"], 12)
         ema26 = ema(df["close"], 26)
         macd_line = ema12 - ema26
@@ -250,6 +262,7 @@ class BollingerStrategy(Strategy):
 
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         from analysis.technical import sma
+
         mid = sma(df["close"], self.period)
         std = df["close"].rolling(self.period).std()
         upper = mid + self.std_dev * std
@@ -264,25 +277,26 @@ class BollingerStrategy(Strategy):
 # ── Strategy Registry ────────────────────────────────────────
 
 STRATEGIES = {
-    "rsi":       lambda args: RSIStrategy(
+    "rsi": lambda args: RSIStrategy(
         buy_level=int(args[0]) if args else 30,
         sell_level=int(args[1]) if len(args) > 1 else 70,
     ),
-    "ma":        lambda args: MACrossStrategy(
+    "ma": lambda args: MACrossStrategy(
         fast=int(args[0]) if args else 20,
         slow=int(args[1]) if len(args) > 1 else 50,
     ),
-    "ema":       lambda args: MACrossStrategy(
+    "ema": lambda args: MACrossStrategy(
         fast=int(args[0]) if args else 20,
         slow=int(args[1]) if len(args) > 1 else 50,
     ),
-    "macd":      lambda args: MACDStrategy(),
+    "macd": lambda args: MACDStrategy(),
     "bollinger": lambda args: BollingerStrategy(),
-    "bb":        lambda args: BollingerStrategy(),
+    "bb": lambda args: BollingerStrategy(),
 }
 
 
 # ── Backtester Engine ────────────────────────────────────────
+
 
 class Backtester:
     """
@@ -293,10 +307,10 @@ class Backtester:
 
     def __init__(
         self,
-        symbol:   str,
+        symbol: str,
         exchange: str = "NSE",
-        period:   str = "1y",
-        capital:  float = 100000,
+        period: str = "1y",
+        capital: float = 100000,
     ) -> None:
         self.symbol = symbol.upper()
         self.exchange = exchange.upper()
@@ -312,8 +326,13 @@ class Backtester:
         from market.history import get_ohlcv
 
         period_days = {
-            "1mo": 30, "3mo": 90, "6mo": 180,
-            "1y": 365, "2y": 730, "3y": 1095, "5y": 1825,
+            "1mo": 30,
+            "3mo": 90,
+            "6mo": 180,
+            "1y": 365,
+            "2y": 730,
+            "3y": 1095,
+            "5y": 1825,
         }
         days = period_days.get(self.period, 365)
 
@@ -353,7 +372,7 @@ class Backtester:
             return multi.run(strategy)
 
         trades: list[Trade] = []
-        position = 0        # 0 = flat, 1 = long
+        position = 0  # 0 = flat, 1 = long
         entry_price = 0.0
         entry_date = ""
         capital = self.initial_capital
@@ -380,29 +399,38 @@ class Backtester:
                     entry_dt = pd.Timestamp(entry_date)
                     exit_dt = pd.Timestamp(df.index[i])
                     # Strip timezone for safe subtraction
-                    if hasattr(entry_dt, 'tz') and entry_dt.tz:
+                    if hasattr(entry_dt, "tz") and entry_dt.tz:
                         entry_dt = entry_dt.tz_localize(None)
-                    if hasattr(exit_dt, 'tz') and exit_dt.tz:
+                    if hasattr(exit_dt, "tz") and exit_dt.tz:
                         exit_dt = exit_dt.tz_localize(None)
                     hold_days = (exit_dt - entry_dt).days
                 except Exception:
                     hold_days = 0
 
-                trades.append(Trade(
-                    entry_date=entry_date,
-                    exit_date=date_str,
-                    direction="LONG",
-                    entry_price=entry_price,
-                    exit_price=price,
-                    quantity=int(capital / price) if price > 0 else 0,
-                    pnl=round(pnl, 2),
-                    pnl_pct=round(pnl_pct, 2),
-                    hold_days=hold_days,
-                    signal=strategy.name,
-                ))
+                trades.append(
+                    Trade(
+                        entry_date=entry_date,
+                        exit_date=date_str,
+                        direction="LONG",
+                        entry_price=entry_price,
+                        exit_price=price,
+                        quantity=int(capital / price) if price > 0 else 0,
+                        pnl=round(pnl, 2),
+                        pnl_pct=round(pnl_pct, 2),
+                        hold_days=hold_days,
+                        signal=strategy.name,
+                    )
+                )
                 position = 0
 
-            equity.append(capital + (position * capital * (price - entry_price) / entry_price if position and entry_price else 0))
+            equity.append(
+                capital
+                + (
+                    position * capital * (price - entry_price) / entry_price
+                    if position and entry_price
+                    else 0
+                )
+            )
 
         # Close any open position at last price
         if position == 1:
@@ -410,23 +438,27 @@ class Backtester:
             pnl_pct = (last_price - entry_price) / entry_price * 100
             pnl = capital * pnl_pct / 100
             capital += pnl
-            trades.append(Trade(
-                entry_date=entry_date,
-                exit_date=str(df.index[-1])[:10],
-                direction="LONG",
-                entry_price=entry_price,
-                exit_price=last_price,
-                quantity=0,
-                pnl=round(pnl, 2),
-                pnl_pct=round(pnl_pct, 2),
-                hold_days=0,
-                signal=strategy.name + " (open)",
-            ))
+            trades.append(
+                Trade(
+                    entry_date=entry_date,
+                    exit_date=str(df.index[-1])[:10],
+                    direction="LONG",
+                    entry_price=entry_price,
+                    exit_price=last_price,
+                    quantity=0,
+                    pnl=round(pnl, 2),
+                    pnl_pct=round(pnl_pct, 2),
+                    hold_days=0,
+                    signal=strategy.name + " (open)",
+                )
+            )
 
         # Calculate metrics
         total_return = (capital - self.initial_capital) / self.initial_capital * 100
         first_close = float(df["close"].dropna().iloc[0]) if not df["close"].dropna().empty else 1
-        last_close = float(df["close"].dropna().iloc[-1]) if not df["close"].dropna().empty else first_close
+        last_close = (
+            float(df["close"].dropna().iloc[-1]) if not df["close"].dropna().empty else first_close
+        )
         buy_hold = (last_close - first_close) / first_close * 100 if first_close else 0
 
         # CAGR
@@ -446,7 +478,9 @@ class Backtester:
         drawdown = (equity_series - peak) / peak * 100
         max_dd = float(drawdown.min())
         max_dd_idx = int(drawdown.idxmin()) if not drawdown.empty else 0
-        max_dd_date = str(df.index[min(max_dd_idx, len(df) - 1)])[:10] if max_dd_idx < len(df) else ""
+        max_dd_date = (
+            str(df.index[min(max_dd_idx, len(df) - 1)])[:10] if max_dd_idx < len(df) else ""
+        )
 
         # Trade stats
         winners = [t for t in trades if t.pnl > 0]
@@ -456,7 +490,7 @@ class Backtester:
         avg_loss = sum(t.pnl_pct for t in losers) / len(losers) if losers else 0
         gross_profit = sum(t.pnl for t in winners)
         gross_loss = abs(sum(t.pnl for t in losers))
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
         avg_hold = sum(t.hold_days for t in trades) / len(trades) if trades else 0
 
         return BacktestResult(
@@ -486,56 +520,60 @@ class Backtester:
 
 # ── Multi-Symbol (Pairs) Backtester ──────────────────────────
 
+
 @dataclass
 class TradeLeg:
     """One leg of a multi-symbol trade."""
-    symbol:      str
-    direction:   str      # "LONG" or "SHORT"
+
+    symbol: str
+    direction: str  # "LONG" or "SHORT"
     entry_price: float
-    exit_price:  float
-    quantity:    int
-    pnl:         float
-    pnl_pct:     float
+    exit_price: float
+    quantity: int
+    pnl: float
+    pnl_pct: float
 
 
 @dataclass
 class PairTrade:
     """A complete multi-symbol trade (entry + exit on all legs)."""
-    entry_date:      str
-    exit_date:       str
-    legs:            list[TradeLeg]
-    combined_pnl:    float
+
+    entry_date: str
+    exit_date: str
+    legs: list[TradeLeg]
+    combined_pnl: float
     combined_pnl_pct: float
-    hold_days:       int
+    hold_days: int
 
 
 @dataclass
 class MultiBacktestResult:
     """Backtest result for multi-symbol strategies (pairs, hedged, etc.)."""
-    symbols:        list[str]
-    strategy_name:  str
-    period:         str
-    start_date:     str
-    end_date:       str
+
+    symbols: list[str]
+    strategy_name: str
+    period: str
+    start_date: str
+    end_date: str
 
     # Performance
-    total_return:   float       # %
-    cagr:           float       # %
-    sharpe_ratio:   float
-    max_drawdown:   float       # %
+    total_return: float  # %
+    cagr: float  # %
+    sharpe_ratio: float
+    max_drawdown: float  # %
 
     # Trade stats
-    total_trades:   int = 0
+    total_trades: int = 0
     winning_trades: int = 0
-    losing_trades:  int = 0
-    win_rate:       float = 0.0
-    avg_win:        float = 0.0
-    avg_loss:       float = 0.0
-    profit_factor:  float = 0.0
-    avg_hold_days:  float = 0.0
+    losing_trades: int = 0
+    win_rate: float = 0.0
+    avg_win: float = 0.0
+    avg_loss: float = 0.0
+    profit_factor: float = 0.0
+    avg_hold_days: float = 0.0
 
-    trades:         list[PairTrade] = field(default_factory=list)
-    equity_curve:   list[float] = field(default_factory=list)
+    trades: list[PairTrade] = field(default_factory=list)
+    equity_curve: list[float] = field(default_factory=list)
 
     def print_summary(self) -> None:
         """Display multi-symbol backtest results."""
@@ -563,11 +601,13 @@ class MultiBacktestResult:
             f"  Avg Hold       : {self.avg_hold_days:.1f} days",
         ]
 
-        console.print(Panel(
-            "\n".join(lines),
-            title=f"[bold cyan]Pairs Backtest: {self.strategy_name}[/bold cyan]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"[bold cyan]Pairs Backtest: {self.strategy_name}[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
     def print_trades(self, n: int = 20) -> None:
         """Show pair trades with all legs."""
@@ -624,8 +664,13 @@ class MultiBacktester:
         from market.history import get_ohlcv
 
         period_days = {
-            "1mo": 30, "3mo": 90, "6mo": 180,
-            "1y": 365, "2y": 730, "3y": 1095, "5y": 1825,
+            "1mo": 30,
+            "3mo": 90,
+            "6mo": 180,
+            "1y": 365,
+            "2y": 730,
+            "3y": 1095,
+            "5y": 1825,
         }
         days = period_days.get(self.period, 365)
 
@@ -675,7 +720,9 @@ class MultiBacktester:
         elif isinstance(signals, pd.DataFrame):
             sig_df = signals
         else:
-            raise TypeError(f"generate_signals must return Series or DataFrame, got {type(signals)}")
+            raise TypeError(
+                f"generate_signals must return Series or DataFrame, got {type(signals)}"
+            )
 
         # Align signals to common index
         common_idx = primary_df.index
@@ -746,38 +793,44 @@ class MultiBacktester:
                             pnl = capital_per_leg * pnl_pct / 100
                             total_pnl += pnl
 
-                            legs.append(TradeLeg(
-                                symbol=sym,
-                                direction=direction,
-                                entry_price=round(ep, 2),
-                                exit_price=round(xp, 2),
-                                quantity=max(1, int(capital_per_leg / ep)) if ep > 0 else 0,
-                                pnl=round(pnl, 2),
-                                pnl_pct=round(pnl_pct, 2),
-                            ))
+                            legs.append(
+                                TradeLeg(
+                                    symbol=sym,
+                                    direction=direction,
+                                    entry_price=round(ep, 2),
+                                    exit_price=round(xp, 2),
+                                    quantity=max(1, int(capital_per_leg / ep)) if ep > 0 else 0,
+                                    pnl=round(pnl, 2),
+                                    pnl_pct=round(pnl_pct, 2),
+                                )
+                            )
 
                     capital += total_pnl
-                    combined_pct = total_pnl / (capital_per_leg * len([l for l in legs])) * 100 if legs else 0
+                    combined_pct = (
+                        total_pnl / (capital_per_leg * len([l for l in legs])) * 100 if legs else 0
+                    )
 
                     try:
                         entry_dt = pd.Timestamp(entry_date)
                         exit_dt = pd.Timestamp(common_idx[i])
-                        if hasattr(entry_dt, 'tz') and entry_dt.tz:
+                        if hasattr(entry_dt, "tz") and entry_dt.tz:
                             entry_dt = entry_dt.tz_localize(None)
-                        if hasattr(exit_dt, 'tz') and exit_dt.tz:
+                        if hasattr(exit_dt, "tz") and exit_dt.tz:
                             exit_dt = exit_dt.tz_localize(None)
                         hold_days = (exit_dt - entry_dt).days
                     except Exception:
                         hold_days = 0
 
-                    trades.append(PairTrade(
-                        entry_date=entry_date,
-                        exit_date=date_str,
-                        legs=legs,
-                        combined_pnl=round(total_pnl, 2),
-                        combined_pnl_pct=round(combined_pct, 2),
-                        hold_days=hold_days,
-                    ))
+                    trades.append(
+                        PairTrade(
+                            entry_date=entry_date,
+                            exit_date=date_str,
+                            legs=legs,
+                            combined_pnl=round(total_pnl, 2),
+                            combined_pnl_pct=round(combined_pct, 2),
+                            hold_days=hold_days,
+                        )
+                    )
 
                     # Reset
                     for sym in self.symbols:
@@ -809,21 +862,35 @@ class MultiBacktester:
                     ep = entry_prices[sym]
                     xp = last_prices[sym]
                     direction = "LONG" if positions[sym] == 1 else "SHORT"
-                    pnl_pct = ((xp - ep) / ep * 100) if positions[sym] == 1 else ((ep - xp) / ep * 100)
+                    pnl_pct = (
+                        ((xp - ep) / ep * 100) if positions[sym] == 1 else ((ep - xp) / ep * 100)
+                    )
                     pnl = capital_per_leg * pnl_pct / 100
                     total_pnl += pnl
-                    legs.append(TradeLeg(sym, direction, round(ep, 2), round(xp, 2), 0, round(pnl, 2), round(pnl_pct, 2)))
+                    legs.append(
+                        TradeLeg(
+                            sym,
+                            direction,
+                            round(ep, 2),
+                            round(xp, 2),
+                            0,
+                            round(pnl, 2),
+                            round(pnl_pct, 2),
+                        )
+                    )
 
             capital += total_pnl
             combined_pct = total_pnl / (capital_per_leg * len(legs)) * 100 if legs else 0
-            trades.append(PairTrade(
-                entry_date=entry_date,
-                exit_date=str(common_idx[-1])[:10],
-                legs=legs,
-                combined_pnl=round(total_pnl, 2),
-                combined_pnl_pct=round(combined_pct, 2),
-                hold_days=0,
-            ))
+            trades.append(
+                PairTrade(
+                    entry_date=entry_date,
+                    exit_date=str(common_idx[-1])[:10],
+                    legs=legs,
+                    combined_pnl=round(total_pnl, 2),
+                    combined_pnl_pct=round(combined_pct, 2),
+                    hold_days=0,
+                )
+            )
 
         # ── Metrics ──────────────────────────────────────────
         total_return = (capital - self.initial_capital) / self.initial_capital * 100
@@ -848,7 +915,7 @@ class MultiBacktester:
         avg_loss = sum(t.combined_pnl_pct for t in losers) / len(losers) if losers else 0
         gross_profit = sum(t.combined_pnl for t in winners)
         gross_loss = abs(sum(t.combined_pnl for t in losers))
-        pf = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+        pf = gross_profit / gross_loss if gross_loss > 0 else float("inf")
         avg_hold = sum(t.hold_days for t in trades) / len(trades) if trades else 0
 
         return MultiBacktestResult(
@@ -889,6 +956,7 @@ def run_backtest(
     # User-saved strategies: "user:my_strategy"
     if strategy_name.startswith("user:"):
         from engine.strategy_builder import strategy_store
+
         user_name = strategy_name[5:]
         strategy = strategy_store.load_strategy(user_name)
         bt = Backtester(symbol=symbol, period=period, capital=capital)
@@ -899,6 +967,7 @@ def run_backtest(
         # Also check user strategies as fallback
         try:
             from engine.strategy_builder import strategy_store
+
             strategy = strategy_store.load_strategy(strategy_name)
             bt = Backtester(symbol=symbol, period=period, capital=capital)
             return bt.run(strategy)
@@ -908,14 +977,14 @@ def run_backtest(
         # Check options strategies
         try:
             from engine.options_backtest import OPTIONS_STRATEGIES, run_options_backtest
+
             if strategy_name.lower() in OPTIONS_STRATEGIES:
                 return run_options_backtest(symbol, strategy_name, strategy_args, period, capital)
         except ImportError:
             pass
 
         raise ValueError(
-            f"Unknown strategy: {strategy_name}. "
-            f"Available: {', '.join(STRATEGIES.keys())}"
+            f"Unknown strategy: {strategy_name}. Available: {', '.join(STRATEGIES.keys())}"
         )
 
     strategy = factory(strategy_args or [])
@@ -925,21 +994,24 @@ def run_backtest(
 
 # ── Walk-Forward Testing ─────────────────────────────────────
 
+
 @dataclass
 class WalkForwardResult:
     """Result of walk-forward analysis."""
-    symbol:          str
-    strategy_name:   str
-    windows:         list[dict]    # each window's metrics
-    avg_return:      float
-    avg_sharpe:      float
-    avg_win_rate:    float
-    consistency:     float         # % of windows that were profitable
-    vs_buy_hold:     float         # avg alpha across windows
+
+    symbol: str
+    strategy_name: str
+    windows: list[dict]  # each window's metrics
+    avg_return: float
+    avg_sharpe: float
+    avg_win_rate: float
+    consistency: float  # % of windows that were profitable
+    vs_buy_hold: float  # avg alpha across windows
 
     def print_summary(self) -> None:
         from rich.table import Table
         from rich.panel import Panel
+
         console = Console()
 
         lines = [
@@ -952,9 +1024,13 @@ class WalkForwardResult:
             f"  Consistency : {self.consistency:.0f}% of windows profitable",
             f"  Avg Alpha   : {self.vs_buy_hold:+.2f}% vs buy-hold",
         ]
-        console.print(Panel("\n".join(lines),
-                            title="[bold cyan]Walk-Forward Analysis[/bold cyan]",
-                            border_style="cyan"))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold cyan]Walk-Forward Analysis[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
         table = Table(title="Window Results", show_lines=False)
         table.add_column("Window", width=25)
@@ -1015,21 +1091,24 @@ def walk_forward_test(
         bt = Backtester(symbol=symbol, period="1y", capital=capital)
         # Override dates
         from market.history import get_ohlcv
+
         df = get_ohlcv(symbol=symbol, from_date=w_start, to_date=w_end, days=window_days)
         if not df.empty:
             df = df.dropna(subset=["close"])
             bt._df = df
             try:
                 result = bt.run(strategy)
-                windows.append({
-                    "period": f"{w_start.strftime('%Y-%m')} → {w_end.strftime('%Y-%m')}",
-                    "return": result.total_return,
-                    "sharpe": result.sharpe_ratio,
-                    "trades": result.total_trades,
-                    "win_rate": result.win_rate,
-                    "buy_hold": result.buy_hold_return,
-                    "max_dd": result.max_drawdown,
-                })
+                windows.append(
+                    {
+                        "period": f"{w_start.strftime('%Y-%m')} → {w_end.strftime('%Y-%m')}",
+                        "return": result.total_return,
+                        "sharpe": result.sharpe_ratio,
+                        "trades": result.total_trades,
+                        "win_rate": result.win_rate,
+                        "buy_hold": result.buy_hold_return,
+                        "max_dd": result.max_drawdown,
+                    }
+                )
             except Exception:
                 pass
 

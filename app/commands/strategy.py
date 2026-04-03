@@ -71,13 +71,17 @@ def _force_generate(agent) -> str:
 
 # ── strategy new ─────────────────────────────────────────────
 
+
 def _cmd_new(args: list[str]) -> None:
     """AI-guided interview -> code generation -> backtest -> save."""
     from agent.core import get_agent
     from agent.prompts import STRATEGY_BUILDER_PROMPT, STRATEGY_BUILDER_SIMPLE_PROMPT
     from engine.strategy_builder import (
-        extract_strategy_payload, build_and_test, strategy_store,
-        validate_strategy_code, COMPLETION_MARKER,
+        extract_strategy_payload,
+        build_and_test,
+        strategy_store,
+        validate_strategy_code,
+        COMPLETION_MARKER,
     )
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import InMemoryHistory
@@ -91,15 +95,21 @@ def _cmd_new(args: list[str]) -> None:
     console.print("\n[bold cyan]━━━ Strategy Builder ━━━[/bold cyan]")
     if simple_mode:
         console.print("[dim]Simple mode: everything explained in plain language[/dim]")
-    console.print("[dim]Describe your strategy idea and the AI will guide you through building it.[/dim]")
-    console.print("[dim]Type [bold]done[/bold] to finish early, [bold]cancel[/bold] to abort.[/dim]\n")
+    console.print(
+        "[dim]Describe your strategy idea and the AI will guide you through building it.[/dim]"
+    )
+    console.print(
+        "[dim]Type [bold]done[/bold] to finish early, [bold]cancel[/bold] to abort.[/dim]\n"
+    )
 
     agent = get_agent()
 
     # Inject the strategy builder system prompt as the first message
     first_message = prompt_text + "\n\n"
     if initial_desc:
-        first_message += f"The user wants to build this strategy: {initial_desc}\n\nStart the interview."
+        first_message += (
+            f"The user wants to build this strategy: {initial_desc}\n\nStart the interview."
+        )
     else:
         first_message += "The user wants to build a custom strategy. Start by asking what kind of strategy they have in mind."
 
@@ -156,7 +166,9 @@ def _cmd_new(args: list[str]) -> None:
         strategy_payload = extract_strategy_payload(response)
 
     if not strategy_payload:
-        console.print("[yellow]Could not generate strategy code. Try again with [bold]strategy new[/bold].[/yellow]")
+        console.print(
+            "[yellow]Could not generate strategy code. Try again with [bold]strategy new[/bold].[/yellow]"
+        )
         return
 
     # ── Validate and backtest ────────────────────────────────
@@ -175,7 +187,9 @@ def _cmd_new(args: list[str]) -> None:
         ok, error = validate_strategy_code(code)
         if ok:
             break
-        console.print(f"[yellow]Code validation failed (attempt {attempt + 1}/{max_retries}): {error}[/yellow]")
+        console.print(
+            f"[yellow]Code validation failed (attempt {attempt + 1}/{max_retries}): {error}[/yellow]"
+        )
         if attempt < max_retries - 1:
             console.print("[dim]Asking AI to fix...[/dim]")
             fix_response = agent.chat(
@@ -189,6 +203,7 @@ def _cmd_new(args: list[str]) -> None:
             else:
                 # Try extracting code from markdown
                 import re
+
                 code_match = re.search(r"```python\s*\n(.*?)```", fix_response, re.DOTALL)
                 if code_match:
                     code = code_match.group(1).strip()
@@ -239,14 +254,17 @@ def _cmd_new(args: list[str]) -> None:
 
 # ── strategy list ────────────────────────────────────────────
 
+
 def _cmd_list() -> None:
     """List all saved strategies."""
     from engine.strategy_builder import strategy_store, print_strategy_list
+
     strategies = strategy_store.list_strategies()
     print_strategy_list(strategies)
 
 
 # ── strategy backtest ────────────────────────────────────────
+
 
 def _cmd_backtest(args: list[str]) -> None:
     """Re-backtest a saved strategy."""
@@ -274,7 +292,9 @@ def _cmd_backtest(args: list[str]) -> None:
     try:
         strategy = strategy_store.load_strategy(name)
     except FileNotFoundError:
-        console.print(f"[red]Strategy '{name}' not found. Run [bold]strategy list[/bold] to see available.[/red]")
+        console.print(
+            f"[red]Strategy '{name}' not found. Run [bold]strategy list[/bold] to see available.[/red]"
+        )
         return
     except Exception as e:
         console.print(f"[red]Failed to load strategy: {e}[/red]")
@@ -289,23 +309,27 @@ def _cmd_backtest(args: list[str]) -> None:
         result.print_trades(10)
 
         # Update metadata with latest backtest
-        strategy_store.update_metadata(name, {
-            "last_backtest": {
-                "symbol": symbol,
-                "period": period,
-                "total_return": round(result.total_return, 2),
-                "sharpe": round(result.sharpe_ratio, 2),
-                "win_rate": round(result.win_rate, 1),
-                "max_drawdown": round(result.max_drawdown, 2),
-                "total_trades": result.total_trades,
-                "date": result.end_date,
-            }
-        })
+        strategy_store.update_metadata(
+            name,
+            {
+                "last_backtest": {
+                    "symbol": symbol,
+                    "period": period,
+                    "total_return": round(result.total_return, 2),
+                    "sharpe": round(result.sharpe_ratio, 2),
+                    "win_rate": round(result.win_rate, 1),
+                    "max_drawdown": round(result.max_drawdown, 2),
+                    "total_trades": result.total_trades,
+                    "date": result.end_date,
+                }
+            },
+        )
     except Exception as e:
         console.print(f"[red]Backtest failed: {e}[/red]")
 
 
 # ── strategy run ─────────────────────────────────────────────
+
 
 def _cmd_run(args: list[str]) -> None:
     """Load strategy, generate latest signal, optionally paper-trade."""
@@ -321,7 +345,11 @@ def _cmd_run(args: list[str]) -> None:
     clean_args = [a for a in args[1:] if a != "--paper"]
 
     meta = strategy_store.get_metadata(name)
-    symbol = clean_args[0].upper() if clean_args else (meta.get("default_symbol", "RELIANCE") if meta else "RELIANCE")
+    symbol = (
+        clean_args[0].upper()
+        if clean_args
+        else (meta.get("default_symbol", "RELIANCE") if meta else "RELIANCE")
+    )
 
     try:
         strategy = strategy_store.load_strategy(name)
@@ -344,14 +372,22 @@ def _cmd_run(args: list[str]) -> None:
         latest_signal = int(signals.iloc[-1]) if len(signals) > 0 else 0
         prev_signal = int(signals.iloc[-2]) if len(signals) > 1 else 0
         latest_price = float(df["close"].iloc[-1])
-        latest_date = str(df.index[-1].date()) if hasattr(df.index[-1], "date") else str(df.index[-1])
+        latest_date = (
+            str(df.index[-1].date()) if hasattr(df.index[-1], "date") else str(df.index[-1])
+        )
 
-        signal_map = {1: "[green bold]BUY[/green bold]", -1: "[red bold]SELL[/red bold]", 0: "[dim]HOLD[/dim]"}
+        signal_map = {
+            1: "[green bold]BUY[/green bold]",
+            -1: "[red bold]SELL[/red bold]",
+            0: "[dim]HOLD[/dim]",
+        }
         console.print(f"\n  {symbol} @ Rs.{latest_price:,.2f} ({latest_date})")
         console.print(f"  Signal: {signal_map.get(latest_signal, 'HOLD')}")
 
         if latest_signal != prev_signal and latest_signal != 0:
-            console.print(f"  [yellow]Signal changed![/yellow] Previous: {signal_map.get(prev_signal, 'HOLD')}")
+            console.print(
+                f"  [yellow]Signal changed![/yellow] Previous: {signal_map.get(prev_signal, 'HOLD')}"
+            )
 
         # Show recent signal history
         recent = signals.tail(10)
@@ -384,14 +420,18 @@ def _cmd_run(args: list[str]) -> None:
                         tag=f"strategy:{name}",
                     )
                     resp = broker.place_order(req)
-                    console.print(f"  [green]Order placed:[/green] {resp.status} | Qty: {quantity} | ID: {resp.order_id}")
+                    console.print(
+                        f"  [green]Order placed:[/green] {resp.status} | Qty: {quantity} | ID: {resp.order_id}"
+                    )
                 else:
                     console.print("[dim]No broker connected. Use [bold]login[/bold] first.[/dim]")
             except Exception as e:
                 console.print(f"[red]Paper trade failed: {e}[/red]")
 
         elif paper_mode and latest_signal == -1:
-            console.print(f"\n[bold yellow]Signal is SELL — check your positions for {symbol}[/bold yellow]")
+            console.print(
+                f"\n[bold yellow]Signal is SELL — check your positions for {symbol}[/bold yellow]"
+            )
         elif paper_mode:
             console.print("\n[dim]Signal is HOLD — no action taken.[/dim]")
 
@@ -400,6 +440,7 @@ def _cmd_run(args: list[str]) -> None:
 
 
 # ── strategy show ────────────────────────────────────────────
+
 
 def _cmd_show(args: list[str]) -> None:
     """Display strategy code and metadata."""
@@ -420,6 +461,7 @@ def _cmd_show(args: list[str]) -> None:
 
 
 # ── strategy delete ──────────────────────────────────────────
+
 
 def _cmd_delete(args: list[str]) -> None:
     """Delete a saved strategy."""

@@ -8,7 +8,7 @@ is logged in or the broker call fails.
 
 from __future__ import annotations
 
-from brokers.base    import Quote
+from brokers.base import Quote
 from brokers.session import get_broker
 
 
@@ -16,6 +16,7 @@ def _ws_quotes(instruments: list[str]) -> dict[str, Quote]:
     """Try WebSocket cache first (instant, no API call)."""
     try:
         from market.websocket import ws_manager
+
         if not ws_manager.connected:
             return {}
 
@@ -25,7 +26,9 @@ def _ws_quotes(instruments: list[str]) -> dict[str, Quote]:
             tick = ws_manager.get_tick(inst)
             if tick and tick.ltp > 0:
                 result[inst] = Quote(
-                    symbol=tick.symbol.split(":")[-1].split("-")[0] if ":" in tick.symbol else tick.symbol,
+                    symbol=tick.symbol.split(":")[-1].split("-")[0]
+                    if ":" in tick.symbol
+                    else tick.symbol,
                     last_price=tick.ltp,
                     open=tick.open,
                     high=tick.high,
@@ -51,6 +54,7 @@ def _yf_fallback_quotes(instruments: list[str]) -> dict[str, Quote]:
     """Try yfinance when broker is unavailable."""
     try:
         from market.yfinance_provider import yf_get_quotes, yf_available
+
         if yf_available():
             return yf_get_quotes(instruments)
     except Exception:
@@ -133,15 +137,23 @@ def get_ohlc(instrument: str) -> dict:
     quotes = get_quote([instrument])
     q = quotes.get(instrument)
     if not q:
-        return {"open": 0, "high": 0, "low": 0, "close": 0,
-                "last_price": 0, "volume": 0, "change": 0, "change_pct": 0}
+        return {
+            "open": 0,
+            "high": 0,
+            "low": 0,
+            "close": 0,
+            "last_price": 0,
+            "volume": 0,
+            "change": 0,
+            "change_pct": 0,
+        }
     return {
-        "open":       q.open,
-        "high":       q.high,
-        "low":        q.low,
-        "close":      q.close,
+        "open": q.open,
+        "high": q.high,
+        "low": q.low,
+        "close": q.close,
         "last_price": q.last_price,
-        "volume":     q.volume,
-        "change":     q.change,
+        "volume": q.volume,
+        "change": q.change,
         "change_pct": q.change_pct,
     }

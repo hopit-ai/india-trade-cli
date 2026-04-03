@@ -30,23 +30,25 @@ console = Console()
 @dataclass
 class TimeframeSignal:
     """Signal from a single timeframe."""
-    timeframe:  str          # "Daily" / "Hourly" / "Weekly"
-    verdict:    str          # BULLISH / BEARISH / NEUTRAL
-    score:      float
-    rsi:        float = 0.0
-    macd_signal: str = ""    # "BULLISH_CROSS" / "BEARISH_CROSS" / "NEUTRAL"
-    ema_trend:  str = ""     # "ABOVE" (EMA20 > EMA50) / "BELOW"
+
+    timeframe: str  # "Daily" / "Hourly" / "Weekly"
+    verdict: str  # BULLISH / BEARISH / NEUTRAL
+    score: float
+    rsi: float = 0.0
+    macd_signal: str = ""  # "BULLISH_CROSS" / "BEARISH_CROSS" / "NEUTRAL"
+    ema_trend: str = ""  # "ABOVE" (EMA20 > EMA50) / "BELOW"
     key_points: list[str] = field(default_factory=list)
 
 
 @dataclass
 class MultiTimeframeResult:
     """Result of multi-timeframe analysis."""
-    symbol:         str
-    signals:        list[TimeframeSignal]
-    confluence:     str          # "STRONG_BUY" / "BUY" / "NEUTRAL" / "SELL" / "STRONG_SELL"
+
+    symbol: str
+    signals: list[TimeframeSignal]
+    confluence: str  # "STRONG_BUY" / "BUY" / "NEUTRAL" / "SELL" / "STRONG_SELL"
     confluence_score: float
-    alignment:      str          # "ALIGNED" / "CONFLICTING" / "MIXED"
+    alignment: str  # "ALIGNED" / "CONFLICTING" / "MIXED"
     recommendation: str
 
     def print_analysis(self) -> None:
@@ -71,7 +73,13 @@ class MultiTimeframeResult:
 
         console.print(table)
 
-        conf_style = "green" if "BUY" in self.confluence else "red" if "SELL" in self.confluence else "yellow"
+        conf_style = (
+            "green"
+            if "BUY" in self.confluence
+            else "red"
+            if "SELL" in self.confluence
+            else "yellow"
+        )
         console.print(
             f"\n  Confluence : [{conf_style}]{self.confluence}[/{conf_style}] "
             f"(score: {self.confluence_score:+.1f})"
@@ -97,10 +105,19 @@ def multi_timeframe_analysis(
         df_w = get_ohlcv(symbol, exchange, interval="day", days=365)
         if not df_w.empty and len(df_w) >= 50:
             # Resample to weekly
-            df_weekly = df_w.resample("W").agg({
-                "open": "first", "high": "max", "low": "min",
-                "close": "last", "volume": "sum",
-            }).dropna()
+            df_weekly = (
+                df_w.resample("W")
+                .agg(
+                    {
+                        "open": "first",
+                        "high": "max",
+                        "low": "min",
+                        "close": "last",
+                        "volume": "sum",
+                    }
+                )
+                .dropna()
+            )
             if len(df_weekly) >= 20:
                 sig = _analyze_timeframe(df_weekly, "Weekly")
                 signals.append(sig)
@@ -117,7 +134,9 @@ def multi_timeframe_analysis(
             rsi=snap.rsi,
             macd_signal="BULLISH_CROSS" if snap.macd_hist > 0 else "BEARISH_CROSS",
             ema_trend="ABOVE" if snap.ema20 > snap.ema50 else "BELOW",
-            key_points=[s.description for s in snap.signals[:3]] if hasattr(snap, 'signals') else [],
+            key_points=[s.description for s in snap.signals[:3]]
+            if hasattr(snap, "signals")
+            else [],
         )
         signals.append(daily)
     except Exception:
@@ -135,8 +154,11 @@ def multi_timeframe_analysis(
     # ── Confluence ───────────────────────────────────────────
     if not signals:
         return MultiTimeframeResult(
-            symbol=symbol, signals=[], confluence="NEUTRAL",
-            confluence_score=0, alignment="NO_DATA",
+            symbol=symbol,
+            signals=[],
+            confluence="NEUTRAL",
+            confluence_score=0,
+            alignment="NO_DATA",
             recommendation="Insufficient data for multi-timeframe analysis.",
         )
 

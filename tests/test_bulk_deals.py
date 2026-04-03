@@ -102,6 +102,7 @@ CSV_CONTENT = (
 
 # ── Entity classification ────────────────────────────────────
 
+
 class TestClassifyEntity:
     def test_fii(self):
         assert classify_entity("GOLDMAN SACHS FPI") == "FII"
@@ -127,6 +128,7 @@ class TestClassifyEntity:
 
 
 # ── Deal parsing ─────────────────────────────────────────────
+
 
 class TestParseDealItem:
     def test_parse_snapshot_fields(self):
@@ -175,6 +177,7 @@ class TestParseDealItem:
 
 # ── Mock helpers ─────────────────────────────────────────────
 
+
 def _mock_response(status_code, json_data=None, text=""):
     """Create a mock httpx.Response."""
     resp = MagicMock()
@@ -185,6 +188,7 @@ def _mock_response(status_code, json_data=None, text=""):
 
 
 # ── Bulk deals: 4-tier fallback ──────────────────────────────
+
 
 class TestGetBulkDeals:
     @patch("market.bulk_deals._nse_session")
@@ -288,6 +292,7 @@ class TestGetBulkDeals:
 
 
 # ── Block deals ──────────────────────────────────────────────
+
 
 class TestGetBlockDeals:
     @patch("market.bulk_deals._nse_session")

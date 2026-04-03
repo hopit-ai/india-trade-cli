@@ -4,13 +4,19 @@ import pytest
 
 import brokers.session as session_mod
 from brokers.session import (
-    _BROKER_NAMES, _BROKER_LABELS, _BROKER_MENU,
-    get_broker, get_all_brokers, is_multi_broker, register_broker,
+    _BROKER_NAMES,
+    _BROKER_LABELS,
+    _BROKER_MENU,
+    get_broker,
+    get_all_brokers,
+    is_multi_broker,
+    register_broker,
 )
 from brokers.mock import MockBrokerAPI
 
 
 # ── Broker name mapping ─────────────────────────────────────
+
 
 class TestBrokerNames:
     def test_numeric_choices(self):
@@ -39,6 +45,7 @@ class TestBrokerNames:
 
 
 # ── get_broker / get_all_brokers ─────────────────────────────
+
 
 class TestBrokerAccessors:
     def setup_method(self):
@@ -86,6 +93,7 @@ class TestBrokerAccessors:
 
 # ── _make_broker ─────────────────────────────────────────────
 
+
 class TestMakeBroker:
     def test_mock_broker(self):
         key, broker = session_mod._make_broker("0")
@@ -102,6 +110,7 @@ class TestMakeBroker:
 
 
 # ── logout ───────────────────────────────────────────────────
+
 
 class TestLogout:
     def setup_method(self):
@@ -128,6 +137,7 @@ class TestLogout:
 
 # ── disconnect_broker ────────────────────────────────────────
 
+
 class TestDisconnectBroker:
     def setup_method(self):
         session_mod._brokers = {}
@@ -149,6 +159,7 @@ class TestDisconnectBroker:
 
 
 # ── register_broker ──────────────────────────────────────────
+
 
 class TestRegisterBroker:
     def setup_method(self):

@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 # ── App fixture ───────────────────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def client():
     """TestClient with all broker/keychain loading suppressed."""
@@ -24,10 +25,12 @@ def client():
         patch("dotenv.load_dotenv", return_value=None),
     ):
         from web.api import app
+
         yield TestClient(app)
 
 
 # ── Shared fake data ──────────────────────────────────────────
+
 
 @dataclass
 class FakeQuote:
@@ -89,6 +92,7 @@ class FakePairAnalysis:
 
 # ── /skills/quote ─────────────────────────────────────────────
 
+
 class TestQuoteSkill:
     def test_returns_quote(self, client):
         with patch("market.quotes.get_quote", return_value={"NSE:RELIANCE": FakeQuote()}):
@@ -101,13 +105,18 @@ class TestQuoteSkill:
 
     def test_prefixes_exchange(self, client):
         """Symbol without exchange prefix should get NSE: added."""
-        with patch("market.quotes.get_quote", return_value={"NSE:TCS": FakeQuote(symbol="NSE:TCS")}) as mock:
+        with patch(
+            "market.quotes.get_quote", return_value={"NSE:TCS": FakeQuote(symbol="NSE:TCS")}
+        ) as mock:
             client.post("/skills/quote", json={"symbol": "TCS"})
         mock.assert_called_once_with(["NSE:TCS"])
 
     def test_passthrough_if_exchange_in_symbol(self, client):
         """If caller already includes exchange, don't double-prefix."""
-        with patch("market.quotes.get_quote", return_value={"BSE:RELIANCE": FakeQuote(symbol="BSE:RELIANCE")}) as mock:
+        with patch(
+            "market.quotes.get_quote",
+            return_value={"BSE:RELIANCE": FakeQuote(symbol="BSE:RELIANCE")},
+        ) as mock:
             client.post("/skills/quote", json={"symbol": "BSE:RELIANCE"})
         mock.assert_called_once_with(["BSE:RELIANCE"])
 
@@ -124,6 +133,7 @@ class TestQuoteSkill:
 
 
 # ── /skills/flows ─────────────────────────────────────────────
+
 
 class TestFlowsSkill:
     def test_returns_flow_data(self, client):
@@ -142,6 +152,7 @@ class TestFlowsSkill:
 
 # ── /skills/macro ─────────────────────────────────────────────
 
+
 class TestMacroSkill:
     def test_returns_macro_snapshot(self, client):
         with patch("market.macro.get_macro_snapshot", return_value=FakeMacroSnapshot()):
@@ -153,6 +164,7 @@ class TestMacroSkill:
 
 
 # ── /skills/earnings ──────────────────────────────────────────
+
 
 class TestEarningsSkill:
     def test_returns_all_events_when_no_filter(self, client):
@@ -186,6 +198,7 @@ class TestEarningsSkill:
 
 # ── /skills/backtest ──────────────────────────────────────────
 
+
 class TestBacktestSkill:
     def test_returns_backtest_result(self, client):
         with patch("engine.backtest.run_backtest", return_value=FakeBacktestResult()):
@@ -209,6 +222,7 @@ class TestBacktestSkill:
 
 # ── /skills/pairs ─────────────────────────────────────────────
 
+
 class TestPairsSkill:
     def test_returns_pair_analysis(self, client):
         with patch("engine.pairs.analyze_pair", return_value=FakePairAnalysis()):
@@ -226,14 +240,18 @@ class TestPairsSkill:
 
 # ── /skills/morning_brief ─────────────────────────────────────
 
+
 class TestMorningBriefSkill:
     def test_returns_all_sections(self, client):
         with (
             patch("market.indices.get_market_snapshot", return_value={"nifty": 22500}),
-            patch("market.flow_intel.get_flow_analysis",  return_value=FakeFlowAnalysis()),
-            patch("market.news.get_market_news",           return_value=[{"title": "Market up"}]),
-            patch("market.sentiment.get_market_breadth",   return_value={"advance": 1200, "decline": 800}),
-            patch("market.events.get_upcoming_events",     return_value=[]),
+            patch("market.flow_intel.get_flow_analysis", return_value=FakeFlowAnalysis()),
+            patch("market.news.get_market_news", return_value=[{"title": "Market up"}]),
+            patch(
+                "market.sentiment.get_market_breadth",
+                return_value={"advance": 1200, "decline": 800},
+            ),
+            patch("market.events.get_upcoming_events", return_value=[]),
         ):
             r = client.post("/skills/morning_brief")
         assert r.status_code == 200
@@ -247,16 +265,17 @@ class TestMorningBriefSkill:
     def test_partial_failure_still_500(self, client):
         with (
             patch("market.indices.get_market_snapshot", side_effect=Exception("NSE down")),
-            patch("market.flow_intel.get_flow_analysis",  return_value=FakeFlowAnalysis()),
-            patch("market.news.get_market_news",           return_value=[]),
-            patch("market.sentiment.get_market_breadth",   return_value={}),
-            patch("market.events.get_upcoming_events",     return_value=[]),
+            patch("market.flow_intel.get_flow_analysis", return_value=FakeFlowAnalysis()),
+            patch("market.news.get_market_news", return_value=[]),
+            patch("market.sentiment.get_market_breadth", return_value={}),
+            patch("market.events.get_upcoming_events", return_value=[]),
         ):
             r = client.post("/skills/morning_brief")
         assert r.status_code == 500
 
 
 # ── /skills/chat ─────────────────────────────────────────────
+
 
 class TestChatSkill:
     def test_returns_response(self, client):
@@ -265,7 +284,9 @@ class TestChatSkill:
         mock_agent._history = [{"role": "user"}, {"role": "assistant"}]
 
         with patch("agent.core.TradingAgent", return_value=mock_agent):
-            r = client.post("/skills/chat", json={"message": "Analyse RELIANCE", "session_id": "test-1"})
+            r = client.post(
+                "/skills/chat", json={"message": "Analyse RELIANCE", "session_id": "test-1"}
+            )
         assert r.status_code == 200
         d = r.json()["data"]
         assert "RELIANCE" in d["response"]
@@ -280,14 +301,18 @@ class TestChatSkill:
 
         # Pre-populate the session store
         from web.skills import _chat_sessions
+
         _chat_sessions["reuse-session"] = mock_agent
 
-        r = client.post("/skills/chat", json={"message": "Follow up", "session_id": "reuse-session"})
+        r = client.post(
+            "/skills/chat", json={"message": "Follow up", "session_id": "reuse-session"}
+        )
         assert r.status_code == 200
         mock_agent.chat.assert_called_once_with("Follow up")
 
     def test_chat_reset_clears_session(self, client):
         from web.skills import _chat_sessions
+
         _chat_sessions["to-clear"] = MagicMock()
 
         r = client.post("/skills/chat/reset", json={"session_id": "to-clear"})
@@ -303,9 +328,11 @@ class TestChatSkill:
 
 # ── /skills/alerts/* ─────────────────────────────────────────
 
+
 class TestAlertsSkills:
     def _fake_alert(self, **kwargs):
         from engine.alerts import Alert
+
         defaults = dict(
             id="abc12345",
             alert_type="PRICE",
@@ -320,63 +347,110 @@ class TestAlertsSkills:
 
     def test_add_price_alert(self, client):
         fake = self._fake_alert()
-        with patch("engine.alerts.alert_manager.add_price_alert", return_value=fake) as mock, \
-             patch("engine.alerts.alert_manager.start_polling"):
-            r = client.post("/skills/alerts/add", json={
-                "symbol": "RELIANCE",
-                "condition": "ABOVE",
-                "threshold": 2800,
-            })
+        with (
+            patch("engine.alerts.alert_manager.add_price_alert", return_value=fake) as mock,
+            patch("engine.alerts.alert_manager.start_polling"),
+        ):
+            r = client.post(
+                "/skills/alerts/add",
+                json={
+                    "symbol": "RELIANCE",
+                    "condition": "ABOVE",
+                    "threshold": 2800,
+                },
+            )
         assert r.status_code == 200
         d = r.json()["data"]
         assert d["id"] == "abc12345"
         assert d["alert_type"] == "PRICE"
         mock.assert_called_once_with(
-            symbol="RELIANCE", condition="ABOVE", threshold=2800.0,
-            exchange="NSE", webhook_url=None,
+            symbol="RELIANCE",
+            condition="ABOVE",
+            threshold=2800.0,
+            exchange="NSE",
+            webhook_url=None,
         )
 
     def test_add_technical_alert(self, client):
         fake = self._fake_alert(alert_type="TECHNICAL", indicator="RSI", threshold=70.0)
-        with patch("engine.alerts.alert_manager.add_technical_alert", return_value=fake) as mock, \
-             patch("engine.alerts.alert_manager.start_polling"):
-            r = client.post("/skills/alerts/add", json={
-                "symbol": "INFY",
-                "indicator": "RSI",
-                "condition": "ABOVE",
-                "threshold": 70,
-            })
+        with (
+            patch("engine.alerts.alert_manager.add_technical_alert", return_value=fake) as mock,
+            patch("engine.alerts.alert_manager.start_polling"),
+        ):
+            r = client.post(
+                "/skills/alerts/add",
+                json={
+                    "symbol": "INFY",
+                    "indicator": "RSI",
+                    "condition": "ABOVE",
+                    "threshold": 70,
+                },
+            )
         assert r.status_code == 200
         mock.assert_called_once_with(
-            symbol="INFY", indicator="RSI", condition="ABOVE", threshold=70.0,
-            exchange="NSE", webhook_url=None,
+            symbol="INFY",
+            indicator="RSI",
+            condition="ABOVE",
+            threshold=70.0,
+            exchange="NSE",
+            webhook_url=None,
         )
 
     def test_add_conditional_alert(self, client):
-        fake = self._fake_alert(alert_type="CONDITIONAL", conditions=[
-            {"condition_type": "PRICE",     "condition": "ABOVE", "threshold": 2800, "indicator": None},
-            {"condition_type": "TECHNICAL", "condition": "ABOVE", "threshold": 60,   "indicator": "RSI"},
-        ])
-        with patch("engine.alerts.alert_manager.add_conditional_alert", return_value=fake) as mock, \
-             patch("engine.alerts.alert_manager.start_polling"):
-            r = client.post("/skills/alerts/add", json={
-                "symbol": "RELIANCE",
-                "conditions": [
-                    {"condition_type": "PRICE",     "condition": "ABOVE", "threshold": 2800},
-                    {"condition_type": "TECHNICAL", "condition": "ABOVE", "threshold": 60, "indicator": "RSI"},
-                ],
-            })
+        fake = self._fake_alert(
+            alert_type="CONDITIONAL",
+            conditions=[
+                {
+                    "condition_type": "PRICE",
+                    "condition": "ABOVE",
+                    "threshold": 2800,
+                    "indicator": None,
+                },
+                {
+                    "condition_type": "TECHNICAL",
+                    "condition": "ABOVE",
+                    "threshold": 60,
+                    "indicator": "RSI",
+                },
+            ],
+        )
+        with (
+            patch("engine.alerts.alert_manager.add_conditional_alert", return_value=fake) as mock,
+            patch("engine.alerts.alert_manager.start_polling"),
+        ):
+            r = client.post(
+                "/skills/alerts/add",
+                json={
+                    "symbol": "RELIANCE",
+                    "conditions": [
+                        {"condition_type": "PRICE", "condition": "ABOVE", "threshold": 2800},
+                        {
+                            "condition_type": "TECHNICAL",
+                            "condition": "ABOVE",
+                            "threshold": 60,
+                            "indicator": "RSI",
+                        },
+                    ],
+                },
+            )
         assert r.status_code == 200
         assert mock.called
 
     def test_add_with_webhook_url(self, client):
         fake = self._fake_alert(webhook_url="https://agent.example.com/cb")
-        with patch("engine.alerts.alert_manager.add_price_alert", return_value=fake) as mock, \
-             patch("engine.alerts.alert_manager.start_polling"):
-            client.post("/skills/alerts/add", json={
-                "symbol": "RELIANCE", "condition": "ABOVE", "threshold": 2800,
-                "webhook_url": "https://agent.example.com/cb",
-            })
+        with (
+            patch("engine.alerts.alert_manager.add_price_alert", return_value=fake) as mock,
+            patch("engine.alerts.alert_manager.start_polling"),
+        ):
+            client.post(
+                "/skills/alerts/add",
+                json={
+                    "symbol": "RELIANCE",
+                    "condition": "ABOVE",
+                    "threshold": 2800,
+                    "webhook_url": "https://agent.example.com/cb",
+                },
+            )
         _, kwargs = mock.call_args
         assert kwargs["webhook_url"] == "https://agent.example.com/cb"
 
@@ -388,8 +462,20 @@ class TestAlertsSkills:
 
     def test_list_alerts(self, client):
         fake_list = [
-            {"id": "a1", "alert_type": "PRICE", "symbol": "RELIANCE", "condition": "ABOVE", "threshold": 2800.0},
-            {"id": "b2", "alert_type": "TECHNICAL", "symbol": "INFY",    "condition": "ABOVE", "threshold": 70.0},
+            {
+                "id": "a1",
+                "alert_type": "PRICE",
+                "symbol": "RELIANCE",
+                "condition": "ABOVE",
+                "threshold": 2800.0,
+            },
+            {
+                "id": "b2",
+                "alert_type": "TECHNICAL",
+                "symbol": "INFY",
+                "condition": "ABOVE",
+                "threshold": 70.0,
+            },
         ]
         with patch("engine.alerts.alert_manager.list_alerts", return_value=fake_list):
             r = client.post("/skills/alerts/list")
@@ -408,8 +494,10 @@ class TestAlertsSkills:
         assert r.status_code == 404
 
     def test_check_alerts_no_triggers(self, client):
-        with patch("engine.alerts.alert_manager.check_alerts", return_value=[]), \
-             patch("engine.alerts.alert_manager.active_count", return_value=3):
+        with (
+            patch("engine.alerts.alert_manager.check_alerts", return_value=[]),
+            patch("engine.alerts.alert_manager.active_count", return_value=3),
+        ):
             r = client.post("/skills/alerts/check")
         assert r.status_code == 200
         d = r.json()["data"]
@@ -418,8 +506,10 @@ class TestAlertsSkills:
 
     def test_check_alerts_with_triggered(self, client):
         fake = self._fake_alert(triggered=True, triggered_at="2026-04-03T11:00:00")
-        with patch("engine.alerts.alert_manager.check_alerts", return_value=[fake]), \
-             patch("engine.alerts.alert_manager.active_count", return_value=0):
+        with (
+            patch("engine.alerts.alert_manager.check_alerts", return_value=[fake]),
+            patch("engine.alerts.alert_manager.active_count", return_value=0),
+        ):
             r = client.post("/skills/alerts/check")
         assert r.status_code == 200
         triggered = r.json()["data"]["triggered"]
@@ -428,6 +518,7 @@ class TestAlertsSkills:
 
 
 # ── /.well-known/openclaw.json ────────────────────────────────
+
 
 class TestOpenClawManifest:
     def test_manifest_returns_200(self, client):
@@ -447,10 +538,23 @@ class TestOpenClawManifest:
         r = client.get("/.well-known/openclaw.json")
         skill_names = {s["name"] for s in r.json()["skills"]}
         expected = {
-            "quote", "options_chain", "flows", "earnings", "macro",
-            "deals", "backtest", "pairs", "analyze", "deep_analyze",
-            "morning_brief", "chat", "chat_reset",
-            "alerts_add", "alerts_list", "alerts_remove", "alerts_check",
+            "quote",
+            "options_chain",
+            "flows",
+            "earnings",
+            "macro",
+            "deals",
+            "backtest",
+            "pairs",
+            "analyze",
+            "deep_analyze",
+            "morning_brief",
+            "chat",
+            "chat_reset",
+            "alerts_add",
+            "alerts_list",
+            "alerts_remove",
+            "alerts_check",
         }
         assert expected <= skill_names, f"Missing skills: {expected - skill_names}"
 

@@ -32,13 +32,14 @@ console = Console()
 @dataclass
 class ScenarioResult:
     """Output of a what-if simulation."""
-    scenario_name:  str
-    description:    str
+
+    scenario_name: str
+    description: str
 
     # Portfolio impact
-    current_value:  float = 0.0
+    current_value: float = 0.0
     projected_value: float = 0.0
-    projected_pnl:  float = 0.0
+    projected_pnl: float = 0.0
     projected_pnl_pct: float = 0.0
 
     # Per-holding breakdown
@@ -55,11 +56,13 @@ class ScenarioResult:
             f"  Impact         : [{pnl_style}]{self.projected_pnl:+,.0f} ({self.projected_pnl_pct:+.2f}%)[/{pnl_style}]",
         ]
 
-        console.print(Panel(
-            "\n".join(lines),
-            title="[bold yellow]What-If Scenario[/bold yellow]",
-            border_style="yellow",
-        ))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold yellow]What-If Scenario[/bold yellow]",
+                border_style="yellow",
+            )
+        )
 
         if self.impacts:
             table = Table(title="Position-wise Impact", show_lines=False)
@@ -97,6 +100,7 @@ class Simulator:
             return
         try:
             from brokers.session import get_broker
+
             broker = get_broker()
             self._holdings = broker.get_holdings()
             self._positions = broker.get_positions()
@@ -174,14 +178,16 @@ class Simulator:
             current_total += current_val
             projected_total += projected_val
 
-            impacts.append({
-                "symbol": h.symbol,
-                "quantity": h.quantity,
-                "current_price": h.last_price,
-                "projected_price": round(projected_price, 2),
-                "pnl": round(pnl, 2),
-                "beta": beta,
-            })
+            impacts.append(
+                {
+                    "symbol": h.symbol,
+                    "quantity": h.quantity,
+                    "current_price": h.last_price,
+                    "projected_price": round(projected_price, 2),
+                    "pnl": round(pnl, 2),
+                    "beta": beta,
+                }
+            )
 
         for p in self._positions:
             current_val = p.last_price * abs(p.quantity)
@@ -193,13 +199,15 @@ class Simulator:
             current_total += current_val * multiplier
             projected_total += projected_val * multiplier
 
-            impacts.append({
-                "symbol": f"{p.symbol} ({p.product})",
-                "quantity": p.quantity,
-                "current_price": p.last_price,
-                "projected_price": round(projected_price, 2),
-                "pnl": round(pnl, 2),
-            })
+            impacts.append(
+                {
+                    "symbol": f"{p.symbol} ({p.product})",
+                    "quantity": p.quantity,
+                    "current_price": p.last_price,
+                    "projected_price": round(projected_price, 2),
+                    "pnl": round(pnl, 2),
+                }
+            )
 
         projected_pnl = projected_total - current_total
         pnl_pct = (projected_pnl / current_total * 100) if current_total else 0
@@ -227,15 +235,23 @@ class Simulator:
 
         all_positions = []
         for h in self._holdings:
-            all_positions.append({
-                "symbol": h.symbol, "qty": h.quantity,
-                "price": h.last_price, "label": h.symbol,
-            })
+            all_positions.append(
+                {
+                    "symbol": h.symbol,
+                    "qty": h.quantity,
+                    "price": h.last_price,
+                    "label": h.symbol,
+                }
+            )
         for p in self._positions:
-            all_positions.append({
-                "symbol": p.symbol, "qty": p.quantity,
-                "price": p.last_price, "label": f"{p.symbol} ({p.product})",
-            })
+            all_positions.append(
+                {
+                    "symbol": p.symbol,
+                    "qty": p.quantity,
+                    "price": p.last_price,
+                    "label": f"{p.symbol} ({p.product})",
+                }
+            )
 
         for pos in all_positions:
             current_val = pos["price"] * abs(pos["qty"])
@@ -254,13 +270,15 @@ class Simulator:
             projected_total += projected_val * multiplier
 
             if is_target or pnl != 0:
-                impacts.append({
-                    "symbol": pos["label"],
-                    "quantity": pos["qty"],
-                    "current_price": pos["price"],
-                    "projected_price": round(projected_price, 2),
-                    "pnl": round(pnl, 2),
-                })
+                impacts.append(
+                    {
+                        "symbol": pos["label"],
+                        "quantity": pos["qty"],
+                        "current_price": pos["price"],
+                        "projected_price": round(projected_price, 2),
+                        "pnl": round(pnl, 2),
+                    }
+                )
 
         projected_pnl = projected_total - current_total
         pnl_pct = (projected_pnl / current_total * 100) if current_total else 0
@@ -276,9 +294,7 @@ class Simulator:
             impacts=impacts,
         )
 
-    def scenario_custom(
-        self, moves: dict[str, float]
-    ) -> ScenarioResult:
+    def scenario_custom(self, moves: dict[str, float]) -> ScenarioResult:
         """
         Custom scenario with multiple stocks moving differently.
         moves: {"RELIANCE": -5.0, "HDFCBANK": 3.0, "TCS": -2.0}
@@ -291,15 +307,23 @@ class Simulator:
 
         all_positions = []
         for h in self._holdings:
-            all_positions.append({
-                "symbol": h.symbol, "qty": h.quantity,
-                "price": h.last_price, "label": h.symbol,
-            })
+            all_positions.append(
+                {
+                    "symbol": h.symbol,
+                    "qty": h.quantity,
+                    "price": h.last_price,
+                    "label": h.symbol,
+                }
+            )
         for p in self._positions:
-            all_positions.append({
-                "symbol": p.symbol, "qty": p.quantity,
-                "price": p.last_price, "label": f"{p.symbol} ({p.product})",
-            })
+            all_positions.append(
+                {
+                    "symbol": p.symbol,
+                    "qty": p.quantity,
+                    "price": p.last_price,
+                    "label": f"{p.symbol} ({p.product})",
+                }
+            )
 
         for pos in all_positions:
             current_val = pos["price"] * abs(pos["qty"])
@@ -319,13 +343,15 @@ class Simulator:
             projected_total += projected_val * multiplier
 
             if change_pct != 0:
-                impacts.append({
-                    "symbol": pos["label"],
-                    "quantity": pos["qty"],
-                    "current_price": pos["price"],
-                    "projected_price": round(projected_price, 2),
-                    "pnl": round(pnl, 2),
-                })
+                impacts.append(
+                    {
+                        "symbol": pos["label"],
+                        "quantity": pos["qty"],
+                        "current_price": pos["price"],
+                        "projected_price": round(projected_price, 2),
+                        "pnl": round(pnl, 2),
+                    }
+                )
 
         projected_pnl = projected_total - current_total
         pnl_pct = (projected_pnl / current_total * 100) if current_total else 0

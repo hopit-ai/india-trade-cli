@@ -20,12 +20,12 @@ from __future__ import annotations
 import os
 
 from rich.console import Console
-from rich.panel   import Panel
-from rich.table   import Table
-from rich.prompt  import Prompt, Confirm
-from rich         import box
+from rich.panel import Panel
+from rich.table import Table
+from rich.prompt import Prompt, Confirm
+from rich import box
 
-from brokers.base    import OrderRequest
+from brokers.base import OrderRequest
 from brokers.session import get_broker
 from engine.strategy import recommend, StrategyResult
 
@@ -44,13 +44,15 @@ def run(symbol: str | None = None, view: str | None = None) -> None:
 
     mode = os.environ.get("TRADING_MODE", "PAPER")
     mode_badge = "[green]PAPER[/green]" if mode == "PAPER" else "[bold red]LIVE[/bold red]"
-    console.print(Panel(
-        "[bold cyan]📈  Trade Builder[/bold cyan]\n"
-        f"[dim]Mode: {mode_badge}  •  Pick a symbol → choose a strategy → confirm order[/dim]\n"
-        "[dim]Type Ctrl+C or enter 0 at any step to cancel.[/dim]",
-        box=box.SIMPLE_HEAVY,
-        style="cyan",
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]📈  Trade Builder[/bold cyan]\n"
+            f"[dim]Mode: {mode_badge}  •  Pick a symbol → choose a strategy → confirm order[/dim]\n"
+            "[dim]Type Ctrl+C or enter 0 at any step to cancel.[/dim]",
+            box=box.SIMPLE_HEAVY,
+            style="cyan",
+        )
+    )
 
     # ── Step 1: Get symbol + view ─────────────────────────────
     if not symbol:
@@ -64,35 +66,42 @@ def run(symbol: str | None = None, view: str | None = None) -> None:
 
     # ── Step 2: Get live data ─────────────────────────────────
     from market.quotes import get_ltp
+
     console.print(f"\n  [dim]Fetching live data for {symbol}...[/dim]")
     try:
         spot = get_ltp(f"NSE:{symbol}")
     except Exception:
         try:
-            spot = get_ltp(f"NSE:{symbol} 50")   # index format
+            spot = get_ltp(f"NSE:{symbol} 50")  # index format
         except Exception:
-            spot = float(Prompt.ask(f"[yellow]Could not fetch LTP for {symbol}. Enter manually[/yellow]"))
+            spot = float(
+                Prompt.ask(f"[yellow]Could not fetch LTP for {symbol}. Enter manually[/yellow]")
+            )
 
-    capital  = float(os.environ.get("TOTAL_CAPITAL", 200_000))
+    capital = float(os.environ.get("TOTAL_CAPITAL", 200_000))
     risk_pct = float(os.environ.get("DEFAULT_RISK_PCT", 2))
     max_risk = capital * risk_pct / 100
 
-    console.print(f"  Spot: [bold]₹{spot:,.2f}[/bold]   Capital: [bold]₹{capital:,.0f}[/bold]   "
-                  f"Max risk/trade: [yellow]₹{max_risk:,.0f}[/yellow] ({risk_pct}%)\n")
+    console.print(
+        f"  Spot: [bold]₹{spot:,.2f}[/bold]   Capital: [bold]₹{capital:,.0f}[/bold]   "
+        f"Max risk/trade: [yellow]₹{max_risk:,.0f}[/yellow] ({risk_pct}%)\n"
+    )
 
     # ── Step 3: Strategy recommendations ──────────────────────
     console.print(f"  [dim]Evaluating strategies for {symbol} {view}...[/dim]")
     report = recommend(symbol=symbol, view=view, spot=spot, capital=capital, risk_pct=risk_pct)
 
     if not report.strategies:
-        console.print("[red]No strategies available for this view. Try a different symbol or view.[/red]")
+        console.print(
+            "[red]No strategies available for this view. Try a different symbol or view.[/red]"
+        )
         return
 
     _show_strategies(report.strategies[:3])
 
     # ── Step 4: Let user pick strategy ────────────────────────
     choices = [str(i + 1) for i in range(min(3, len(report.strategies)))]
-    choice  = Prompt.ask(
+    choice = Prompt.ask(
         "\n[bold]Select strategy[/bold]",
         choices=choices + ["0"],
         default="1",
@@ -121,11 +130,13 @@ def run(symbol: str | None = None, view: str | None = None) -> None:
     sl_default = round(spot * 0.95, 2) if view == "BULLISH" else round(spot * 1.05, 2)
     console.print("\n  [bold]Stop-loss[/bold] (required before placing order)")
     sl_price = float(Prompt.ask("  Stop-loss price", default=str(sl_default)))
-    sl_pct   = abs(sl_price - spot) / spot * 100
+    sl_pct = abs(sl_price - spot) / spot * 100
     console.print(f"  Stop-loss set at ₹{sl_price:,.2f}  ({sl_pct:.1f}% from spot)")
 
     if sl_pct > 10:
-        console.print("[yellow]  ⚠  Stop-loss is >10% away — very wide. Consider tighter risk management.[/yellow]")
+        console.print(
+            "[yellow]  ⚠  Stop-loss is >10% away — very wide. Consider tighter risk management.[/yellow]"
+        )
 
     # ── Step 7: Final confirmation ─────────────────────────────
     mode = os.environ.get("TRADING_MODE", "PAPER")
@@ -133,8 +144,10 @@ def run(symbol: str | None = None, view: str | None = None) -> None:
 
     console.print(f"\n  Mode: {mode_badge}")
     console.print(f"  Strategy: [bold]{selected.name}[/bold]")
-    console.print(f"  Max loss: [red]₹{abs(selected.max_loss):,.0f}[/red]  "
-                  f"({risk_pct_actual:.1f}% of capital)")
+    console.print(
+        f"  Max loss: [red]₹{abs(selected.max_loss):,.0f}[/red]  "
+        f"({risk_pct_actual:.1f}% of capital)"
+    )
     console.print(f"  Stop-loss: ₹{sl_price:,.2f}")
 
     if not Confirm.ask("\n  [bold]Confirm and place order?[/bold]", default=False):
@@ -149,23 +162,25 @@ def run(symbol: str | None = None, view: str | None = None) -> None:
 def _show_strategies(strategies: list[StrategyResult]) -> None:
     """Show top-3 strategy cards."""
     table = Table(
-        show_header=True, header_style="bold cyan",
-        box=box.ROUNDED, padding=(0, 1),
+        show_header=True,
+        header_style="bold cyan",
+        box=box.ROUNDED,
+        padding=(0, 1),
     )
-    table.add_column("#",          width=3)
-    table.add_column("Strategy",   style="bold white")
+    table.add_column("#", width=3)
+    table.add_column("Strategy", style="bold white")
     table.add_column("Max Profit", justify="right")
-    table.add_column("Max Loss",   justify="right")
-    table.add_column("Breakeven",  justify="right")
-    table.add_column("R:R",        justify="right")
-    table.add_column("Fit",        justify="right")
+    table.add_column("Max Loss", justify="right")
+    table.add_column("Breakeven", justify="right")
+    table.add_column("R:R", justify="right")
+    table.add_column("Fit", justify="right")
 
     for i, s in enumerate(strategies, 1):
-        mp    = f"[green]₹{s.max_profit:,.0f}[/green]" if s.max_profit > 0 else "[dim]—[/dim]"
-        ml    = f"[red]₹{abs(s.max_loss):,.0f}[/red]"
-        be    = " / ".join(f"₹{b:,.0f}" for b in s.breakeven[:2])
-        rr    = f"{s.rr_ratio:.1f}×" if s.rr_ratio > 0 else "—"
-        fit   = f"[cyan]{s.fit_score}/100[/cyan]"
+        mp = f"[green]₹{s.max_profit:,.0f}[/green]" if s.max_profit > 0 else "[dim]—[/dim]"
+        ml = f"[red]₹{abs(s.max_loss):,.0f}[/red]"
+        be = " / ".join(f"₹{b:,.0f}" for b in s.breakeven[:2])
+        rr = f"{s.rr_ratio:.1f}×" if s.rr_ratio > 0 else "—"
+        fit = f"[cyan]{s.fit_score}/100[/cyan]"
         table.add_row(str(i), s.name, mp, ml, be, rr, fit)
 
     console.print(table)
@@ -188,25 +203,28 @@ def _show_trade_summary(s: StrategyResult, symbol: str, spot: float) -> None:
         f"[bold]Best for  :[/bold] [dim]{s.best_for}[/dim]",
         f"[bold]Risks     :[/bold] [yellow]{s.risks}[/yellow]",
     ]
-    console.print(Panel(
-        "\n".join(lines),
-        title="[bold cyan]📊 Trade Summary[/bold cyan]",
-        box=box.ROUNDED,
-    ))
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="[bold cyan]📊 Trade Summary[/bold cyan]",
+            box=box.ROUNDED,
+        )
+    )
 
 
 def _place_strategy_legs(broker, strategy: StrategyResult, symbol: str, mode: str) -> None:
     """Place each leg of the selected strategy."""
     for leg in strategy.legs:
-        action   = leg.get("action", "BUY")
+        action = leg.get("action", "BUY")
         opt_type = leg.get("type", "")
-        strike   = leg.get("strike", 0)
-        lots     = leg.get("lots", 1)
+        strike = leg.get("strike", 0)
+        lots = leg.get("lots", 1)
         lot_size = leg.get("lot_size", 1)
 
         # Build trading symbol
         if opt_type in ("CE", "PE"):
             from market.events import get_expiry_dates
+
             try:
                 expiry = get_expiry_dates().monthly
                 exp_compact = expiry.replace("-", "").replace("20", "")[2:]  # "25APR"
@@ -220,12 +238,12 @@ def _place_strategy_legs(broker, strategy: StrategyResult, symbol: str, mode: st
 
         exchange = "NFO" if opt_type in ("CE", "PE") else "NSE"
         req = OrderRequest(
-            symbol           = trade_symbol,
-            exchange         = exchange,
-            transaction_type = action,
-            quantity         = qty,
-            order_type       = "MARKET",
-            product          = "CNC" if opt_type == "" else "NRML",
+            symbol=trade_symbol,
+            exchange=exchange,
+            transaction_type=action,
+            quantity=qty,
+            order_type="MARKET",
+            product="CNC" if opt_type == "" else "NRML",
         )
 
         try:
@@ -239,5 +257,6 @@ def _place_strategy_legs(broker, strategy: StrategyResult, symbol: str, mode: st
         except Exception as e:
             console.print(f"  [red]✗  Failed to place {action} {trade_symbol}: {e}[/red]")
 
-    console.print("\n  [bold green]Order(s) placed.[/bold green] "
-                  "Use [bold]positions[/bold] to monitor.\n")
+    console.print(
+        "\n  [bold green]Order(s) placed.[/bold green] Use [bold]positions[/bold] to monitor.\n"
+    )

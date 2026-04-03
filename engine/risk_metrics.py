@@ -37,42 +37,43 @@ console = Console()
 @dataclass
 class VaRResult:
     """Value-at-Risk calculation result for a single holding."""
-    symbol:       str
-    position_value: float       # current market value
-    var_95:       float          # 1-day 95% VaR (INR)
-    var_99:       float          # 1-day 99% VaR (INR)
-    cvar_95:      float          # Conditional VaR at 95% (INR)
-    volatility:   float          # annualized volatility %
-    daily_vol:    float          # daily volatility %
+
+    symbol: str
+    position_value: float  # current market value
+    var_95: float  # 1-day 95% VaR (INR)
+    var_99: float  # 1-day 99% VaR (INR)
+    cvar_95: float  # Conditional VaR at 95% (INR)
+    volatility: float  # annualized volatility %
+    daily_vol: float  # daily volatility %
 
 
 @dataclass
 class PortfolioRiskReport:
     """Comprehensive portfolio risk report."""
+
     # Portfolio-level VaR
-    portfolio_value:    float
-    portfolio_var_95:   float       # 1-day 95% VaR (INR)
-    portfolio_var_99:   float
-    portfolio_cvar_95:  float
-    portfolio_volatility: float     # annualized %
+    portfolio_value: float
+    portfolio_var_95: float  # 1-day 95% VaR (INR)
+    portfolio_var_99: float
+    portfolio_cvar_95: float
+    portfolio_volatility: float  # annualized %
 
     # Per-holding breakdown
-    holding_vars:       list[VaRResult] = field(default_factory=list)
+    holding_vars: list[VaRResult] = field(default_factory=list)
 
     # Correlation
-    correlation_matrix: Optional[dict] = None   # symbol → symbol → corr
-    high_correlations:  list[str] = field(default_factory=list)
+    correlation_matrix: Optional[dict] = None  # symbol → symbol → corr
+    high_correlations: list[str] = field(default_factory=list)
 
     # Concentration
-    top_concentration:  list[dict] = field(default_factory=list)  # [{symbol, pct}]
-    hhi:                float = 0.0  # Herfindahl-Hirschman Index (0-1)
+    top_concentration: list[dict] = field(default_factory=list)  # [{symbol, pct}]
+    hhi: float = 0.0  # Herfindahl-Hirschman Index (0-1)
     concentration_risk: str = "LOW"  # LOW / MEDIUM / HIGH
 
     def print_report(self) -> None:
         """Display risk report as Rich panels + tables."""
         # Portfolio summary
-        var_pct = (self.portfolio_var_95 / self.portfolio_value * 100
-                   if self.portfolio_value else 0)
+        var_pct = self.portfolio_var_95 / self.portfolio_value * 100 if self.portfolio_value else 0
         lines = [
             f"  Portfolio Value    : {self.portfolio_value:,.0f}",
             f"  Annual Volatility  : {self.portfolio_volatility:.1f}%",
@@ -86,11 +87,13 @@ class PortfolioRiskReport:
             f"  HHI Index : {self.hhi:.3f}  ({self.concentration_risk})",
         ]
 
-        console.print(Panel(
-            "\n".join(lines),
-            title="[bold cyan]Portfolio Risk Report[/bold cyan]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title="[bold cyan]Portfolio Risk Report[/bold cyan]",
+                border_style="cyan",
+            )
+        )
 
         # Per-holding VaR
         if self.holding_vars:
@@ -126,6 +129,7 @@ class PortfolioRiskReport:
 
 # ── VaR Calculations ─────────────────────────────────────────
 
+
 def compute_var(
     symbol: str,
     position_value: float = 100000,
@@ -146,10 +150,13 @@ def compute_var(
         var_95 = position_value * daily_vol * 1.645 * math.sqrt(days)
         var_99 = position_value * daily_vol * 2.326 * math.sqrt(days)
         return VaRResult(
-            symbol=symbol, position_value=position_value,
-            var_95=round(var_95, 2), var_99=round(var_99, 2),
+            symbol=symbol,
+            position_value=position_value,
+            var_95=round(var_95, 2),
+            var_99=round(var_99, 2),
             cvar_95=round(var_95 * 1.2, 2),
-            volatility=round(ann_vol, 1), daily_vol=round(daily_vol * 100, 2),
+            volatility=round(ann_vol, 1),
+            daily_vol=round(daily_vol * 100, 2),
         )
 
     daily_vol = float(np.std(returns))
@@ -189,8 +196,11 @@ def compute_portfolio_risk() -> PortfolioRiskReport:
     holdings = _get_holdings()
     if not holdings:
         return PortfolioRiskReport(
-            portfolio_value=0, portfolio_var_95=0, portfolio_var_99=0,
-            portfolio_cvar_95=0, portfolio_volatility=0,
+            portfolio_value=0,
+            portfolio_var_95=0,
+            portfolio_var_99=0,
+            portfolio_cvar_95=0,
+            portfolio_volatility=0,
         )
 
     symbols = [h["symbol"] for h in holdings]
@@ -238,7 +248,7 @@ def compute_portfolio_risk() -> PortfolioRiskReport:
         if len(syms_with_returns) == len(weights):
             min_len = min(len(all_returns[s]) for s in syms_with_returns)
             ret_matrix = np.column_stack([all_returns[s][-min_len:] for s in syms_with_returns])
-            port_returns = ret_matrix @ weights[:len(syms_with_returns)]
+            port_returns = ret_matrix @ weights[: len(syms_with_returns)]
 
             port_vol = float(np.std(port_returns)) * math.sqrt(252)
             sorted_port = np.sort(port_returns)
@@ -251,14 +261,19 @@ def compute_portfolio_risk() -> PortfolioRiskReport:
             p_var_95 = sum(v.var_95 for v in holding_vars)
             p_var_99 = sum(v.var_99 for v in holding_vars)
             p_cvar = sum(v.cvar_95 for v in holding_vars)
-            port_vol = sum(v.volatility * (values[i] / total_value)
-                          for i, v in enumerate(holding_vars)) / 100
+            port_vol = (
+                sum(v.volatility * (values[i] / total_value) for i, v in enumerate(holding_vars))
+                / 100
+            )
     else:
         p_var_95 = sum(v.var_95 for v in holding_vars)
         p_var_99 = sum(v.var_99 for v in holding_vars)
         p_cvar = sum(v.cvar_95 for v in holding_vars)
-        port_vol = sum(v.volatility * (values[i] / total_value)
-                      for i, v in enumerate(holding_vars)) / 100 if holding_vars else 0
+        port_vol = (
+            sum(v.volatility * (values[i] / total_value) for i, v in enumerate(holding_vars)) / 100
+            if holding_vars
+            else 0
+        )
 
     # Concentration analysis
     top_conc = sorted(
@@ -287,10 +302,12 @@ def compute_portfolio_risk() -> PortfolioRiskReport:
 
 # ── Helpers ──────────────────────────────────────────────────
 
+
 def _get_daily_returns(symbol: str, days: int = 252) -> Optional[np.ndarray]:
     """Fetch daily returns from yfinance."""
     try:
         from market.yfinance_provider import yf_get_ohlcv
+
         data = yf_get_ohlcv(symbol, period="1y")
         if not data or len(data) < 30:
             return None
@@ -305,11 +322,13 @@ def _get_holdings() -> list[dict]:
     """Get current holdings from broker or return empty list."""
     try:
         from brokers.session import get_broker
+
         broker = get_broker()
         holdings = broker.get_holdings()
         return [
             {"symbol": h.symbol, "value": h.last_price * h.quantity, "qty": h.quantity}
-            for h in holdings if h.quantity > 0
+            for h in holdings
+            if h.quantity > 0
         ]
     except Exception:
         return []

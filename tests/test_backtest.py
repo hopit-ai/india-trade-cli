@@ -3,8 +3,13 @@
 import pandas as pd
 
 from engine.backtest import (
-    RSIStrategy, MACrossStrategy, MACDStrategy, BollingerStrategy,
-    Backtester, BacktestResult, Trade,
+    RSIStrategy,
+    MACrossStrategy,
+    MACDStrategy,
+    BollingerStrategy,
+    Backtester,
+    BacktestResult,
+    Trade,
 )
 
 
@@ -76,13 +81,16 @@ class TestBacktester:
     def test_zero_trades_no_division_error(self):
         """Flat data → 0 trades → no division by zero."""
         dates = pd.date_range("2025-01-01", periods=50, freq="B")
-        flat = pd.DataFrame({
-            "open": [100.0] * 50,
-            "high": [101.0] * 50,
-            "low": [99.0] * 50,
-            "close": [100.0] * 50,
-            "volume": [1000000] * 50,
-        }, index=dates)
+        flat = pd.DataFrame(
+            {
+                "open": [100.0] * 50,
+                "high": [101.0] * 50,
+                "low": [99.0] * 50,
+                "close": [100.0] * 50,
+                "volume": [1000000] * 50,
+            },
+            index=dates,
+        )
 
         bt = Backtester("FLAT", period="1y")
         bt._df = flat

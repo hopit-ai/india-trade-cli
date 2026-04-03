@@ -29,61 +29,54 @@ console = Console()
 @dataclass
 class MacroSnapshot:
     """Current macro indicators relevant to Indian markets."""
-    usdinr:         Optional[float] = None   # USD/INR rate
-    usdinr_change:  Optional[float] = None   # % change
-    crude_oil:      Optional[float] = None   # Brent crude USD/bbl
-    crude_change:   Optional[float] = None
-    gold:           Optional[float] = None   # Gold USD/oz
-    gold_change:    Optional[float] = None
-    us_10y:         Optional[float] = None   # US 10Y treasury yield %
-    dxy:            Optional[float] = None   # Dollar index
+
+    usdinr: Optional[float] = None  # USD/INR rate
+    usdinr_change: Optional[float] = None  # % change
+    crude_oil: Optional[float] = None  # Brent crude USD/bbl
+    crude_change: Optional[float] = None
+    gold: Optional[float] = None  # Gold USD/oz
+    gold_change: Optional[float] = None
+    us_10y: Optional[float] = None  # US 10Y treasury yield %
+    dxy: Optional[float] = None  # Dollar index
 
 
 # Stock → macro factor sensitivity mapping
 _MACRO_LINKAGES = {
     # IT exporters: benefit from weak INR (revenue in USD, costs in INR)
-    "INFY":       {"usdinr": +0.8, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
-    "TCS":        {"usdinr": +0.8, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
-    "WIPRO":      {"usdinr": +0.7, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
-    "HCLTECH":    {"usdinr": +0.7, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
-    "TECHM":      {"usdinr": +0.7, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
-
+    "INFY": {"usdinr": +0.8, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
+    "TCS": {"usdinr": +0.8, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
+    "WIPRO": {"usdinr": +0.7, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
+    "HCLTECH": {"usdinr": +0.7, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
+    "TECHM": {"usdinr": +0.7, "crude_oil": 0, "gold": 0, "us_10y": -0.3},
     # Oil/energy: hurt by high crude (import costs)
-    "RELIANCE":   {"usdinr": -0.3, "crude_oil": +0.5, "gold": 0, "us_10y": 0},
-    "ONGC":       {"usdinr": -0.2, "crude_oil": +0.7, "gold": 0, "us_10y": 0},
-    "IOC":        {"usdinr": -0.3, "crude_oil": -0.6, "gold": 0, "us_10y": 0},
-    "BPCL":       {"usdinr": -0.3, "crude_oil": -0.6, "gold": 0, "us_10y": 0},
-
+    "RELIANCE": {"usdinr": -0.3, "crude_oil": +0.5, "gold": 0, "us_10y": 0},
+    "ONGC": {"usdinr": -0.2, "crude_oil": +0.7, "gold": 0, "us_10y": 0},
+    "IOC": {"usdinr": -0.3, "crude_oil": -0.6, "gold": 0, "us_10y": 0},
+    "BPCL": {"usdinr": -0.3, "crude_oil": -0.6, "gold": 0, "us_10y": 0},
     # Aviation: hurt by crude (jet fuel), benefit from strong INR (dollar-denominated leases)
-    "INDIGO":     {"usdinr": -0.6, "crude_oil": -0.8, "gold": 0, "us_10y": 0},
-
+    "INDIGO": {"usdinr": -0.6, "crude_oil": -0.8, "gold": 0, "us_10y": 0},
     # Banks: hurt by rising US yields (FII selling), benefit from rate cuts
-    "HDFCBANK":   {"usdinr": +0.1, "crude_oil": 0, "gold": 0, "us_10y": -0.5},
-    "ICICIBANK":  {"usdinr": +0.1, "crude_oil": 0, "gold": 0, "us_10y": -0.5},
-    "SBIN":       {"usdinr": +0.1, "crude_oil": 0, "gold": 0, "us_10y": -0.4},
-    "KOTAKBANK":  {"usdinr": +0.1, "crude_oil": 0, "gold": 0, "us_10y": -0.5},
-
+    "HDFCBANK": {"usdinr": +0.1, "crude_oil": 0, "gold": 0, "us_10y": -0.5},
+    "ICICIBANK": {"usdinr": +0.1, "crude_oil": 0, "gold": 0, "us_10y": -0.5},
+    "SBIN": {"usdinr": +0.1, "crude_oil": 0, "gold": 0, "us_10y": -0.4},
+    "KOTAKBANK": {"usdinr": +0.1, "crude_oil": 0, "gold": 0, "us_10y": -0.5},
     # Gold/jewelry: benefit from rising gold
-    "TITAN":      {"usdinr": -0.2, "crude_oil": 0, "gold": +0.6, "us_10y": 0},
+    "TITAN": {"usdinr": -0.2, "crude_oil": 0, "gold": +0.6, "us_10y": 0},
     "KALYANKJIL": {"usdinr": -0.2, "crude_oil": 0, "gold": +0.7, "us_10y": 0},
-
     # Cement/paint: hurt by crude (input costs)
     "ULTRACEMCO": {"usdinr": -0.2, "crude_oil": -0.4, "gold": 0, "us_10y": 0},
     "ASIANPAINT": {"usdinr": -0.3, "crude_oil": -0.5, "gold": 0, "us_10y": 0},
-
     # Pharma: benefit from weak INR (exports), less sensitive to crude
-    "SUNPHARMA":  {"usdinr": +0.5, "crude_oil": -0.1, "gold": 0, "us_10y": -0.2},
-    "DRREDDY":    {"usdinr": +0.6, "crude_oil": -0.1, "gold": 0, "us_10y": -0.2},
-
+    "SUNPHARMA": {"usdinr": +0.5, "crude_oil": -0.1, "gold": 0, "us_10y": -0.2},
+    "DRREDDY": {"usdinr": +0.6, "crude_oil": -0.1, "gold": 0, "us_10y": -0.2},
     # Auto: hurt by crude (steel prices, logistics)
     "TATAMOTORS": {"usdinr": -0.3, "crude_oil": -0.3, "gold": 0, "us_10y": -0.2},
-    "MARUTI":     {"usdinr": -0.2, "crude_oil": -0.2, "gold": 0, "us_10y": 0},
-    "M&M":        {"usdinr": -0.2, "crude_oil": -0.2, "gold": 0, "us_10y": 0},
-
+    "MARUTI": {"usdinr": -0.2, "crude_oil": -0.2, "gold": 0, "us_10y": 0},
+    "M&M": {"usdinr": -0.2, "crude_oil": -0.2, "gold": 0, "us_10y": 0},
     # Metals: benefit from weak INR (exporters), commodity-linked
-    "TATASTEEL":  {"usdinr": +0.3, "crude_oil": +0.2, "gold": +0.3, "us_10y": 0},
-    "HINDALCO":   {"usdinr": +0.4, "crude_oil": +0.2, "gold": +0.2, "us_10y": 0},
-    "JSWSTEEL":   {"usdinr": +0.3, "crude_oil": +0.2, "gold": +0.2, "us_10y": 0},
+    "TATASTEEL": {"usdinr": +0.3, "crude_oil": +0.2, "gold": +0.3, "us_10y": 0},
+    "HINDALCO": {"usdinr": +0.4, "crude_oil": +0.2, "gold": +0.2, "us_10y": 0},
+    "JSWSTEEL": {"usdinr": +0.3, "crude_oil": +0.2, "gold": +0.2, "us_10y": 0},
 }
 
 
@@ -203,13 +196,15 @@ def get_stock_macro_linkages(symbol: str) -> dict:
         else:
             impact = "N/A"
 
-        impacts.append({
-            "factor": label,
-            "sensitivity": sensitivity,
-            "current_value": current_val,
-            "day_change_pct": change,
-            "impact": impact,
-        })
+        impacts.append(
+            {
+                "factor": label,
+                "sensitivity": sensitivity,
+                "current_value": current_val,
+                "day_change_pct": change,
+                "impact": impact,
+            }
+        )
 
     return {
         "symbol": symbol,
@@ -238,11 +233,23 @@ def get_macro_context(symbol: Optional[str] = None) -> str:
     snap = get_macro_snapshot()
     parts = ["Macro snapshot:"]
     if snap.usdinr:
-        parts.append(f"  USD/INR: {snap.usdinr:.2f} ({snap.usdinr_change:+.2f}%)" if snap.usdinr_change else f"  USD/INR: {snap.usdinr:.2f}")
+        parts.append(
+            f"  USD/INR: {snap.usdinr:.2f} ({snap.usdinr_change:+.2f}%)"
+            if snap.usdinr_change
+            else f"  USD/INR: {snap.usdinr:.2f}"
+        )
     if snap.crude_oil:
-        parts.append(f"  Crude: ${snap.crude_oil:.1f}/bbl ({snap.crude_change:+.1f}%)" if snap.crude_change else f"  Crude: ${snap.crude_oil:.1f}/bbl")
+        parts.append(
+            f"  Crude: ${snap.crude_oil:.1f}/bbl ({snap.crude_change:+.1f}%)"
+            if snap.crude_change
+            else f"  Crude: ${snap.crude_oil:.1f}/bbl"
+        )
     if snap.gold:
-        parts.append(f"  Gold: ${snap.gold:.0f}/oz ({snap.gold_change:+.1f}%)" if snap.gold_change else f"  Gold: ${snap.gold:.0f}/oz")
+        parts.append(
+            f"  Gold: ${snap.gold:.0f}/oz ({snap.gold_change:+.1f}%)"
+            if snap.gold_change
+            else f"  Gold: ${snap.gold:.0f}/oz"
+        )
     if snap.us_10y:
         parts.append(f"  US 10Y: {snap.us_10y:.2f}%")
 
@@ -291,6 +298,6 @@ def print_macro_snapshot(symbol: Optional[str] = None) -> None:
             for l in linkages["linkages"]:
                 imp_style = {"TAILWIND": "green", "HEADWIND": "red"}.get(l["impact"], "yellow")
                 sens = l["sensitivity"]
-                sens_str = f"{'+'if sens>0 else ''}{sens:.1f}"
+                sens_str = f"{'+' if sens > 0 else ''}{sens:.1f}"
                 t2.add_row(l["factor"], sens_str, f"[{imp_style}]{l['impact']}[/{imp_style}]")
             console.print(t2)

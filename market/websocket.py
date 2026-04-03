@@ -52,26 +52,39 @@ DEFAULT_SYMBOLS = [
 
 # Map our instrument format to Fyers WebSocket format
 _SYMBOL_MAP = {
-    "NSE:NIFTY 50":          "NSE:NIFTY50-INDEX",
-    "NSE:NIFTY BANK":        "NSE:NIFTYBANK-INDEX",
-    "NSE:INDIA VIX":         "NSE:INDIAVIX-INDEX",
-    "BSE:SENSEX":            "BSE:SENSEX-INDEX",
+    "NSE:NIFTY 50": "NSE:NIFTY50-INDEX",
+    "NSE:NIFTY BANK": "NSE:NIFTYBANK-INDEX",
+    "NSE:INDIA VIX": "NSE:INDIAVIX-INDEX",
+    "BSE:SENSEX": "BSE:SENSEX-INDEX",
     "NSE:NIFTY FIN SERVICE": "NSE:FINNIFTY-INDEX",
-    "NSE:NIFTY MIDCAP 100":  "NSE:MIDCAP100-INDEX",
-    "NSE:NIFTY IT":          "NSE:NIFTYIT-INDEX",
-    "NSE:NIFTY PHARMA":      "NSE:CNXPHARMA-INDEX",
-    "NSE:NIFTY AUTO":        "NSE:CNXAUTO-INDEX",
-    "NSE:NIFTY FMCG":        "NSE:CNXFMCG-INDEX",
-    "NSE:NIFTY REALTY":      "NSE:CNXREALTY-INDEX",
-    "NSE:NIFTY METAL":       "NSE:CNXMETAL-INDEX",
-    "NSE:NIFTY ENERGY":      "NSE:CNXENERGY-INDEX",
+    "NSE:NIFTY MIDCAP 100": "NSE:MIDCAP100-INDEX",
+    "NSE:NIFTY IT": "NSE:NIFTYIT-INDEX",
+    "NSE:NIFTY PHARMA": "NSE:CNXPHARMA-INDEX",
+    "NSE:NIFTY AUTO": "NSE:CNXAUTO-INDEX",
+    "NSE:NIFTY FMCG": "NSE:CNXFMCG-INDEX",
+    "NSE:NIFTY REALTY": "NSE:CNXREALTY-INDEX",
+    "NSE:NIFTY METAL": "NSE:CNXMETAL-INDEX",
+    "NSE:NIFTY ENERGY": "NSE:CNXENERGY-INDEX",
 }
 
 # Known index patterns — anything with these keywords is an INDEX, not EQ
 _INDEX_KEYWORDS = {
-    "NIFTY", "SENSEX", "VIX", "MIDCAP", "FINNIFTY", "BANKNIFTY",
-    "PHARMA", "AUTO", "FMCG", "REALTY", "METAL", "ENERGY", "IT",
-    "FIN SERVICE", "BANK", "INDEX",
+    "NIFTY",
+    "SENSEX",
+    "VIX",
+    "MIDCAP",
+    "FINNIFTY",
+    "BANKNIFTY",
+    "PHARMA",
+    "AUTO",
+    "FMCG",
+    "REALTY",
+    "METAL",
+    "ENERGY",
+    "IT",
+    "FIN SERVICE",
+    "BANK",
+    "INDEX",
 }
 
 
@@ -110,18 +123,19 @@ def _to_ws_symbol(instrument: str) -> str:
 @dataclass
 class Tick:
     """A single price tick from WebSocket."""
-    symbol:     str
-    ltp:        float
-    open:       float = 0.0
-    high:       float = 0.0
-    low:        float = 0.0
-    close:      float = 0.0   # prev close
-    volume:     int   = 0
-    change:     float = 0.0
+
+    symbol: str
+    ltp: float
+    open: float = 0.0
+    high: float = 0.0
+    low: float = 0.0
+    close: float = 0.0  # prev close
+    volume: int = 0
+    change: float = 0.0
     change_pct: float = 0.0
-    timestamp:  float = 0.0   # epoch
-    bid:        float = 0.0
-    ask:        float = 0.0
+    timestamp: float = 0.0  # epoch
+    bid: float = 0.0
+    ask: float = 0.0
 
 
 class WebSocketManager:
@@ -136,7 +150,7 @@ class WebSocketManager:
         self._connected = False
         self._access_token = ""
         self._app_id = ""
-        self._ticks: dict[str, Tick] = {}    # symbol → latest tick
+        self._ticks: dict[str, Tick] = {}  # symbol → latest tick
         self._callbacks: list[Callable] = []
         self._subscribed: set[str] = set()
         self._lock = threading.Lock()
