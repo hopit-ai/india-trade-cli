@@ -88,7 +88,7 @@ trade
 ```
 
 First run walks you through:
-1. **Broker** → Choose **Fyers** → enter App ID + Secret Key → browser opens for login
+1. **Broker** → Choose **Fyers** → enter App ID + Secret Key → browser opens for Fyers login → after login, the browser redirects to a URL containing `auth_code=XXXXX` → paste that code back into the terminal
 2. **AI Provider** → Choose **Gemini** (paste API key) or **Claude subscription** (no key needed)
 3. **NewsAPI** → paste your key (or press Enter to skip)
 
