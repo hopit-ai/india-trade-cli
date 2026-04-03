@@ -71,8 +71,17 @@ def _to_yf_symbol(symbol: str, exchange: str = "NSE") -> str:
     if ":" in symbol:
         exchange, symbol = symbol.split(":", 1)
 
-    # Check index map first
     upper = symbol.upper()
+
+    # Strip Fyers-specific suffixes before index/stock lookup
+    if upper.endswith("-EQ"):
+        upper = upper[:-3]
+        symbol = symbol[:-3]
+    elif upper.endswith("-INDEX"):
+        upper = upper[:-6]
+        symbol = symbol[:-6]
+
+    # Check index map first
     if upper in _INDEX_MAP:
         return _INDEX_MAP[upper]
 
@@ -83,9 +92,11 @@ def _to_yf_symbol(symbol: str, exchange: str = "NSE") -> str:
 
 
 def _from_instrument(instrument: str) -> str:
-    """Convert 'NSE:RELIANCE' format to yfinance ticker."""
+    """Convert 'NSE:RELIANCE' or 'NSE:RELIANCE-EQ' format to yfinance ticker."""
     if ":" in instrument:
         exchange, symbol = instrument.split(":", 1)
+        if symbol.endswith("-EQ"):
+            symbol = symbol[:-3]
         return _to_yf_symbol(symbol, exchange)
     return _to_yf_symbol(instrument)
 
@@ -169,6 +180,9 @@ def yf_get_quotes(instruments: list[str]) -> dict[str, Quote]:
             exchange, symbol = inst.split(":", 1)
         else:
             exchange, symbol = "NSE", inst
+
+        if symbol.endswith("-EQ"):
+            symbol = symbol[:-3]
 
         try:
             quote = yf_get_quote(symbol, exchange)

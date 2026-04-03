@@ -17,6 +17,7 @@ Available commands:
   positions        Open positions from primary broker
   portfolio        Unified view — all connected brokers, Greeks, risk meter
   orders           Today's orders (primary broker)
+  quote <SYM>      Live price, OHLC, volume, and change
   morning-brief    Daily AI market briefing
   analyze <SYM>    Full analysis: fundamental + technical + options
   trade            Interactive strategy builder
@@ -93,6 +94,7 @@ COMMANDS = [
     "most-active",
     "oi",
     "oi-profile",
+    "quote",
     "scan",
     "smile",
     "roll-options",
@@ -249,6 +251,92 @@ def cmd_orders(broker: BrokerAPI) -> None:
     console.print()
     console.print(table)
     console.print()
+
+
+def cmd_quote(symbols: list[str]) -> None:
+    """
+    Display live quotes for one or more NSE/BSE symbols.
+
+    Fetches via WebSocket cache → broker REST → yfinance fallback.
+    """
+    from market.quotes import get_quote
+
+    instruments = []
+    for sym in symbols:
+        upper = sym.upper()
+        if ":" in upper:
+            instruments.append(upper)
+        elif upper.endswith("-INDEX") or upper.endswith("-EQ"):
+            instruments.append(f"NSE:{upper}")
+        else:
+            instruments.append(f"NSE:{upper}-EQ")
+
+    quotes = get_quote(instruments)
+
+    if not quotes:
+        console.print(
+            f"[red]No data found for {', '.join(symbols)}.[/red]\n"
+            "[dim]Check the symbol name or try during market hours.[/dim]"
+        )
+        return
+
+    single = len(quotes) == 1
+
+    if single:
+        key = next(iter(quotes))
+        q = quotes[key]
+        chg_style = "green" if q.change >= 0 else "red"
+        arrow = "▲" if q.change >= 0 else "▼"
+
+        console.print()
+        console.print(f"  [bold white]{q.symbol}[/bold white]  [dim]{key}[/dim]")
+        console.print(
+            f"  [bold]{arrow} ₹{q.last_price:,.2f}[/bold]  "
+            f"[{chg_style}]{q.change:+,.2f} ({q.change_pct:+.2f}%)[/{chg_style}]"
+        )
+        console.print()
+
+        detail = Table(show_header=False, box=None, padding=(0, 2))
+        detail.add_column(style="dim")
+        detail.add_column(justify="right", style="bold")
+        detail.add_row("Open", f"₹{q.open:,.2f}")
+        detail.add_row("High", f"[green]₹{q.high:,.2f}[/green]")
+        detail.add_row("Low", f"[red]₹{q.low:,.2f}[/red]")
+        detail.add_row("Prev Close", f"₹{q.close:,.2f}")
+        detail.add_row("Volume", f"{q.volume:,}")
+        if q.bid is not None and q.ask is not None:
+            detail.add_row("Bid / Ask", f"₹{q.bid:,.2f} / ₹{q.ask:,.2f}")
+        if q.oi is not None:
+            detail.add_row("Open Interest", f"{q.oi:,}")
+        console.print(detail)
+        console.print()
+    else:
+        table = Table(title="Live Quotes", show_header=True, header_style="bold cyan")
+        table.add_column("Symbol", style="bold white")
+        table.add_column("LTP", justify="right")
+        table.add_column("Change", justify="right")
+        table.add_column("% Change", justify="right")
+        table.add_column("Open", justify="right")
+        table.add_column("High", justify="right")
+        table.add_column("Low", justify="right")
+        table.add_column("Volume", justify="right")
+
+        for key, q in quotes.items():
+            chg_style = "green" if q.change >= 0 else "red"
+            table.add_row(
+                q.symbol,
+                f"₹{q.last_price:,.2f}",
+                f"[{chg_style}]{q.change:+,.2f}[/{chg_style}]",
+                f"[{chg_style}]{q.change_pct:+.2f}%[/{chg_style}]",
+                f"₹{q.open:,.2f}",
+                f"₹{q.high:,.2f}",
+                f"₹{q.low:,.2f}",
+                f"{q.volume:,}",
+            )
+
+        console.print()
+        console.print(table)
+        console.print()
 
 
 def _cmd_portfolio(summary) -> None:
@@ -488,6 +576,7 @@ def cmd_help() -> None:
             ("morning-brief", "Daily market context + AI narrative"),
         ],
         "Market Data": [
+            ("quote <SYM> [SYM...]", "Live price, OHLC, volume, and change"),
             ("earnings [SYM...]", "Upcoming quarterly results calendar"),
             ("flows", "FII/DII flow intelligence with signals"),
             ("events [days]", "Event-driven strategy recommendations"),
@@ -1044,6 +1133,29 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print(
                         "[dim]Your broker session may have expired. Try: logout → login[/dim]"
                     )
+
+            elif command == "quote":
+                if not args:
+                    console.print(
+                        "[red]Usage: quote <SYMBOL> [SYMBOL ...][/red]\n"
+                        "[dim]  quote RELIANCE            single stock\n"
+                        "  quote TCS INFY WIPRO       multiple stocks\n"
+                        "  quote NSE:NIFTY50-INDEX    index quote\n"
+                        "  quote NIFTY BANKNIFTY      shorthand for indices[/dim]"
+                    )
+                else:
+                    idx_aliases = {
+                        "NIFTY": "NSE:NIFTY50-INDEX",
+                        "NIFTY50": "NSE:NIFTY50-INDEX",
+                        "BANKNIFTY": "NSE:NIFTYBANK-INDEX",
+                        "NIFTYBANK": "NSE:NIFTYBANK-INDEX",
+                        "SENSEX": "BSE:SENSEX-INDEX",
+                        "VIX": "NSE:INDIAVIX-INDEX",
+                        "INDIAVIX": "NSE:INDIAVIX-INDEX",
+                        "FINNIFTY": "NSE:FINNIFTY-INDEX",
+                    }
+                    resolved = [idx_aliases.get(a.upper(), a) for a in args]
+                    cmd_quote(resolved)
 
             # ── Portfolio (unified multi-broker view) ─────────
             elif command == "portfolio":
