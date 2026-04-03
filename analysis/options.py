@@ -26,7 +26,10 @@ try:
     )
     from py_vollib.black_scholes.implied_volatility import implied_volatility as bs_iv
     PY_VOLLIB_AVAILABLE = True
-except ImportError:
+except Exception:
+    # Catch broad Exception: py_vollib depends on py_lets_be_rational/numba
+    # which can crash (not just ImportError) on Python 3.13+ due to numba
+    # cache/compilation issues. Graceful fallback to built-in BS formulas.
     PY_VOLLIB_AVAILABLE = False
 
 from market.options import get_options_chain, get_pcr, get_max_pain

@@ -1146,7 +1146,7 @@ class OpenAISubscriptionProvider(LLMProvider):
 
 class GeminiProvider(LLMProvider):
     """
-    Google Gemini via `google-generativeai` SDK.
+    Google Gemini via `google-genai` SDK (unified GenAI SDK).
 
     Access modes:
       - Free / paid API key from Google AI Studio (aistudio.google.com)
@@ -1162,8 +1162,10 @@ class GeminiProvider(LLMProvider):
     def __init__(self, model: str, registry: ToolRegistry, system_prompt: str) -> None:
         super().__init__(model, registry, system_prompt)
         try:
-            import google.generativeai as genai
+            from google import genai
+            from google.genai import types as genai_types
             self._genai = genai
+            self._genai_types = genai_types
             api_key = (
                 get_credential("GEMINI_API_KEY", "Google Gemini API Key", secret=True, required=False)
                 or os.environ.get("GOOGLE_API_KEY", "")
@@ -1172,17 +1174,12 @@ class GeminiProvider(LLMProvider):
                 raise RuntimeError(
                     "GEMINI_API_KEY not set. Get a free key at aistudio.google.com"
                 )
-            genai.configure(api_key=api_key)
+            self._client = genai.Client(api_key=api_key)
             self._tools_schema = self._build_gemini_tools()
-            self._model_obj = genai.GenerativeModel(
-                model_name     = self.model or GEMINI_DEFAULT_MODEL,
-                system_instruction = self.system_prompt,
-                tools          = self._tools_schema or None,
-            )
         except ImportError:
             raise RuntimeError(
-                "google-generativeai not installed.\n"
-                "Run: pip install google-generativeai"
+                "google-genai not installed.\n"
+                "Run: pip install google-genai"
             )
 
     @property
@@ -1192,26 +1189,39 @@ class GeminiProvider(LLMProvider):
     def _build_gemini_tools(self) -> list:
         """Convert ToolRegistry to Gemini FunctionDeclaration format."""
         try:
-            from google.generativeai.types import FunctionDeclaration, Tool
+            types = self._genai_types
             declarations = []
             for t in self.registry.anthropic_schema():
                 params = t.get("input_schema", {})
-                declarations.append(FunctionDeclaration(
+                declarations.append(types.FunctionDeclaration(
                     name        = t["name"],
                     description = t["description"],
                     parameters  = params,
                 ))
-            return [Tool(function_declarations=declarations)]
+            return [types.Tool(function_declarations=declarations)]
         except Exception:
             return []
 
     def chat(self, messages: list[dict], stream: bool = True) -> str:
         """Agentic loop using Gemini's function calling."""
+        types = self._genai_types
+
+        # Build chat config with tools and system instruction
+        config = types.GenerateContentConfig(
+            system_instruction = self.system_prompt,
+            tools              = self._tools_schema or None,
+            automatic_function_calling = types.AutomaticFunctionCallingConfig(disable=True),
+        )
+
         # Convert history to Gemini format
         gemini_history = self._to_gemini_history(messages[:-1]) if len(messages) > 1 else []
         last_msg       = messages[-1]["content"] if messages else ""
 
-        chat_session = self._model_obj.start_chat(history=gemini_history)
+        chat_session = self._client.chats.create(
+            model   = self.model or GEMINI_DEFAULT_MODEL,
+            config  = config,
+            history = gemini_history or None,
+        )
         final_text   = ""
 
         # Send the last user message
@@ -1227,14 +1237,14 @@ class GeminiProvider(LLMProvider):
             tool_calls = []
             text_parts = []
 
-            for part in response.parts:
-                if hasattr(part, "function_call") and part.function_call.name:
+            for part in response.candidates[0].content.parts:
+                if part.function_call:
                     fc = part.function_call
                     tool_calls.append({
                         "name":  fc.name,
-                        "input": dict(fc.args),
+                        "input": dict(fc.args) if fc.args else {},
                     })
-                elif hasattr(part, "text") and part.text:
+                elif part.text:
                     text_parts.append(part.text)
 
             text = "".join(text_parts)
@@ -1244,14 +1254,13 @@ class GeminiProvider(LLMProvider):
                     console.print(text, highlight=False)
 
                 # Execute tools, build function response parts
-                from google.generativeai.types import content_types
                 fn_responses = []
                 for tc in tool_calls:
                     _print_tool_call(tc["name"], tc["input"])
                     result = self.registry.execute(tc["name"], tc["input"])
                     fn_responses.append(
-                        self._genai.protos.Part(
-                            function_response=self._genai.protos.FunctionResponse(
+                        types.Part(
+                            function_response=types.FunctionResponse(
                                 name     = tc["name"],
                                 response = {"result": result},
                             )
@@ -1279,7 +1288,7 @@ class GeminiProvider(LLMProvider):
         for msg in messages:
             role    = "user" if msg["role"] == "user" else "model"
             content = msg["content"] if isinstance(msg["content"], str) else str(msg["content"])
-            history.append({"role": role, "parts": [content]})
+            history.append({"role": role, "parts": [{"text": content}]})
         return history
 
 
