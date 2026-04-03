@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "india-trade-cli"
 version = "0.1.0"
 description = "AI-powered multi-agent stock & options analysis platform for Indian markets"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}
 keywords = ["trading", "stocks", "options", "nse", "bse", "india", "ai", "llm", "analysis"]

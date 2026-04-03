@@ -5,7 +5,7 @@ AI-powered multi-agent stock & options analysis platform for Indian markets (NSE
 > **Philosophy:** Every trade must be justified. Analyze first, debate second, execute third.
 
 [![CI](https://github.com/archieindian/india-trade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/archieindian/india-trade-cli/actions/workflows/ci.yml)
-[![Python 3.11–3.12](https://img.shields.io/badge/python-3.11%E2%80%933.12-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -43,7 +43,7 @@ analyze RELIANCE
 
 ### Prerequisites
 
-- **Python 3.11 or 3.12** (3.13 not yet supported due to numba/py_vollib compatibility)
+- **Python 3.11+** (3.11 and 3.12 are tested in CI; 3.13+ should work but py_vollib/numba may not be available)
 
 ### Step 1: Install
 
@@ -457,7 +457,7 @@ Contributions welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full g
 3. Test the app: `trade --no-broker` (uses yfinance, no broker account needed)
 4. Submit a PR against `main`
 
-**Requires Python 3.11 or 3.12.**
+**Requires Python 3.11+.**
 
 ### Areas where help is needed
 
@@ -526,7 +526,7 @@ See [all open issues](https://github.com/ArchieIndian/india-trade-cli/issues) fo
 |---------|----------|
 | `ModuleNotFoundError: kiteconnect` | Broker SDKs are optional. Install only the one you use: `pip install kiteconnect` for Zerodha, or use Demo mode (`login 0`). |
 | `ModuleNotFoundError: feedparser` | Install with `pip install feedparser`. RSS news feeds are optional — the CLI works without them. |
-| `py_vollib` errors on Python 3.13 | py_vollib uses numba which doesn't support 3.13 yet. Use Python 3.11 or 3.12. Options Greeks will use fallback calculations. |
+| `py_vollib` errors on Python 3.13+ | py_vollib uses numba which may not support newer Python versions yet. The platform gracefully falls back to built-in Black-Scholes calculations. |
 | NSE API returns empty data | NSE rate-limits automated requests. Wait a few minutes and retry. The CLI uses browser-like headers to reduce blocks. |
 | `No active broker session` | Run `login` or `login 0` (demo mode) before using broker-dependent commands like `portfolio` or `orders`. |
 | AI commands return errors | Run `credentials setup` to configure your AI provider (Anthropic, OpenAI, or Gemini). Free tier available with Google AI Studio. |
