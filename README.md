@@ -5,7 +5,7 @@ AI-powered multi-agent stock & options analysis platform for Indian markets (NSE
 > **Philosophy:** Every trade must be justified. Analyze first, debate second, execute third.
 
 [![CI](https://github.com/hopit-ai/india-trade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/hopit-ai/india-trade-cli/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -43,7 +43,7 @@ analyze RELIANCE
 
 ### Prerequisites
 
-- **Python 3.11 or 3.12** (both tested in CI; Python 3.13+ is not supported due to `requires-python = "<3.13"` — numba/py_vollib compatibility)
+- **Python 3.11+** (3.11, 3.12, and 3.13 tested in CI)
 
 ### Step 1: Install
 

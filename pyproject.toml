@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "india-trade-cli"
 version = "0.1.0"
 description = "AI-powered multi-agent stock & options analysis platform for Indian markets"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -22,6 +22,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 
