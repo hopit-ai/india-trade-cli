@@ -404,7 +404,11 @@ class AngelOneAPI(BrokerAPI):
         data = self._obj.placeOrder(params)
         if not data or data.get("status") is False:
             msg = data.get("message", "Order failed") if data else "No response"
-            raise RuntimeError(f"Angel One order error: {msg}")
+            raise RuntimeError(
+                f"Angel One order error: {msg}\n"
+                "Check that the symbol is valid, you have sufficient margin, and markets are open.\n"
+                "Run 'funds' to check available margin, or 'positions' to review open positions."
+            )
         return OrderResponse(
             order_id = data.get("data", {}).get("orderid", ""),
             status   = "OPEN",
@@ -500,7 +504,10 @@ class AngelOneAPI(BrokerAPI):
                 for candle in candles
             ]
         except Exception as e:
-            raise RuntimeError(f"Angel One historical data error: {e}") from e
+            raise RuntimeError(
+                f"Angel One historical data error: {e}\n"
+                "Check that the symbol and date range are valid. If your session expired, try: logout → login"
+            ) from e
 
 
 # ── Field mapping helpers ─────────────────────────────────────
