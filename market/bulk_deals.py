@@ -206,6 +206,9 @@ def _bulk_via_snapshot(session: httpx.Client) -> list[Deal]:
         data = r.json()
         items = data.get("BULK_DEALS_DATA", [])
         console.print(f"[dim]  snapshot: {len(items)} bulk deals[/dim]")
+        if items:
+            console.print(f"[dim]  sample keys: {list(items[0].keys())}[/dim]")
+            console.print(f"[dim]  sample item: {items[0]}[/dim]")
         return [_parse_deal_item(it, "BULK") for it in items]
     except Exception as e:
         console.print(f"[dim]  snapshot error: {e}[/dim]")
