@@ -63,6 +63,7 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     ("ANTHROPIC_API_KEY",   "Anthropic API Key",                   True),
     ("OPENAI_API_KEY",      "OpenAI API Key",                      True),
     ("OPENAI_BASE_URL",     "OpenAI-compatible Base URL (OpenRouter, PaleDotBlue, etc.)", False),
+    ("OPENAI_MODEL",        "Model name for OpenAI-compatible provider",               False),
     ("GEMINI_API_KEY",      "Google Gemini API Key",               True),
     ("OPENAI_SESSION_TOKEN","OpenAI Session Token (ChatGPT Plus)", True),
     ("GOOGLE_CLOUD_PROJECT","Google Cloud Project ID",             False),
@@ -278,7 +279,8 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
     _UPSTOX_KEYS    = {"UPSTOX_API_KEY", "UPSTOX_API_SECRET"}
     _FYERS_KEYS     = {"FYERS_APP_ID", "FYERS_SECRET_KEY"}
     _AI_KEYS        = {"AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENAI_BASE_URL",
-                       "GEMINI_API_KEY", "OPENAI_SESSION_TOKEN", "GOOGLE_CLOUD_PROJECT"}
+                       "OPENAI_MODEL", "GEMINI_API_KEY", "OPENAI_SESSION_TOKEN",
+                       "GOOGLE_CLOUD_PROJECT"}
     _TELEGRAM_KEYS  = {"TELEGRAM_BOT_TOKEN"}
 
     sections: dict[str, list] = {
@@ -430,6 +432,14 @@ def _wizard_ai_provider(items: list[tuple[str, str, bool]]) -> None:
         )
         _prompt_and_save("OPENAI_BASE_URL", "Base URL (e.g. https://openrouter.ai/api/v1)", secret=False)
         _prompt_and_save("OPENAI_API_KEY", "API Key for this provider", secret=True)
+        console.print(
+            "\n  [dim]Model name depends on your provider. Examples:[/dim]\n"
+            "    OpenRouter:   [cyan]anthropic/claude-sonnet-4[/cyan]  or  [cyan]google/gemini-2.5-pro[/cyan]\n"
+            "    Groq:         [cyan]llama-3.3-70b-versatile[/cyan]\n"
+            "    PaleDotBlue:  check your provider's model list\n"
+            "    [dim]Default: gpt-4o (only works with OpenAI itself)[/dim]\n"
+        )
+        _prompt_and_save("OPENAI_MODEL", "Model name", secret=False)
 
     elif choice == "8":
         _save_cred("AI_PROVIDER", "ollama")

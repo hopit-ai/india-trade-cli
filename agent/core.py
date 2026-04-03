@@ -1715,7 +1715,7 @@ def _auto_detect_provider() -> str:
 
 def _default_model(provider: str) -> str:
     if provider == PROVIDER_OPENAI:
-        return OPENAI_DEFAULT_MODEL
+        return os.environ.get("OPENAI_MODEL", OPENAI_DEFAULT_MODEL)
     if provider in (PROVIDER_GEMINI, PROVIDER_GEMINI_SUB):
         return GEMINI_DEFAULT_MODEL
     if provider == PROVIDER_OLLAMA:
