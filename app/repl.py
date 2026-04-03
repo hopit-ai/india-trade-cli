@@ -1032,9 +1032,30 @@ def run_repl(broker: BrokerAPI) -> None:
             return HTML(f'<b>trade</b><style fg="orange">{badge}</style> ❯ ')
         return "trade ❯ "
 
+    def _build_toolbar():
+        """Status bar: WebSocket connection state + alerts mode."""
+        parts = []
+        try:
+            from market.websocket import ws_manager
+
+            if ws_manager.connected:
+                parts.append("ws:live")
+            else:
+                parts.append("ws:delayed")
+        except Exception:
+            parts.append("ws:delayed")
+        try:
+            from engine.alerts import alert_manager
+
+            if alert_manager.active_count() > 0:
+                parts.append(f"{alert_manager.active_count()} alert(s)")
+        except Exception:
+            pass
+        return " · ".join(parts)
+
     while True:
         try:
-            raw = session.prompt(_build_prompt, refresh_interval=1.0).strip()
+            raw = session.prompt(_build_prompt, bottom_toolbar=_build_toolbar, refresh_interval=1.0).strip()
         except (KeyboardInterrupt, EOFError):
             console.print("\n[yellow]Use 'quit' to exit.[/yellow]")
             continue

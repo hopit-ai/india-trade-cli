@@ -305,12 +305,8 @@ def _start_websocket(broker: BrokerAPI) -> None:
         app_id = getattr(broker, "_app_id", "")
         if token and app_id:
             ws_manager.start(access_token=token, app_id=app_id)
-            if ws_manager.connected:
-                console.print("[dim]  WebSocket: connected (real-time quotes)[/dim]")
-            else:
-                console.print("[dim]  WebSocket: unavailable (using REST fallback)[/dim]")
-    except Exception as e:
-        console.print(f"[dim]  WebSocket: {e}[/dim]")
+    except Exception:
+        pass  # Status shown in REPL toolbar
 
 
 def _print_welcome(broker: BrokerAPI, role: str = "primary") -> None:
