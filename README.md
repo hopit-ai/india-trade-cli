@@ -111,7 +111,7 @@ trade
 > credentials setup
 ```
 
-All credentials are stored in your OS keychain (macOS Keychain / Linux Secret Service / Windows Credential Locker) — never in plain text files.
+API keys and secrets are stored in your OS keychain (macOS Keychain / Linux Secret Service / Windows Credential Locker) via the `keyring` library. Broker session tokens (access tokens obtained after login) are cached as JSON files under `~/.trading_platform/` for session resumption and are automatically deleted on logout.
 
 ---
 
