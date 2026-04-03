@@ -528,7 +528,7 @@ See [all open issues](https://github.com/ArchieIndian/india-trade-cli/issues) fo
 | `ModuleNotFoundError: feedparser` | Install with `pip install feedparser`. RSS news feeds are optional — the CLI works without them. |
 | `py_vollib` errors on Python 3.13+ | py_vollib uses numba which may not support newer Python versions yet. The platform gracefully falls back to built-in Black-Scholes calculations. |
 | NSE API returns empty data | NSE rate-limits automated requests. Wait a few minutes and retry. The CLI uses browser-like headers to reduce blocks. |
-| Fyers `invalid app id hash` | Your App ID and Secret Key don't match. Go to [myapi.fyers.in](https://myapi.fyers.in), verify your app's ID (format: `XXXX-100`) and Secret Key, then run `credentials setup` to re-enter them. |
+| Fyers `invalid app id hash` | Your App ID and Secret Key don't match. To clear and re-enter: `credentials delete FYERS_APP_ID` then `credentials delete FYERS_SECRET_KEY` then `login`. Verify values at [myapi.fyers.in](https://myapi.fyers.in) (App ID format: `XXXX-100`). |
 | `No active broker session` | Run `login` or `login 0` (demo mode) before using broker-dependent commands like `portfolio` or `orders`. |
 | AI commands return errors | Run `credentials setup` to configure your AI provider (Anthropic, OpenAI, or Gemini). Free tier available with Google AI Studio. |
 | `keyring` errors on Linux | Install the SecretService backend: `sudo apt install gnome-keyring` or set credentials via environment variables in `.env`. |

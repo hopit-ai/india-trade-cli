@@ -194,8 +194,12 @@ class FyersAPI(BrokerAPI):
             if "invalid app id" in error_msg.lower() or "app id hash" in error_msg.lower():
                 raise RuntimeError(
                     f"Fyers login failed: {error_msg}\n"
-                    "Check that your App ID (e.g. XXXX-100) and Secret Key match "
-                    "what's shown at myapi.fyers.in. Run 'credentials setup' to re-enter them."
+                    "Your App ID and Secret Key don't match. To fix:\n"
+                    "  trade\n"
+                    "  > credentials delete FYERS_APP_ID\n"
+                    "  > credentials delete FYERS_SECRET_KEY\n"
+                    "  > login\n"
+                    "Then re-enter the correct values from myapi.fyers.in"
                 )
             raise RuntimeError(f"Fyers login failed: {response}")
 
