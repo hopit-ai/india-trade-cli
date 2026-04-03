@@ -301,7 +301,7 @@ async def skill_morning_brief():
 
         snapshot = get_market_snapshot()
         flows = get_flow_analysis()
-        news = get_market_news(limit=5)
+        news = get_market_news(n=5)
         breadth = get_market_breadth()
         events = get_upcoming_events(days=7)
 
