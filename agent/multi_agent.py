@@ -445,6 +445,28 @@ class NewsMacroAnalyst(BaseAnalyst):
                     direction = "buying" if fii_net > 0 else "selling"
                     points.append(f"FII: net {direction} {abs(fii_net):,.0f} Cr (latest)")
 
+            # Bulk/block deals (institutional activity)
+            try:
+                deals = self.registry.execute("get_bulk_block_deals", {"symbol": symbol})
+                if isinstance(deals, dict):
+                    bulk_deals = deals.get("bulk", [])
+                    block_deals = deals.get("block", [])
+                    all_deals = bulk_deals + block_deals
+                    if all_deals:
+                        data["bulk_block_deals"] = all_deals
+                        buys = [d for d in all_deals if d.get("deal_type") == "BUY"]
+                        sells = [d for d in all_deals if d.get("deal_type") == "SELL"]
+                        fii_deals = [d for d in all_deals if d.get("entity_type") == "FII"]
+                        mf_deals = [d for d in all_deals if d.get("entity_type") == "MF"]
+                        summary = f"Bulk/block deals: {len(buys)} buys, {len(sells)} sells"
+                        if fii_deals:
+                            summary += f" ({len(fii_deals)} FII)"
+                        if mf_deals:
+                            summary += f" ({len(mf_deals)} MF)"
+                        points.append(summary)
+            except Exception:
+                pass  # non-critical — don't fail analysis if deals unavailable
+
             # Market breadth
             breadth = self.registry.execute("get_market_breadth", {})
             if isinstance(breadth, dict):
@@ -527,6 +549,13 @@ class NewsMacroAnalyst(BaseAnalyst):
         breadth = data.get("breadth", {})
         if breadth:
             macro_parts.append(f"Market breadth: {json.dumps(breadth)}")
+        deals = data.get("bulk_block_deals", [])
+        if deals:
+            deal_lines = []
+            for d in deals[:10]:
+                dl = f"{d.get('date','')} {d.get('symbol','')} {d.get('client','')[:30]} {d.get('deal_type','')} {d.get('quantity',0):,} @ ₹{d.get('price',0):,.1f} [{d.get('entity_type','')}]"
+                deal_lines.append(dl)
+            macro_parts.append(f"Bulk/block deals:\n" + "\n".join(deal_lines))
         events = data.get("events")
         if events:
             events_str = json.dumps(events) if isinstance(events, (dict, list)) else str(events)

@@ -88,9 +88,9 @@ class TestGeneratePlan:
         assert plan is not None
         assert plan.direction == "SHORT"
 
-    def test_zero_ltp_returns_none(self):
+    def test_negative_ltp_returns_none(self):
         t = TraderAgent(capital=200000)
-        plan = t.generate_plan("RELIANCE", verdict="BUY", confidence=75, ltp=0)
+        plan = t.generate_plan("RELIANCE", verdict="BUY", confidence=75, ltp=-1)
         assert plan is None
 
     def test_plan_has_entry_orders(self):

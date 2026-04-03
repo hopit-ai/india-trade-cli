@@ -69,6 +69,18 @@ def main() -> None:
         except (KeyboardInterrupt, EOFError):
             console.print("\n[yellow]Login cancelled.[/yellow]")
             sys.exit(0)
+        except Exception as e:
+            console.print(f"\n[red]Login failed: {e}[/red]")
+            console.print("[yellow]Dropping into REPL with mock broker so you can fix credentials.[/yellow]")
+            console.print("[dim]  Run 'credentials list' to see saved credentials[/dim]")
+            console.print("[dim]  Run 'credentials clear' to wipe all and start fresh[/dim]")
+            console.print("[dim]  Run 'login' to try again[/dim]\n")
+            from brokers.mock import MockBrokerAPI
+            from brokers.session import register_broker
+            mock = MockBrokerAPI(passthrough_market_data=True)
+            mock.complete_login()
+            register_broker("mock", mock, primary=True)
+            broker = mock
 
     if use_tui:
         # Launch Textual TUI
@@ -96,9 +108,15 @@ if __name__ == "__main__":
         non_daemon = [t for t in threading.enumerate()
                       if t.is_alive() and not t.daemon and t != threading.main_thread()]
         if non_daemon:
-            # Non-daemon threads exist — force kill after brief wait
-            import signal
-            signal.alarm(2) if hasattr(signal, 'alarm') else None
-            os._exit(exit_code)
+            # Non-daemon threads exist (e.g. WebSocket SDK) — wait up to
+            # 2 seconds for them to finish, then force exit.
+            for t in non_daemon:
+                t.join(timeout=2)
+            # If any are still alive after the wait, force kill
+            still_alive = [t for t in non_daemon if t.is_alive()]
+            if still_alive:
+                os._exit(exit_code)
+            else:
+                sys.exit(exit_code)
         else:
             sys.exit(exit_code)
