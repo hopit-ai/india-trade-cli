@@ -325,4 +325,7 @@ class ZerodhaAPI(BrokerAPI):
                 for candle in raw
             ]
         except Exception as e:
-            raise RuntimeError(f"Zerodha historical data error: {e}") from e
+            raise RuntimeError(
+                f"Zerodha historical data error: {e}\n"
+                "Check that the symbol and date range are valid. If your session expired, try: logout → login"
+            ) from e

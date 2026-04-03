@@ -517,4 +517,7 @@ class FyersAPI(BrokerAPI):
                 for c in candles
             ]
         except Exception as e:
-            raise RuntimeError(f"Fyers historical data error: {e}") from e
+            raise RuntimeError(
+                f"Fyers historical data error: {e}\n"
+                "Check that the symbol and date range are valid. If your session expired, try: logout → login"
+            ) from e

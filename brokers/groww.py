@@ -142,7 +142,13 @@ class GrowwAPI(BrokerAPI):
             elif status == 429:
                 raise RuntimeError("Groww login failed: rate limited. Wait a minute and try again.")
             else:
-                raise RuntimeError(f"Groww login failed (HTTP {status}): {r.text[:200]}")
+                raise RuntimeError(
+                    f"Groww login failed (HTTP {status}): {r.text[:200]}\n"
+                    "This may be a temporary server issue. Wait a moment and try again.\n"
+                    "If it persists, verify your credentials and try:\n"
+                    "  credentials delete GROWW_CLIENT_ID\n"
+                    "  credentials delete GROWW_CLIENT_SECRET"
+                )
         self._save_token(r.json())
         return self.get_profile()
 

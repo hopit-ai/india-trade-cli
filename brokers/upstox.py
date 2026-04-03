@@ -143,7 +143,13 @@ class UpstoxAPI(BrokerAPI):
             elif status == 429:
                 raise RuntimeError("Upstox login failed: rate limited. Wait a minute and try again.")
             else:
-                raise RuntimeError(f"Upstox login failed (HTTP {status}): {resp.text[:200]}")
+                raise RuntimeError(
+                    f"Upstox login failed (HTTP {status}): {resp.text[:200]}\n"
+                    "This may be a temporary server issue. Wait a moment and try again.\n"
+                    "If it persists, verify your credentials and try:\n"
+                    "  credentials delete UPSTOX_API_KEY\n"
+                    "  credentials delete UPSTOX_API_SECRET"
+                )
         payload = resp.json()
         token   = payload.get("access_token", "")
         if not token:
@@ -418,7 +424,10 @@ class UpstoxAPI(BrokerAPI):
                 for candle in candles
             ]
         except Exception as e:
-            raise RuntimeError(f"Upstox historical data error: {e}") from e
+            raise RuntimeError(
+                f"Upstox historical data error: {e}\n"
+                "Check that the symbol and date range are valid. If your session expired, try: logout → login"
+            ) from e
 
     # ── Helpers ───────────────────────────────────────────────
 
