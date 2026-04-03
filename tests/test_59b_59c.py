@@ -15,12 +15,17 @@ class TestSectorFallback:
         result = get_sector_snapshot()
         assert isinstance(result, list)
 
+    @pytest.mark.network
     def test_sectors_have_non_zero_values(self):
-        """At least some sectors should have real prices."""
+        """At least some sectors should have real prices.
+
+        Requires network access (yfinance). Skipped in offline CI.
+        Run with: pytest -m network
+        """
         from market.indices import get_sector_snapshot
         result = get_sector_snapshot()
         non_zero = [s for s in result if s.ltp > 0]
-        # With yfinance fallback, should always have data
+        # With yfinance fallback, should always have data when online
         assert len(non_zero) > 0
 
 
@@ -46,12 +51,14 @@ class TestNSEShareholding:
         assert sample["fii"] == pytest.approx(19.09)
         assert sample["dii"] == pytest.approx(20.18)
 
+    @pytest.mark.network
     def test_fetch_nse_shareholding_returns_dict(self):
         """fetch should return a dict (may be empty if API fails)."""
         from analysis.fundamental import _fetch_nse_shareholding
         result = _fetch_nse_shareholding("RELIANCE")
         assert isinstance(result, dict)
 
+    @pytest.mark.network
     def test_shareholding_has_promoter(self):
         """If data available, promoter % should be present."""
         from analysis.fundamental import _fetch_nse_shareholding
@@ -61,6 +68,7 @@ class TestNSEShareholding:
             assert "promoter_pct" in result
             assert result["promoter_pct"] > 0
 
+    @pytest.mark.network
     def test_shareholding_has_fii_dii(self):
         """If data available, FII and DII % should be present."""
         from analysis.fundamental import _fetch_nse_shareholding
@@ -69,6 +77,7 @@ class TestNSEShareholding:
             assert "fii_pct" in result
             assert "dii_pct" in result
 
+    @pytest.mark.network
     def test_shareholding_has_pledge(self):
         """If data available, pledge status should be present."""
         from analysis.fundamental import _fetch_nse_shareholding

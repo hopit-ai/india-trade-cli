@@ -58,12 +58,10 @@ def main() -> None:
         console.print("[dim]  Running without broker (--no-broker). Using yfinance for market data.[/dim]")
         console.print("[dim]  To connect a real broker later, run 'login' in the REPL.[/dim]\n")
         from brokers.mock import MockBrokerAPI
-        from brokers.session import _brokers, _primary_key
+        from brokers.session import register_broker
         mock = MockBrokerAPI(passthrough_market_data=True)
         mock.complete_login()
-        import brokers.session as _sess
-        _sess._brokers["mock"] = mock
-        _sess._primary_key = "mock"
+        register_broker("mock", mock, primary=True)
         broker = mock
     else:
         try:

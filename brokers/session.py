@@ -91,6 +91,19 @@ _BROKER_MENU = [
 
 # ── Public accessors ──────────────────────────────────────────
 
+def register_broker(key: str, broker: BrokerAPI, *, primary: bool = True) -> None:
+    """
+    Register an externally-created broker instance.
+
+    Used by --no-broker mode to inject a MockBrokerAPI without going
+    through the interactive login flow.
+    """
+    global _brokers, _primary_key
+    _brokers[key] = broker
+    if primary or not _primary_key:
+        _primary_key = key
+
+
 def get_broker() -> BrokerAPI:
     """Return the primary broker. Raises if login() has not been called."""
     if not _primary_key or _primary_key not in _brokers:
