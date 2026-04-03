@@ -42,7 +42,7 @@ analyze RELIANCE
 
 ### Prerequisites
 
-- **Python 3.11+**
+- **Python 3.11 or 3.12** (3.13 not yet supported due to numba/py_vollib compatibility)
 - **One AI provider** (Gemini free tier works great, or Claude/OpenAI)
 - **No broker account needed** for analysis (yfinance provides free NSE/BSE data)
 
@@ -64,7 +64,7 @@ trade
 ```
 
 First run prompts you to:
-1. Choose a broker (pick **Demo** to skip, or **No Broker** for real data via yfinance)
+1. Choose a broker (pick **Demo** for mock data — no credentials needed)
 2. Choose an AI provider (Gemini is free and works well)
 
 That's it. You're in the REPL. Type `analyze RELIANCE` to see it work.
@@ -75,7 +75,9 @@ That's it. You're in the REPL. Type `analyze RELIANCE` to see it work.
 trade --no-broker
 ```
 
-Uses yfinance for real NSE/BSE data (~15 min delayed). All analysis, backtesting, and AI features work. Connect a broker later via the `login` command.
+Uses yfinance for real NSE/BSE data (~15 min delayed). All analysis, backtesting, and AI features work — no broker account needed. Connect a broker later via the `login` command in the REPL.
+
+> **Note:** `--no-broker` is a CLI flag, not an interactive menu option. The broker selection menu offers Demo, Zerodha, Groww, Angel One, Upstox, and Fyers.
 
 ---
 
@@ -461,20 +463,21 @@ Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for 
 - Telegram bot (14 commands + alert push + REPL status badge)
 - Auto-archived PDF exports with timestamped copies
 - Multi-symbol backtester (pairs trading with both legs tracked)
+- Options-specific backtesting (straddle, iron condor, covered call, protective put)
+- Options scanner (high IV, unusual OI)
+- Greeks-based position management (delta-hedge, roll-options)
+- Volatility surface and IV smile analysis
+- GEX analysis (dealer gamma positioning)
+- Broker order placement flow (Zerodha, Fyers, Upstox, Angel One, Groww)
+- DCF valuation model with reverse DCF, FCF quality, scenarios
 
 ### Experimental
 - Interactive strategy builder (plain English to backtest to paper trade to save)
 
 ### Planned
 - Strategy template library (curated strategies with explanations)
-- Options-specific backtesting
-- Options scanner (high IV, unusual OI)
-- Greeks-based position management
-- Volatility surface and IV smile analysis
-- GEX analysis
 - TradingView/ChartInk webhook support
-- Web UI (FastAPI)
-- Broker order placement flow
+- Web UI dashboard (FastAPI — OAuth login flow exists, dashboard pending)
 - SEBI compliance layer
 
 See [all open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for the full list.

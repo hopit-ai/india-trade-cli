@@ -6,7 +6,7 @@ fyers-apiv3>=3.1.0          # Fyers broker (official SDK)
 # ── AI Brain ─────────────────────────────────────────────────
 anthropic>=0.40.0           # Claude API
 openai>=1.40.0              # OpenAI GPT API
-google-generativeai>=0.8.0  # Google Gemini API (AI Studio key)
+google-genai>=1.0.0         # Google Gemini API (unified GenAI SDK)
 google-cloud-aiplatform>=1.60.0  # Vertex AI (Gemini for GCP/Workspace)
 
 # ── Terminal UI ──────────────────────────────────────────────
@@ -17,7 +17,7 @@ prompt_toolkit>=3.0.0       # REPL with tab-complete
 # ── Data & Analysis ──────────────────────────────────────────
 pandas>=2.2.0               # OHLCV data manipulation
 numpy>=1.26.0               # Numerical computations
-py_vollib>=1.0.1            # Black-Scholes, Greeks
+# py_vollib>=1.0.1          # Black-Scholes, Greeks (optional: pip install py_vollib)
 yfinance>=0.2.40            # Free market data (NSE/BSE) — no broker needed
 
 # ── News & Events ────────────────────────────────────────────
