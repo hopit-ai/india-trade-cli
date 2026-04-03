@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 from config.credentials import (
     _kr_get, _kr_set, _kr_delete,
-    get_credential, set_credential, delete_credential, load_all,
+    get_credential, set_credential, load_all,
     SERVICE, KNOWN_CREDENTIALS, _KNOWN_KEYS,
     cmd_credentials,
 )

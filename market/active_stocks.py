@@ -10,7 +10,6 @@ worth feeding into sentiment analysis.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 

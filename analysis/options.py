@@ -16,7 +16,6 @@ from typing      import Optional
 import numpy as np
 
 try:
-    from py_vollib.black_scholes          import black_scholes as bs_price
     from py_vollib.black_scholes.greeks.analytical import (
         delta as bs_delta,
         gamma as bs_gamma,
@@ -32,7 +31,7 @@ except Exception:
     # cache/compilation issues. Graceful fallback to built-in BS formulas.
     PY_VOLLIB_AVAILABLE = False
 
-from market.options import get_options_chain, get_pcr, get_max_pain
+from market.options import get_options_chain
 
 
 # ── Risk-free rate (RBI repo rate) ────────────────────────────

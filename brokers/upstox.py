@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from pathlib  import Path
 from typing   import Optional
 
@@ -364,7 +364,7 @@ class UpstoxAPI(BrokerAPI):
 
     def cancel_order(self, order_id: str) -> bool:
         try:
-            self._delete(f"/order/cancel", order_id=order_id)
+            self._delete("/order/cancel", order_id=order_id)
             return True
         except Exception:
             return False

@@ -26,7 +26,6 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -101,17 +100,17 @@ class TradingProfile:
         pnl_style = "green" if self.total_pnl >= 0 else "red"
 
         lines = [
-            f"  [bold]Overview[/bold]",
+            "  [bold]Overview[/bold]",
             f"  Trades         : {self.trades_with_outcome} with outcomes / {self.total_trades} total",
             f"  Win Rate       : {self.overall_win_rate:.0f}%",
             f"  Total P&L      : [{pnl_style}]{self.total_pnl:+,.0f}[/{pnl_style}]",
             f"  Avg P&L/Trade  : [{pnl_style}]{self.avg_pnl:+,.0f}[/{pnl_style}]",
             "",
-            f"  [bold]Risk Profile[/bold]",
+            "  [bold]Risk Profile[/bold]",
             f"  Classification : [{risk_style}]{self.risk_class}[/{risk_style}] (score: {self.risk_score:.0f}/100)",
             f"  {self.risk_reasoning}",
             "",
-            f"  [bold]Win/Loss Characteristics[/bold]",
+            "  [bold]Win/Loss Characteristics[/bold]",
             f"  Avg Winner     : [green]{self.avg_winner:+,.0f}[/green]",
             f"  Avg Loser      : [red]{self.avg_loser:+,.0f}[/red]",
             f"  Win/Loss Ratio : {self.win_loss_ratio:.2f}x",
@@ -124,12 +123,12 @@ class TradingProfile:
             lines.append(f"\n  [yellow]! You cut winners early[/yellow] "
                          f"(avg win hold: {self.avg_win_hold:.0f}d vs avg loss hold: {self.avg_loss_hold:.0f}d)")
         if self.holds_losers_long:
-            lines.append(f"  [yellow]! You hold losers too long[/yellow]")
+            lines.append("  [yellow]! You hold losers too long[/yellow]")
 
         # VIX regime
         lines.extend([
             "",
-            f"  [bold]By VIX Regime[/bold]",
+            "  [bold]By VIX Regime[/bold]",
             f"  Low (<15)  : {self.low_vix_win_rate:.0f}%",
             f"  Mid (15-20): {self.mid_vix_win_rate:.0f}%",
             f"  High (>20) : {self.high_vix_win_rate:.0f}%",
@@ -139,7 +138,7 @@ class TradingProfile:
         # Confidence
         lines.extend([
             "",
-            f"  [bold]By Confidence[/bold]",
+            "  [bold]By Confidence[/bold]",
             f"  High conf (>70) : {self.high_conf_win_rate:.0f}%",
             f"  Low conf (<50)  : {self.low_conf_win_rate:.0f}%",
             f"  Min useful conf : {self.min_useful_confidence}%",
@@ -148,7 +147,7 @@ class TradingProfile:
         # Streaks
         lines.extend([
             "",
-            f"  [bold]Streaks[/bold]",
+            "  [bold]Streaks[/bold]",
             f"  Current        : {'W' if self.current_streak > 0 else 'L'}{abs(self.current_streak)}",
             f"  Longest Win    : W{self.longest_win_streak}",
             f"  Longest Loss   : L{self.longest_loss_streak}",
@@ -307,7 +306,6 @@ def build_profile() -> TradingProfile:
     profile.worst_symbols = sorted(symbol_data, key=lambda x: x["win_rate"])[:5]
 
     # Streaks
-    streak = 0
     max_win = 0
     max_loss = 0
     cur_win = 0

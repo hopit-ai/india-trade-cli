@@ -141,7 +141,7 @@ def get_multi_broker_summary() -> PortfolioSummary:
 
     Falls back to get_portfolio_summary() if only one broker is connected.
     """
-    from brokers.session import get_all_brokers, is_multi_broker
+    from brokers.session import get_all_brokers
 
     all_brokers = get_all_brokers()
 
@@ -466,7 +466,7 @@ def print_portfolio_greeks() -> None:
     theta_style = "red" if greeks.net_theta < 0 else "green"
 
     lines = [
-        f"  [bold]Net Portfolio Greeks[/bold]",
+        "  [bold]Net Portfolio Greeks[/bold]",
         f"  Delta : [{delta_style}]{greeks.net_delta:+.2f}[/{delta_style}]"
         f"  {'(net long)' if greeks.net_delta > 0 else '(net short)' if greeks.net_delta < 0 else '(delta neutral)'}",
         f"  Gamma : {greeks.net_gamma:+.4f}",

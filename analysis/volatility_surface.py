@@ -80,7 +80,7 @@ def compute_iv_smile(underlying: str, expiry: Optional[str] = None) -> Optional[
             # If IV not in chain, try computing from premium
             if (iv_val is None or iv_val <= 0) and c.last_price > 0:
                 try:
-                    from analysis.options import compute_greeks, _dte_days
+                    from analysis.options import compute_greeks
                     exp_str = c.expiry if c.expiry else expiry
                     if exp_str:
                         g = compute_greeks(spot, s, exp_str, c.option_type, c.last_price)

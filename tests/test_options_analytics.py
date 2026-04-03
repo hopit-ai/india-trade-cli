@@ -4,10 +4,7 @@ TDD — written before implementation.
 Covers issues #33, #47, #48, #49, #58.
 """
 
-import numpy as np
 import pandas as pd
-import pytest
-from datetime import date, timedelta
 
 
 # ── #58: Bulk/Block Deals ────────────────────────────────────

@@ -1,7 +1,6 @@
 """Tests for analysis/options.py — Greeks, IV rank, payoff."""
 
 import pytest
-from datetime import date, timedelta
 
 from analysis.options import iv_rank, payoff, PayoffLeg
 

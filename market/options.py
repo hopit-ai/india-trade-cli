@@ -6,7 +6,6 @@ Options chain and expiry utilities — broker-agnostic.
 
 from __future__ import annotations
 
-from datetime import date, datetime
 from typing   import Optional
 
 import pandas as pd

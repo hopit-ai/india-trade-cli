@@ -11,18 +11,13 @@ Covers:
 from __future__ import annotations
 
 import json
-import threading
 import time
-from dataclasses import asdict
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, patch
 
 from engine.alerts import (
     Alert,
     AlertManager,
     _webhook_notify,
-    alert_manager,
 )
 
 

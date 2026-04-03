@@ -95,3 +95,11 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint]
+ignore = [
+    "E402",   # module-level import not at top — intentional for optional/conditional imports
+    "E701",   # multiple statements on one line (colon) — intentional style
+    "E702",   # multiple statements on one line (semicolon) — intentional style
+    "E741",   # ambiguous variable name `l` — widespread in financial loop code
+]

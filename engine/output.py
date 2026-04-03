@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import os
 import re
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -40,7 +39,7 @@ EXPORTS_DIR = Path.home() / ".trading_platform" / "exports"
 
 # ── PDF Export ───────────────────────────────────────────────
 
-def _build_pdf(content: str, title: str) -> "FPDF":
+def _build_pdf(content: str, title: str) -> object:
     """Build a FPDF object from content. Returns the FPDF instance."""
     from fpdf import FPDF
 
@@ -218,7 +217,8 @@ def list_exports() -> list[dict]:
 
 def open_export(filename: str) -> bool:
     """Open an exported PDF with the system default viewer."""
-    import subprocess, platform
+    import subprocess
+    import platform
 
     path = EXPORTS_DIR / filename
     if not path.exists():

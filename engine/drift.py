@@ -18,8 +18,6 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -74,17 +72,17 @@ class DriftReport:
         lines = [
             f"  Trades Analyzed   : {self.trades_with_outcome} / {self.total_trades}",
             "",
-            f"  [bold]Win Rate Trend[/bold]",
+            "  [bold]Win Rate Trend[/bold]",
             f"  Recent (last 10)  : {self.recent_win_rate:.0f}%",
             f"  Older             : {self.older_win_rate:.0f}%",
             f"  Trend             : [{trend_style}]{self.win_rate_trend} ({self.win_rate_delta:+.0f}%)[/{trend_style}]",
             "",
-            f"  [bold]By VIX Regime[/bold]",
+            "  [bold]By VIX Regime[/bold]",
             f"  Low VIX (<15)     : {self.low_vix_win_rate:.0f}%",
             f"  High VIX (>18)    : {self.high_vix_win_rate:.0f}%",
             f"  Best regime       : {self.best_vix_regime}",
             "",
-            f"  [bold]By Verdict[/bold]",
+            "  [bold]By Verdict[/bold]",
             f"  BUY accuracy      : {self.buy_accuracy:.0f}%",
             f"  SELL accuracy     : {self.sell_accuracy:.0f}%",
         ]
@@ -92,7 +90,7 @@ class DriftReport:
         if self.best_analyst:
             lines.extend([
                 "",
-                f"  [bold]Analyst Accuracy[/bold]",
+                "  [bold]Analyst Accuracy[/bold]",
                 f"  Best analyst      : [green]{self.best_analyst}[/green]",
                 f"  Worst analyst     : [red]{self.worst_analyst}[/red]",
             ])
@@ -139,9 +137,6 @@ def detect_drift() -> DriftReport:
         return report
 
     # Win rate trend
-    wins = [r for r in with_outcome if r.outcome == "WIN"]
-    overall_wr = len(wins) / len(with_outcome) * 100
-
     recent = with_outcome[-10:]
     older = with_outcome[:-10] if len(with_outcome) > 10 else []
 

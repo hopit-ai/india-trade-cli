@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, date, timedelta
+from datetime import datetime
 from pathlib  import Path
 from typing   import Optional
 
@@ -168,7 +168,7 @@ class AngelOneAPI(BrokerAPI):
                 obj = self._smart_connect()
                 # Re-attach the saved token to the SDK object
                 try:
-                    import logzero
+                    import logzero  # noqa: F401
                 except ImportError:
                     pass
                 self._obj = obj

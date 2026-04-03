@@ -19,7 +19,6 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel

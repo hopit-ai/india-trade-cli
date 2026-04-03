@@ -39,7 +39,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, date
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -180,7 +180,6 @@ class TradeMemory:
         # Extract analyst scores
         scores = {}
         vix = None
-        nifty_level = None
         fii_net = None
 
         for report in analyst_reports:
@@ -190,7 +189,6 @@ class TradeMemory:
                 # Extract market context from Risk Manager
                 if report.analyst == "Risk Manager" and hasattr(report, 'data'):
                     vix = report.data.get("vix")
-                    ltp = report.data.get("ltp")
 
                 # Extract FII data from News & Macro
                 if report.analyst == "News & Macro" and hasattr(report, 'data'):

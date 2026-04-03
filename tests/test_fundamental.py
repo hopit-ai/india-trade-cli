@@ -1,9 +1,8 @@
 """Tests for analysis/fundamental.py — scoring and parsing logic."""
 
-import math
 import pytest
 
-from analysis.fundamental import _score, _safe_float, FundamentalFlag
+from analysis.fundamental import _score, _safe_float
 
 
 class TestScore:

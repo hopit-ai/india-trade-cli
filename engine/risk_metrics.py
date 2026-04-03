@@ -77,12 +77,12 @@ class PortfolioRiskReport:
             f"  Portfolio Value    : {self.portfolio_value:,.0f}",
             f"  Annual Volatility  : {self.portfolio_volatility:.1f}%",
             "",
-            f"  [bold]Value-at-Risk (1-day)[/bold]",
+            "  [bold]Value-at-Risk (1-day)[/bold]",
             f"  VaR 95%  : [red]{self.portfolio_var_95:,.0f}[/red] ({var_pct:.2f}%)",
             f"  VaR 99%  : [red]{self.portfolio_var_99:,.0f}[/red]",
             f"  CVaR 95% : [red]{self.portfolio_cvar_95:,.0f}[/red]  (avg loss in worst 5% of days)",
             "",
-            f"  [bold]Concentration[/bold]",
+            "  [bold]Concentration[/bold]",
             f"  HHI Index : {self.hhi:.3f}  ({self.concentration_risk})",
         ]
 

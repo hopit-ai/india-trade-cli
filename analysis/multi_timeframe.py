@@ -18,12 +18,10 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 import pandas as pd
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 console = Console()
@@ -90,7 +88,7 @@ def multi_timeframe_analysis(
     Run technical analysis on multiple timeframes and check confluence.
     """
     from market.history import get_ohlcv
-    from analysis.technical import analyse, rsi, ema
+    from analysis.technical import analyse
 
     signals = []
 

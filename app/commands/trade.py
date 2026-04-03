@@ -18,7 +18,6 @@ This module is also called directly from the REPL `trade` command.
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 from rich.console import Console
 from rich.panel   import Panel
@@ -120,7 +119,7 @@ def run(symbol: str | None = None, view: str | None = None) -> None:
 
     # ── Step 6: Stop-loss ─────────────────────────────────────
     sl_default = round(spot * 0.95, 2) if view == "BULLISH" else round(spot * 1.05, 2)
-    console.print(f"\n  [bold]Stop-loss[/bold] (required before placing order)")
+    console.print("\n  [bold]Stop-loss[/bold] (required before placing order)")
     sl_price = float(Prompt.ask("  Stop-loss price", default=str(sl_default)))
     sl_pct   = abs(sl_price - spot) / spot * 100
     console.print(f"  Stop-loss set at ₹{sl_price:,.2f}  ({sl_pct:.1f}% from spot)")
@@ -130,7 +129,7 @@ def run(symbol: str | None = None, view: str | None = None) -> None:
 
     # ── Step 7: Final confirmation ─────────────────────────────
     mode = os.environ.get("TRADING_MODE", "PAPER")
-    mode_badge = f"[green]PAPER[/green]" if mode == "PAPER" else "[bold red]LIVE[/bold red]"
+    mode_badge = "[green]PAPER[/green]" if mode == "PAPER" else "[bold red]LIVE[/bold red]"
 
     console.print(f"\n  Mode: {mode_badge}")
     console.print(f"  Strategy: [bold]{selected.name}[/bold]")
@@ -198,8 +197,6 @@ def _show_trade_summary(s: StrategyResult, symbol: str, spot: float) -> None:
 
 def _place_strategy_legs(broker, strategy: StrategyResult, symbol: str, mode: str) -> None:
     """Place each leg of the selected strategy."""
-    product = "PAPER" if mode == "PAPER" else "NRML"
-
     for leg in strategy.legs:
         action   = leg.get("action", "BUY")
         opt_type = leg.get("type", "")

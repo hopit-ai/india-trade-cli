@@ -1,10 +1,8 @@
 """Tests for agent/tools.py — registry, schema, serialization."""
 
-import pytest
 import pandas as pd
-import numpy as np
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 
 
 class TestToolRegistry:

@@ -1,17 +1,15 @@
 """Tests for agent/core.py — provider selection, model defaults, message helpers."""
 
-import os
 import pytest
 from unittest.mock import patch, MagicMock
 
 from agent.core import (
     _default_model, _user_msg, _assistant_msg, _auto_detect_provider,
     PROVIDER_OPENAI, PROVIDER_GEMINI, PROVIDER_ANTHROPIC,
-    PROVIDER_CLAUDE_CLI, PROVIDER_OLLAMA, PROVIDER_OPENAI_SUB,
-    PROVIDER_GEMINI_SUB,
+    PROVIDER_CLAUDE_CLI, PROVIDER_OLLAMA, PROVIDER_GEMINI_SUB,
     OPENAI_DEFAULT_MODEL, GEMINI_DEFAULT_MODEL, ANTHROPIC_DEFAULT_MODEL,
     OLLAMA_DEFAULT_MODEL,
-    LLMProvider, AnthropicProvider, ClaudeCLIProvider,
+    ClaudeCLIProvider,
     MAX_TOOL_ROUNDS, ALL_PROVIDERS,
     _print_tool_call,
 )

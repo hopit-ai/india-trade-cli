@@ -33,7 +33,6 @@ Install: pip install python-telegram-bot
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import threading
@@ -266,7 +265,8 @@ async def cmd_analyze(update, context) -> None:
         """Synchronous full pipeline — run in executor to avoid blocking event loop."""
         _suppress_output.active = True
         # Log to file — stdout and logging are both suppressed on this thread
-        import tempfile, pathlib
+        import tempfile
+        import pathlib
         _logfile = pathlib.Path(tempfile.gettempdir()) / "tg_analyze.log"
         def _log(msg):  # noqa: E731
             with open(_logfile, "a") as f:
@@ -375,7 +375,7 @@ async def cmd_analyze(update, context) -> None:
         if not msg1:
             await update.message.reply_text("Analysis completed but produced no output.")
     except asyncio.TimeoutError:
-        await update.message.reply_text(f"⏱ Analysis timed out after 5 minutes. Try again later.")
+        await update.message.reply_text("⏱ Analysis timed out after 5 minutes. Try again later.")
     except Exception as e:
         err = str(e)[:500]
         await update.message.reply_text(f"Analysis failed: {err}")
@@ -395,7 +395,8 @@ async def cmd_deepanalyze(update, context) -> None:
 
     def _run_deep() -> tuple:
         _suppress_output.active = True
-        import tempfile, pathlib
+        import tempfile
+        import pathlib
         _logfile = pathlib.Path(tempfile.gettempdir()) / "tg_deepanalyze.log"
         def _log(msg):
             with open(_logfile, "a") as f:
@@ -404,7 +405,6 @@ async def cmd_deepanalyze(update, context) -> None:
             _log(f"Starting deep analysis for {symbol}")
             from agent.tools import build_registry
             from agent.deep_agent import DeepAnalyzer
-            from agent.multi_agent import compute_scorecard
             from agent.core import get_provider
 
             os.environ["_CLI_BATCH_MODE"] = "1"
@@ -747,7 +747,7 @@ def run_setup_wizard() -> None:
       Step 3 — Start bot, wait for user to send /start, send test message
     """
     from rich.console import Console
-    from rich.prompt import Prompt, Confirm
+    from rich.prompt import Prompt
 
     console = Console()
 

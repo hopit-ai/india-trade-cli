@@ -35,8 +35,7 @@ Install:
 
 from __future__ import annotations
 
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 from brokers.base import Quote
@@ -267,7 +266,7 @@ def yf_get_ohlcv(
 def yf_available() -> bool:
     """Check if yfinance is installed."""
     try:
-        import yfinance
+        import yfinance  # noqa: F401
         return True
     except ImportError:
         return False

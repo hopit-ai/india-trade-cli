@@ -1,7 +1,6 @@
 """Tests for brokers/session.py — session management, broker registry."""
 
 import pytest
-from unittest.mock import patch, MagicMock
 
 import brokers.session as session_mod
 from brokers.session import (

@@ -36,7 +36,6 @@ from prompt_toolkit.history      import FileHistory
 from prompt_toolkit.styles       import Style
 from rich.console                import Console
 from rich.table                  import Table
-from rich.text                   import Text
 
 from brokers.base    import BrokerAPI
 from brokers.session import (
@@ -45,7 +44,6 @@ from brokers.session import (
     connect_broker,
     disconnect_broker,
     list_connected_brokers,
-    get_broker,
     is_multi_broker,
 )
 from agent.core import get_agent, ALL_PROVIDERS
@@ -1260,7 +1258,7 @@ def run_repl(broker: BrokerAPI) -> None:
                         from rich.table import Table as RichTable
                         tbl = RichTable(
                             title="Saved Exports",
-                            caption=f"~/.trading_platform/exports/",
+                            caption="~/.trading_platform/exports/",
                             show_lines=False,
                         )
                         tbl.add_column("File", style="cyan")
@@ -1389,7 +1387,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     _last_command = f"AI: {message[:40]}"
                     if wants_pdf or wants_explain:
                         handle_output_flags(
-                            output or "", f"AI Chat",
+                            output or "", "AI Chat",
                             wants_pdf, wants_explain,
                             llm_provider=agent._provider if wants_explain else None,
                         )

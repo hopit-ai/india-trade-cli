@@ -48,7 +48,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request as _Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse as _JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 # Load .env + keychain at server startup
 from dotenv import load_dotenv

@@ -44,17 +44,14 @@ from __future__ import annotations
 
 import json
 import time
-import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field, asdict
-from typing import Any, Optional
+from dataclasses import dataclass, field
+from typing import Any
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
-from agent.tools import ToolRegistry, build_registry
+from agent.tools import ToolRegistry
 
 console = Console()
 
@@ -555,7 +552,7 @@ class NewsMacroAnalyst(BaseAnalyst):
             for d in deals[:10]:
                 dl = f"{d.get('date','')} {d.get('symbol','')} {d.get('client','')[:30]} {d.get('deal_type','')} {d.get('quantity',0):,} @ ₹{d.get('price',0):,.1f} [{d.get('entity_type','')}]"
                 deal_lines.append(dl)
-            macro_parts.append(f"Bulk/block deals:\n" + "\n".join(deal_lines))
+            macro_parts.append("Bulk/block deals:\n" + "\n".join(deal_lines))
         events = data.get("events")
         if events:
             events_str = json.dumps(events) if isinstance(events, (dict, list)) else str(events)
@@ -1246,7 +1243,7 @@ class MultiAgentAnalyzer:
 
         # ── Round 2: Rebuttals ───────────────────────────────
         if self.verbose:
-            console.print(f"\n[bold]Round 2[/bold]")
+            console.print("\n[bold]Round 2[/bold]")
 
         # Bull rebuttal
         bull_rebuttal_prompt = BULL_REBUTTAL_PROMPT.format(

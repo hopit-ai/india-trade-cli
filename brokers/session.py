@@ -306,20 +306,20 @@ def _print_welcome(broker: BrokerAPI, role: str = "primary") -> None:
         funds = None
 
     lines = Text()
-    lines.append(f"  Name    : ", style="dim")
+    lines.append("  Name    : ", style="dim")
     lines.append(f"{profile.name}\n", style="bold white")
-    lines.append(f"  Broker  : ", style="dim")
+    lines.append("  Broker  : ", style="dim")
     lines.append(f"{profile.broker}\n", style="bold cyan")
-    lines.append(f"  Role    : ", style="dim")
+    lines.append("  Role    : ", style="dim")
     lines.append(f"{role.title()}\n", style="bold yellow" if role != "primary" else "bold green")
     if funds:
-        lines.append(f"  Cash    : ", style="dim")
+        lines.append("  Cash    : ", style="dim")
         lines.append(f"₹{funds.available_cash:,.2f}\n", style="bold green")
-        lines.append(f"  Margin  : ", style="dim")
+        lines.append("  Margin  : ", style="dim")
         lines.append(f"₹{funds.used_margin:,.2f} used", style="yellow")
     else:
-        lines.append(f"  Cash    : ", style="dim")
-        lines.append(f"(loading...)", style="dim yellow")
+        lines.append("  Cash    : ", style="dim")
+        lines.append("(loading...)", style="dim yellow")
 
     title = (
         "[bold green]✅  LOGIN SUCCESSFUL[/bold green]"

@@ -17,7 +17,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -180,9 +179,6 @@ def compute_roll_suggestions(
             continue
 
         ltp = pos.get("ltp", 0)
-        strike = pos.get("strike", 0)
-        opt_type = pos.get("option_type", "CE")
-        underlying = pos.get("underlying", "NIFTY")
 
         # Next weekly expiry: current + 7 days (approximate)
         next_expiry = expiry_date + timedelta(days=7)

@@ -3,11 +3,10 @@
 Written BEFORE the implementation (TDD). Tests define the spec.
 """
 
-import math
 import numpy as np
 import pandas as pd
 import pytest
-from datetime import date, timedelta
+from datetime import date
 
 
 # ── Premium estimation tests ─────────────────────────────────

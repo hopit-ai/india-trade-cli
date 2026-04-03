@@ -30,7 +30,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 from rich.console import Console
@@ -101,17 +100,17 @@ class BacktestResult:
             f"  Symbol         : {self.symbol}",
             f"  Period         : {self.start_date} → {self.end_date}",
             "",
-            f"  [bold]Returns[/bold]",
+            "  [bold]Returns[/bold]",
             f"  Total Return   : [{ret_style}]{self.total_return:+.2f}%[/{ret_style}]",
             f"  CAGR           : [{ret_style}]{self.cagr:+.2f}%[/{ret_style}]",
             f"  Buy & Hold     : [{bh_style}]{self.buy_hold_return:+.2f}%[/{bh_style}]",
             f"  Alpha          : [{alpha_style}]{alpha:+.2f}%[/{alpha_style}]",
             "",
-            f"  [bold]Risk[/bold]",
+            "  [bold]Risk[/bold]",
             f"  Sharpe Ratio   : {self.sharpe_ratio:.2f}",
             f"  Max Drawdown   : [red]{self.max_drawdown:.2f}%[/red]",
             "",
-            f"  [bold]Trades[/bold]",
+            "  [bold]Trades[/bold]",
             f"  Total          : {self.total_trades}",
             f"  Win Rate       : {self.win_rate:.1f}%",
             f"  Avg Win        : [green]{self.avg_win:+.2f}%[/green]",
@@ -547,15 +546,15 @@ class MultiBacktestResult:
             f"  Symbols        : {', '.join(self.symbols)}",
             f"  Period         : {self.start_date} → {self.end_date}",
             "",
-            f"  [bold]Returns[/bold]",
+            "  [bold]Returns[/bold]",
             f"  Total Return   : [{ret_style}]{self.total_return:+.2f}%[/{ret_style}]",
             f"  CAGR           : [{ret_style}]{self.cagr:+.2f}%[/{ret_style}]",
             "",
-            f"  [bold]Risk[/bold]",
+            "  [bold]Risk[/bold]",
             f"  Sharpe Ratio   : {self.sharpe_ratio:.2f}",
             f"  Max Drawdown   : [red]{self.max_drawdown:.2f}%[/red]",
             "",
-            f"  [bold]Trades[/bold]",
+            "  [bold]Trades[/bold]",
             f"  Total          : {self.total_trades}",
             f"  Win Rate       : {self.win_rate:.1f}%",
             f"  Avg Win        : [green]{self.avg_win:+.2f}%[/green]",
@@ -993,7 +992,6 @@ def walk_forward_test(
     E.g. 3 years split into 6 windows of 6 months each.
     Tests if the strategy works consistently across different regimes.
     """
-    from datetime import datetime, timedelta
 
     factory = STRATEGIES.get(strategy_name.lower())
     if not factory:

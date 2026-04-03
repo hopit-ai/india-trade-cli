@@ -306,8 +306,6 @@ def dcf_for_symbol(
                 pass
 
             # Collect all available growth signals
-            trailing_pe = info.get("trailingPE")
-            forward_pe = info.get("forwardPE")
             trailing_eps = info.get("trailingEps")
             forward_eps = info.get("forwardEps")
             revenue_growth = info.get("revenueGrowth")  # decimal
@@ -472,7 +470,7 @@ def print_dcf(symbol: str, growth_rate: Optional[float] = None, wacc: Optional[f
         f"  [bold]Intrinsic Value: ₹{iv:,.2f}[/bold]  vs  CMP: ₹{cmp:,.2f}",
         f"  Margin of Safety: [{vc}]{mos:+.1f}%[/{vc}]  →  [{vc}][bold]{verdict}[/bold][/{vc}]",
         "",
-        f"  [bold]Assumptions:[/bold]",
+        "  [bold]Assumptions:[/bold]",
         f"  FCF:       ₹{data['fcf_cr']:,.0f} Cr",
         f"  Growth:    {data['growth_rate']:.1f}%",
         f"  WACC:      {data['wacc']:.1f}%",
@@ -554,7 +552,7 @@ def print_dcf(symbol: str, growth_rate: Optional[float] = None, wacc: Optional[f
     # Scenarios
     scenarios = data.get("scenarios")
     if scenarios:
-        console.print(f"\n  [bold]Scenarios:[/bold]")
+        console.print("\n  [bold]Scenarios:[/bold]")
         for key in ("bull", "base", "bear"):
             s = scenarios[key]
             sc = "green" if key == "bull" else "red" if key == "bear" else "yellow"
@@ -563,7 +561,7 @@ def print_dcf(symbol: str, growth_rate: Optional[float] = None, wacc: Optional[f
     # Bank model
     bank = data.get("bank_model")
     if bank:
-        console.print(f"\n  [bold]Bank P/BV Model:[/bold]")
+        console.print("\n  [bold]Bank P/BV Model:[/bold]")
         console.print(f"  Book Value: ₹{bank['bv_per_share']:,.0f} | ROE: {bank['roe']:.1f}%")
         console.print(f"  Justified P/BV: {bank['justified_pbv']:.2f}× | Fair Value: ₹{bank['fair_value']:,.0f}")
 

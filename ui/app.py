@@ -38,16 +38,14 @@ import pytz
 from textual          import on, work
 from textual.app      import App, ComposeResult
 from textual.binding  import Binding
-from textual.containers import Horizontal, Vertical, ScrollableContainer
+from textual.containers import Horizontal, Vertical
 from textual.widgets  import (
     Header, Footer, Input, Static, Label,
-    DataTable, RichLog, TabbedContent, TabPane,
+    RichLog,
 )
-from textual.reactive import reactive
 
 from ui.widgets.portfolio    import PortfolioWidget
 from ui.widgets.risk_meter   import RiskMeterWidget
-from ui.widgets.options_chain import OptionsChainWidget
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -284,7 +282,6 @@ class TradingTUI(App):
 
             # Redirect agent output to our chat panel
             import rich.console as _rc
-            orig_console = _rc.Console
 
             class TUIConsole(_rc.Console):
                 """Intercept rich prints and write to chat panel."""

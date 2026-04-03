@@ -21,12 +21,9 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
-from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 console = Console()
 
@@ -208,7 +205,7 @@ def get_flow_context() -> str:
     """Generate flow intelligence text for LLM prompts."""
     a = get_flow_analysis()
     parts = [
-        f"FII/DII Flow Intelligence:",
+        "FII/DII Flow Intelligence:",
         f"  FII today: {a.fii_net_today:,.0f} Cr | DII today: {a.dii_net_today:,.0f} Cr",
         f"  FII 5-day: {a.fii_5d_net:,.0f} Cr | DII 5-day: {a.dii_5d_net:,.0f} Cr",
         f"  FII streak: {a.fii_streak} days ({a.fii_streak_total:,.0f} Cr)",
@@ -234,15 +231,15 @@ def print_flow_report() -> None:
     dii_style = "green" if a.dii_net_today >= 0 else "red"
 
     lines = [
-        f"  [bold]Today[/bold]",
+        "  [bold]Today[/bold]",
         f"  FII: [{fii_style}]{a.fii_net_today:+,.0f} Cr[/{fii_style}]  |  "
         f"DII: [{dii_style}]{a.dii_net_today:+,.0f} Cr[/{dii_style}]",
         "",
-        f"  [bold]5-Day Totals[/bold]",
+        "  [bold]5-Day Totals[/bold]",
         f"  FII: [{fii_style}]{a.fii_5d_net:+,.0f} Cr[/{fii_style}]  |  "
         f"DII: [{dii_style}]{a.dii_5d_net:+,.0f} Cr[/{dii_style}]",
         "",
-        f"  [bold]Streaks[/bold]",
+        "  [bold]Streaks[/bold]",
         f"  FII: {a.fii_streak} day(s) ({a.fii_streak_total:+,.0f} Cr)",
         f"  DII: {a.dii_streak} day(s) ({a.dii_streak_total:+,.0f} Cr)",
         f"  Momentum: {a.fii_momentum or 'N/A'}",

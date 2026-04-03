@@ -31,12 +31,10 @@ Usage:
 
 from __future__ import annotations
 
-import math
 import os
-import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
-from typing import Any, Optional
+from datetime import datetime
+from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -231,7 +229,7 @@ class TradePlan:
             f"  {self.symbol} ({self.exchange}) | {self.instrument_type} | {self.timeframe}",
             f"  Verdict: {self.verdict} (confidence: {self.confidence}%)",
             "",
-            f"  [bold]Sizing[/bold]",
+            "  [bold]Sizing[/bold]",
             f"  Capital    : {self.capital_deployed:,.0f} ({self.capital_pct:.1f}% of portfolio)",
             f"  Max Risk   : {self.max_risk:,.0f} ({self.risk_pct:.1f}% of capital)",
             f"  R:R Ratio  : {self.reward_risk:.1f}",
@@ -634,7 +632,6 @@ class TraderAgent:
 
         # VIX regime
         high_vix = vix and vix > 18
-        low_vix = vix and vix < 13
 
         # ── High conviction buy ──────────────────────────────
         if is_buy and high_conviction:

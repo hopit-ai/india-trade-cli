@@ -5,8 +5,6 @@ Written BEFORE the implementation (TDD).
 
 import pytest
 from datetime import date, timedelta
-from unittest.mock import MagicMock, patch
-from dataclasses import dataclass
 
 
 # ── Mock PortfolioGreeks for testing without broker ──────────

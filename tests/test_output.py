@@ -1,6 +1,5 @@
 """Tests for engine/output.py — flag parsing, markup stripping, filenames."""
 
-import pytest
 
 from engine.output import parse_output_flags, _strip_rich_markup
 

@@ -28,19 +28,14 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 
-from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from agent.tools import ToolRegistry
 from agent.multi_agent import (
-    AnalystReport, DebateResult, MultiAgentAnalyzer,
+    AnalystReport, MultiAgentAnalyzer,
     compute_scorecard, console,
-    BULL_RESEARCHER_PROMPT, BEAR_RESEARCHER_PROMPT,
-    BULL_REBUTTAL_PROMPT, BEAR_REBUTTAL_PROMPT,
-    FACILITATOR_PROMPT, SYNTHESIS_PROMPT,
 )
 
 

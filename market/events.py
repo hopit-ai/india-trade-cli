@@ -7,7 +7,6 @@ All data sourced from public endpoints (NSE, RBI websites).
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime    import date, datetime, timedelta
 from typing      import Optional
@@ -57,13 +56,7 @@ class CorporateAction:
 
 def _last_thursday(year: int, month: int) -> date:
     """Last Thursday of the given month."""
-    last_day = date(year, month, 1).replace(
-        day=28 if month in (1,3,5,7,8,10,12) else
-            30 if month in (4,6,9,11) else
-            29 if year % 4 == 0 else 28
-    )
     # Walk back from last day to find Thursday (weekday 3)
-    d = date(year, month, 1)
     # Get last day properly
     if month == 12:
         last = date(year + 1, 1, 1) - timedelta(days=1)
@@ -187,7 +180,6 @@ def get_rbi_calendar() -> list[RBIEvent]:
         return []
     try:
         feed  = feedparser.parse(RBI_RSS)
-        today = date.today()
         events = []
         for entry in feed.entries[:10]:
             title = entry.get("title", "")

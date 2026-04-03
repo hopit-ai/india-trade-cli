@@ -4,7 +4,6 @@ TDD — written before implementation. Tests define the spec for
 all new data fields in FundamentalSnapshot.
 """
 
-import pytest
 
 
 class TestFundamentalSnapshotFields:

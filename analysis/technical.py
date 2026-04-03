@@ -13,7 +13,6 @@ Main entry point: analyse(symbol) → TechnicalSnapshot
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing      import Optional
 
 import numpy  as np
 import pandas as pd
@@ -229,10 +228,10 @@ def analyse(
 
     # Price vs MAs
     if ltp > ema20_val:
-        signals.append(Signal("EMA20", round(ema20_val, 2), "BULLISH", f"Price above EMA20"))
+        signals.append(Signal("EMA20", round(ema20_val, 2), "BULLISH", "Price above EMA20"))
         score += 8
     else:
-        signals.append(Signal("EMA20", round(ema20_val, 2), "BEARISH", f"Price below EMA20"))
+        signals.append(Signal("EMA20", round(ema20_val, 2), "BEARISH", "Price below EMA20"))
         score -= 8
 
     if ltp > ema50_val:

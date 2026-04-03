@@ -24,9 +24,8 @@ from config.credentials import load_all as _load_keychain
 _load_keychain()
 
 from rich.console import Console
-from rich.text    import Text
 
-from brokers.session import login, get_broker
+from brokers.session import login
 
 console = Console()
 

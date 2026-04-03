@@ -17,7 +17,7 @@ Usage:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from rich.console import Console
@@ -90,7 +90,7 @@ _MACRO_LINKAGES = {
 def get_macro_snapshot() -> MacroSnapshot:
     """Fetch current macro indicators via yfinance."""
     try:
-        from market.yfinance_provider import yf_get_quote, _get_yf
+        from market.yfinance_provider import _get_yf
 
         snap = MacroSnapshot()
 

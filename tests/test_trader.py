@@ -1,10 +1,7 @@
 """Tests for engine/trader.py — TraderAgent, position sizing, strategy selection."""
 
-import pytest
 from engine.trader import (
-    TraderAgent, TradePlan, OrderLeg, ExitPlan, RiskProfile,
-    RISK_PROFILES, LOT_SIZES, MARGIN_PCT,
-    _parse_synthesis_verdict,
+    TraderAgent, TradePlan, OrderLeg, ExitPlan, RISK_PROFILES, LOT_SIZES, _parse_synthesis_verdict,
 )
 
 

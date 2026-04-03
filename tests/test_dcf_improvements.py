@@ -3,7 +3,6 @@
 TDD — written before implementation.
 """
 
-import pytest
 
 
 # ── Phase 1: Reverse DCF ─────────────────────────────────────

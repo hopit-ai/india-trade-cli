@@ -34,7 +34,6 @@ class TestNSEShareholding:
 
     def test_parse_shareholding_xbrl(self):
         """Parser should extract promoter/FII/DII from XBRL data."""
-        from analysis.fundamental import _parse_shareholding_xbrl
 
         # Minimal XBRL-like data simulating what the parser extracts
         sample = {

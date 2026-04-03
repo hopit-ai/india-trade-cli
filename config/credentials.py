@@ -29,7 +29,6 @@ from typing import Optional
 from rich.console import Console
 from rich.prompt  import Prompt, Confirm
 from rich.table   import Table
-from rich.text    import Text
 
 console = Console()
 
@@ -196,7 +195,7 @@ def get_credential(
             if save:
                 if _kr_set(key, value):
                     os.environ[key] = value
-                    console.print(f"  [green]✓ Saved to keychain[/green]\n")
+                    console.print("  [green]✓ Saved to keychain[/green]\n")
                 else:
                     console.print("  [yellow]Could not save to keychain — keyring unavailable.[/yellow]\n")
         except Exception:

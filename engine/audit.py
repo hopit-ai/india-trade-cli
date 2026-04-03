@@ -117,7 +117,7 @@ class AuditReport:
 
         # What-if
         if self.alt_verdict:
-            console.print(f"\n[bold]What-If:[/bold]")
+            console.print("\n[bold]What-If:[/bold]")
             console.print(f"  With equal weights: {self.alt_verdict}")
             help_str = "[green]YES — would have helped[/green]" if self.alt_would_help else "[dim]NO — same outcome[/dim]"
             console.print(f"  Would it help?    : {help_str}")

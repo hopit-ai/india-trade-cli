@@ -57,9 +57,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from abc import ABC, abstractmethod
-from typing import Any
 
 from rich.console import Console
 
@@ -759,8 +757,8 @@ class ClaudeCLIProvider(LLMProvider):
         "rsi":          ["technical_analyse"],
         "macd":         ["technical_analyse"],
         "chart":        ["technical_analyse"],
-        "support":      ["technical_analyse"],
-        "resistance":   ["technical_analyse"],
+        "support":      ["technical_analyse", "get_oi_profile"],
+        "resistance":   ["technical_analyse", "get_oi_profile"],
         "fundamental":  ["fundamental_analyse"],
         "pe ratio":     ["fundamental_analyse"],
         "roe":          ["fundamental_analyse"],
@@ -785,7 +783,7 @@ class ClaudeCLIProvider(LLMProvider):
         "pcr":          ["get_pcr"],
         "put call":     ["get_pcr"],
         "max pain":     ["get_max_pain"],
-        "greeks":       ["compute_greeks"],
+        "greeks":       ["compute_greeks", "get_portfolio_greeks", "get_greeks_dashboard"],
         "iv rank":      ["get_iv_rank"],
         "straddle":     ["get_options_chain"],
         "strangle":     ["get_options_chain"],
@@ -798,8 +796,8 @@ class ClaudeCLIProvider(LLMProvider):
         "funds":        ["get_funds"],
         "balance":      ["get_funds"],
         # Flows & breadth
-        "fii":          ["get_fii_dii_data"],
-        "dii":          ["get_fii_dii_data"],
+        "fii":          ["get_shareholding_pattern", "get_fii_dii_data"],
+        "dii":          ["get_shareholding_pattern", "get_fii_dii_data"],
         "breadth":      ["get_market_breadth"],
         "advance":      ["get_market_breadth"],
         "decline":      ["get_market_breadth"],
@@ -823,8 +821,6 @@ class ClaudeCLIProvider(LLMProvider):
         "shareholding": ["get_shareholding_pattern", "fundamental_analyse"],
         "holding":      ["get_shareholding_pattern", "fundamental_analyse"],
         "promoter":     ["get_shareholding_pattern", "fundamental_analyse"],
-        "fii":          ["get_shareholding_pattern", "get_fii_dii_data"],
-        "dii":          ["get_shareholding_pattern", "get_fii_dii_data"],
         "institutional":["get_shareholding_pattern"],
         "pledge":       ["get_shareholding_pattern"],
         # Most active stocks
@@ -833,7 +829,6 @@ class ClaudeCLIProvider(LLMProvider):
         "trending":     ["get_most_active_stocks"],
         "volume":       ["get_most_active_stocks"],
         # Greeks & hedging
-        "greeks":       ["get_portfolio_greeks", "get_greeks_dashboard"],
         "delta":        ["get_greeks_dashboard", "suggest_delta_hedge"],
         "hedge":        ["suggest_delta_hedge"],
         "theta":        ["get_greeks_dashboard"],
@@ -841,8 +836,6 @@ class ClaudeCLIProvider(LLMProvider):
         # Options analytics
         "oi":           ["get_oi_profile"],
         "open interest":["get_oi_profile"],
-        "resistance":   ["get_oi_profile"],
-        "support":      ["get_oi_profile"],
         "gex":          ["get_gex_analysis"],
         "gamma exposure":["get_gex_analysis"],
         "scan":         ["scan_options"],
@@ -906,7 +899,6 @@ class ClaudeCLIProvider(LLMProvider):
 
         Returns list of (tool_name, arguments_dict) tuples.
         """
-        import re
         known = {t["name"] for t in self.registry.anthropic_schema()}
         seen:    set[str]                = set()
         matched: list[tuple[str, dict]]  = []
@@ -1487,8 +1479,6 @@ def get_provider(
         PROVIDER_OLLAMA:     None,  # handled specially below
     }
 
-    cls = dispatch.get(chosen, AnthropicProvider)
-
     def _build_provider(prov_name, model, registry, sys_prompt):
         """Construct a provider, with special handling for Ollama."""
         if prov_name == PROVIDER_OLLAMA:
@@ -1556,7 +1546,7 @@ def _first_time_provider_setup() -> str:
     from rich.console import Console
     from rich.panel   import Panel
     from rich.prompt  import Prompt
-    from config.credentials import _kr_set, _kr_get
+    from config.credentials import _kr_set
 
     _c = Console()
 

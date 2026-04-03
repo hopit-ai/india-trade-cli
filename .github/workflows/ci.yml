@@ -29,7 +29,7 @@ jobs:
 
       - name: Check package builds
         run: |
-          pip install build
+          pip install build wheel
           python -m build --no-isolation
 
       - name: Run tests

@@ -95,6 +95,6 @@ class OptionsChainWidget(Static):
                     pe_iv, pe_oi,
                     Text(pe_ltp, style="red"),
                 )
-        except Exception as e:
+        except Exception:
             t = self.query_one("#chain-table", DataTable)
             t.clear()

@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm
 
 console = Console()
 
@@ -393,7 +393,7 @@ def _cmd_run(args: list[str]) -> None:
         elif paper_mode and latest_signal == -1:
             console.print(f"\n[bold yellow]Signal is SELL — check your positions for {symbol}[/bold yellow]")
         elif paper_mode:
-            console.print(f"\n[dim]Signal is HOLD — no action taken.[/dim]")
+            console.print("\n[dim]Signal is HOLD — no action taken.[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")

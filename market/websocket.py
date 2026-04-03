@@ -36,9 +36,8 @@ import json
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Callable, Optional
+from dataclasses import dataclass
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 

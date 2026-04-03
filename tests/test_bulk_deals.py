@@ -8,12 +8,10 @@ Tests cover:
   - Error handling when all endpoints fail
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 from market.bulk_deals import (
     classify_entity,
-    Deal,
     get_bulk_deals,
     get_block_deals,
     _parse_deal_item,

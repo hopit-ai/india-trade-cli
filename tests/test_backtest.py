@@ -1,11 +1,9 @@
 """Tests for engine/backtest.py — strategies, backtester, metrics."""
 
-import numpy as np
 import pandas as pd
-import pytest
 
 from engine.backtest import (
-    Strategy, RSIStrategy, MACrossStrategy, MACDStrategy, BollingerStrategy,
+    RSIStrategy, MACrossStrategy, MACDStrategy, BollingerStrategy,
     Backtester, BacktestResult, Trade,
 )
 

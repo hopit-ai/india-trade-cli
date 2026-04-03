@@ -15,7 +15,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime    import datetime, timezone
-from typing      import Optional
 
 import httpx
 
@@ -220,7 +219,7 @@ def get_nse_announcements(symbol: str, n: int = 5) -> list[NewsItem]:
             items.append(NewsItem(
                 title     = ann.get("subject", ann.get("desc", "Announcement")),
                 source    = "NSE",
-                url       = f"https://www.nseindia.com/companies-listing/corporate-filings-announcements",
+                url       = "https://www.nseindia.com/companies-listing/corporate-filings-announcements",
                 published = ann.get("an_dt", ""),
                 summary   = ann.get("attchmntText", "")[:400],
             ))

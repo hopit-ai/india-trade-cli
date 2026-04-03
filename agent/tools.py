@@ -13,7 +13,6 @@ Tool executor dispatches the call and returns a JSON-serialisable result.
 
 from __future__ import annotations
 
-import json
 import traceback
 from typing import Any, Callable
 
@@ -370,8 +369,8 @@ def build_registry() -> ToolRegistry:
 
     # ── News & Events ─────────────────────────────────────────
     from market.news      import get_market_news, get_stock_news
-    from market.events    import get_upcoming_events, get_expiry_dates, get_earnings_calendar
-    from market.sentiment import get_fii_dii_data, get_market_breadth, score_news_batch
+    from market.events    import get_upcoming_events, get_earnings_calendar
+    from market.sentiment import get_fii_dii_data, get_market_breadth
 
     reg.register(
         name="get_market_news",
@@ -571,7 +570,7 @@ def build_registry() -> ToolRegistry:
     )
 
     # ── India Intelligence ─────────────────────────────────────
-    from market.earnings import get_earnings_calendar, get_pre_earnings_iv, is_earnings_season
+    from market.earnings import get_pre_earnings_iv
     from market.flow_intel import get_flow_analysis
     from engine.event_strategies import get_event_strategies
 
