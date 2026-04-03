@@ -172,11 +172,11 @@ def validate_strategy_code(code: str) -> tuple[bool, str]:
     """
     Validate LLM-generated strategy code for safety and correctness.
 
-    Checks:
+    Checks (all static AST analysis — code is NEVER executed here):
       1. Valid Python syntax (ast.parse)
       2. Contains a class subclassing Strategy with generate_signals method
-      3. Only imports from whitelisted modules
-      4. Smoke test: generate_signals on dummy data returns correct shape
+      3. Only imports from whitelisted modules (pandas, numpy, math, analysis.*, engine.backtest)
+      4. No dangerous builtins (exec, eval, open, __import__, ...) or dunder escapes
 
     Returns:
         (True, "") on success, (False, "error description") on failure.
@@ -228,114 +228,25 @@ def validate_strategy_code(code: str) -> tuple[bool, str]:
                 if root not in IMPORT_WHITELIST:
                     return False, f"Forbidden import: 'from {node.module}'. Only allowed: pandas, numpy, math, analysis.technical, engine.backtest"
 
-    # 4. Smoke test — execute on dummy data
-    try:
-        # Build a restricted namespace
-        namespace = {
-            "pd": pd,
-            "np": np,
-            "pandas": pd,
-            "numpy": np,
-            "math": __import__("math"),
-        }
-
-        # Import Strategy base class
-        from engine.backtest import Strategy
-        namespace["Strategy"] = Strategy
-
-        # Make analysis.technical available
-        try:
-            import analysis.technical as _tech
-            namespace["analysis"] = type(sys)("analysis")
-            namespace["analysis"].technical = _tech
-        except ImportError:
-            pass
-
-        exec(code, namespace)
-
-        # Find and instantiate the strategy class
-        strategy_cls = None
-        for v in namespace.values():
-            if isinstance(v, type) and issubclass(v, Strategy) and v is not Strategy:
-                strategy_cls = v
-                break
-
-        if not strategy_cls:
-            return False, "Could not instantiate the Strategy class after execution."
-
-        try:
-            strategy = strategy_cls()
-        except TypeError:
-            # Might need parameters — try with no args
-            return False, f"Could not instantiate {strategy_cls.__name__}() — check __init__ default arguments."
-
-        # Create dummy OHLCV data
-        dates = pd.date_range("2024-01-01", periods=100, freq="B")
-        np.random.seed(42)
-        prices = 100 + np.cumsum(np.random.randn(100) * 2)
-        dummy_df = pd.DataFrame({
-            "open": prices + np.random.randn(100) * 0.5,
-            "high": prices + abs(np.random.randn(100)),
-            "low": prices - abs(np.random.randn(100)),
-            "close": prices,
-            "volume": np.random.randint(100000, 5000000, 100),
-        }, index=dates)
-
-        signals = strategy.generate_signals(dummy_df)
-
-        # Accept both Series (single-symbol) and DataFrame (multi-symbol/pairs)
-        if isinstance(signals, pd.DataFrame):
-            # Multi-symbol: validate each column
-            if signals.empty:
-                return False, "generate_signals returned an empty DataFrame."
-            for col in signals.columns:
-                col_vals = set(signals[col].dropna().unique().astype(int))
-                invalid = col_vals - {-1, 0, 1}
-                if invalid:
-                    return False, f"Column '{col}' has invalid signal values: {invalid}. Must be -1, 0, or 1."
-            # Check at least one column has non-zero signals
-            has_any_signal = False
-            for col in signals.columns:
-                if (signals[col] != 0).any():
-                    has_any_signal = True
-                    break
-            if not has_any_signal:
-                return False, (
-                    "generate_signals DataFrame has all zeros — no trades would trigger. "
-                    "Use boolean indexing: signals.loc[condition, 'SYMBOL'] = 1"
-                )
-        elif isinstance(signals, pd.Series):
-            if len(signals) != len(dummy_df):
-                return False, f"generate_signals returned {len(signals)} signals for {len(dummy_df)} rows."
-
-            valid_values = {-1, 0, 1}
-            unique = set(signals.dropna().unique().astype(int))
-            invalid = unique - valid_values
-            if invalid:
-                return False, f"Signals must be -1, 0, or 1. Found: {invalid}"
-
-            # Check that signals are not all the same value (likely a bug)
-            if len(unique) <= 1:
-                return False, (
-                    f"generate_signals returned only {unique or '{0}'} — no buy/sell signals generated. "
-                    "The signal assignment is likely using `signals = 1` instead of `signals[mask] = 1`. "
-                    "Use boolean indexing: signals[buy_condition] = 1, signals[sell_condition] = -1."
-                )
-
-            # Check there is at least 1 buy and 1 sell signal
-            has_buy = (signals == 1).any()
-            has_sell = (signals == -1).any()
-            if not has_buy or not has_sell:
-                return False, (
-                    f"generate_signals produced {'no BUY signals' if not has_buy else 'no SELL signals'} "
-                    "on 100 rows of test data. The signal assignment may be wrong — "
-                    "use `signals[condition] = 1` (with boolean mask indexing), not `signals = 1`."
-                )
-        else:
-            return False, f"generate_signals must return pd.Series or pd.DataFrame, got {type(signals).__name__}"
-
-    except Exception as e:
-        return False, f"Runtime error during smoke test: {e}"
+    # 4. Dangerous builtin / dunder access check
+    _DANGEROUS_BUILTINS = {
+        "exec", "eval", "compile", "open", "__import__",
+        "getattr", "setattr", "delattr", "vars", "dir",
+        "globals", "locals", "breakpoint",
+    }
+    _DANGEROUS_DUNDERS = {
+        "__builtins__", "__globals__", "__locals__", "__class__",
+        "__bases__", "__subclasses__", "__import__", "__code__",
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in _DANGEROUS_BUILTINS:
+                return False, f"Forbidden call: '{node.func.id}()' is not allowed in strategy code."
+        if isinstance(node, ast.Attribute) and node.attr in _DANGEROUS_DUNDERS:
+            return False, f"Forbidden attribute access: '{node.attr}' is not allowed in strategy code."
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if node.value in _DANGEROUS_DUNDERS:
+                return False, f"Forbidden string literal: '{node.value}' may not appear in strategy code."
 
     return True, ""
 

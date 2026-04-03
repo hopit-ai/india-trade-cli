@@ -20,7 +20,9 @@ We pledge to make participation in this project a harassment-free experience for
 
 ## Enforcement
 
-Project maintainers are responsible for clarifying standards and may remove, edit, or reject contributions that do not align with this Code of Conduct. Instances of abusive behavior may be reported to the project maintainers.
+Project maintainers are responsible for clarifying standards and may remove, edit, or reject contributions that do not align with this Code of Conduct.
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by emailing **arkid@hopit.ai**. All reports will be reviewed and investigated promptly and confidentially.
 
 ## Attribution
 

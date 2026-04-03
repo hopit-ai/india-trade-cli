@@ -9,6 +9,12 @@ description = "AI-powered multi-agent stock & options analysis platform for Indi
 requires-python = ">=3.11,<3.13"
 readme = "README.md"
 license = {text = "MIT"}
+authors = [
+    {name = "hopit-ai", email = "arkid@hopit.ai"},
+]
+maintainers = [
+    {name = "hopit-ai", email = "arkid@hopit.ai"},
+]
 keywords = ["trading", "stocks", "options", "nse", "bse", "india", "ai", "llm", "analysis"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -65,6 +71,11 @@ vollib = ["py_vollib>=1.0.1"]
 # Note: smartapi-python is not on PyPI's standard index; install with:
 #   pip install smartapi-python
 # The brokers/angelone.py gracefully imports it at call-time.
+
+[project.urls]
+Homepage = "https://github.com/hopit-ai/india-trade-cli"
+Repository = "https://github.com/hopit-ai/india-trade-cli"
+"Bug Tracker" = "https://github.com/hopit-ai/india-trade-cli/issues"
 
 [project.scripts]
 trade = "app.main:main"

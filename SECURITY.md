@@ -29,7 +29,9 @@ Security issues we care about:
 
 This project uses two storage mechanisms for sensitive data:
 
-- **API keys and secrets** (broker API keys, AI provider keys) are stored in the OS keychain (macOS Keychain / Linux Secret Service / Windows Credential Locker) via the `keyring` library. These are never written to plain text files.
+- **API keys and secrets** (broker API keys, AI provider keys) are stored in the OS keychain (macOS Keychain / Linux Secret Service / Windows Credential Locker) via the `keyring` library. This is the recommended and default storage path.
+
+  `.env` files are supported as an alternative (e.g. for CI, Docker, or headless servers). If you use a `.env` file, ensure it is listed in `.gitignore` and never committed to version control. The `.env.example` file in this repo contains only placeholder values and is safe to commit.
 
 - **Broker session tokens** (access tokens obtained after OAuth/TOTP login) are cached as JSON files under `~/.trading_platform/` to allow session resumption without re-authentication. These files:
   - Contain short-lived access tokens (not API secrets)

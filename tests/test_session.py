@@ -52,7 +52,7 @@ class TestBrokerAccessors:
         session_mod._primary_key = ""
 
     def test_get_broker_raises_when_not_logged_in(self):
-        with pytest.raises(RuntimeError, match="No active broker"):
+        with pytest.raises(RuntimeError, match="No broker is connected"):
             get_broker()
 
     def test_get_all_brokers_empty(self):
