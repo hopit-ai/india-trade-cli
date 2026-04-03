@@ -359,24 +359,30 @@ class DeepAnalyzer:
         return self.last_full_report
 
     def _run_llm_analysts(self, symbol: str, exchange: str) -> list[AnalystReport]:
-        """Run all 5 analysts as LLM calls, feeding them raw tool data."""
+        """Run all analysts as LLM calls in parallel (ThreadPoolExecutor).
+
+        Each analyst is independent — they gather their own tool data then
+        make one LLM call. Running them concurrently cuts Phase 1 time from
+        N×latency down to ~1×latency (the slowest analyst).
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         import os
         os.environ["_CLI_BATCH_MODE"] = "1"
 
         analysts = [
-            ("Technical",  DEEP_TECHNICAL_PROMPT,  ["technical_analyse", "get_quote"]),
-            ("Fundamental", DEEP_FUNDAMENTAL_PROMPT, ["fundamental_analyse"]),
-            ("DCF Valuation", DEEP_DCF_PROMPT,     ["compute_dcf"]),
-            ("Options",    DEEP_OPTIONS_PROMPT,     ["get_pcr", "get_max_pain", "get_iv_rank"]),
-            ("Sentiment",  DEEP_SENTIMENT_PROMPT,   ["get_stock_news", "get_fii_dii_data", "get_market_breadth"]),
-            ("Risk",       DEEP_RISK_PROMPT,        ["get_vix", "get_quote", "get_upcoming_events"]),
+            ("Technical",    DEEP_TECHNICAL_PROMPT,    ["technical_analyse", "get_quote"]),
+            ("Fundamental",  DEEP_FUNDAMENTAL_PROMPT,  ["fundamental_analyse"]),
+            ("DCF Valuation", DEEP_DCF_PROMPT,         ["compute_dcf"]),
+            ("Options",      DEEP_OPTIONS_PROMPT,      ["get_pcr", "get_max_pain", "get_iv_rank"]),
+            ("Sentiment",    DEEP_SENTIMENT_PROMPT,    ["get_stock_news", "get_fii_dii_data", "get_market_breadth"]),
+            ("Risk",         DEEP_RISK_PROMPT,         ["get_vix", "get_quote", "get_upcoming_events"]),
         ]
 
-        reports = []
-        for name, prompt_template, tools in analysts:
-            if self.verbose:
-                console.print(f"  [dim]{name:15s}[/dim] gathering data + reasoning...")
+        if self.verbose:
+            console.print(f"  [dim]Running {len(analysts)} analysts in parallel...[/dim]")
 
+        def _run_one(analyst_spec) -> AnalystReport:
+            name, prompt_template, tools = analyst_spec
             try:
                 # Phase A: gather raw tool data
                 tool_data_parts = []
@@ -400,29 +406,39 @@ class DeepAnalyzer:
                 prompt = prompt_template.format(
                     symbol=symbol, exchange=exchange, tool_data=tool_data,
                 )
-
                 response = self.llm.chat(
                     messages=[{"role": "user", "content": prompt}],
                     stream=False,
                 )
-
-                report = self._parse_llm_report(name, response)
-                reports.append(report)
-
-                if self.verbose:
-                    status = f"[green]{report.verdict}[/green]" if not report.error else f"[red]FAIL[/red]"
-                    console.print(f"  [dim]{name:15s}[/dim] {status}")
+                return self._parse_llm_report(name, response)
 
             except Exception as e:
-                reports.append(AnalystReport(
+                return AnalystReport(
                     analyst=name, verdict="UNKNOWN", confidence=0,
                     score=0, error=str(e),
-                ))
+                )
+
+        # Submit all analysts concurrently; collect in original order
+        name_to_report: dict[str, AnalystReport] = {}
+        with ThreadPoolExecutor(max_workers=len(analysts)) as pool:
+            future_to_name = {
+                pool.submit(_run_one, spec): spec[0]
+                for spec in analysts
+            }
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                report = future.result()
+                name_to_report[name] = report
                 if self.verbose:
-                    console.print(f"  [dim]{name:15s}[/dim] [red]FAIL: {e}[/red]")
+                    if report.error:
+                        console.print(f"  [dim]{name:15s}[/dim] [red]FAIL[/red]")
+                    else:
+                        console.print(f"  [dim]{name:15s}[/dim] [green]{report.verdict}[/green]")
 
         os.environ.pop("_CLI_BATCH_MODE", None)
-        return reports
+
+        # Return in original analyst order
+        return [name_to_report[spec[0]] for spec in analysts if spec[0] in name_to_report]
 
     def _parse_llm_report(self, analyst: str, response: str) -> AnalystReport:
         """Parse an LLM analyst response into AnalystReport.
