@@ -208,19 +208,45 @@ def _bulk_via_snapshot(session: httpx.Client) -> list[Deal]:
 def _bulk_via_historical(
     session: httpx.Client, days: int, symbol: Optional[str]
 ) -> list[Deal]:
-    """Try the historical bulk-deals endpoint with date range."""
+    """Try historical bulk-deals endpoints with date range.
+
+    NSE migrated from /api/historical/bulk-deals to
+    /api/historicalOR/bulk-block-short-deals in late 2025.
+    Try the new endpoint first, fall back to the old one.
+    """
     to_dt = date.today()
     from_dt = to_dt - timedelta(days=days)
-    params = {
-        "from": from_dt.strftime("%d-%m-%Y"),
-        "to": to_dt.strftime("%d-%m-%Y"),
+    from_str = from_dt.strftime("%d-%m-%Y")
+    to_str = to_dt.strftime("%d-%m-%Y")
+
+    # New endpoint (2025+): /api/historicalOR/bulk-block-short-deals
+    params_new = {
+        "optionType": "bulk_deals",
+        "from": from_str,
+        "to": to_str,
     }
+    r = session.get(
+        "https://www.nseindia.com/api/historicalOR/bulk-block-short-deals",
+        params=params_new,
+        timeout=10,
+    )
+    if r.status_code == 200:
+        data = r.json()
+        items = data if isinstance(data, list) else data.get("data", [])
+        if items:
+            deals = [_parse_deal_item(it, "BULK") for it in items]
+            if symbol:
+                deals = [d for d in deals if d.symbol.upper() == symbol.upper()]
+            return deals
+
+    # Legacy endpoint fallback: /api/historical/bulk-deals
+    params_old = {"from": from_str, "to": to_str}
     if symbol:
-        params["symbol"] = symbol.upper()
+        params_old["symbol"] = symbol.upper()
 
     r = session.get(
         "https://www.nseindia.com/api/historical/bulk-deals",
-        params=params,
+        params=params_old,
         timeout=10,
     )
     if r.status_code != 200:
