@@ -62,6 +62,8 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     # ── AI API Keys ──────────────────────────────────────────
     ("ANTHROPIC_API_KEY",   "Anthropic API Key",                   True),
     ("OPENAI_API_KEY",      "OpenAI API Key",                      True),
+    ("OPENAI_BASE_URL",     "OpenAI-compatible Base URL (OpenRouter, PaleDotBlue, etc.)", False),
+    ("OPENAI_MODEL",        "Model name for OpenAI-compatible provider",               False),
     ("GEMINI_API_KEY",      "Google Gemini API Key",               True),
     ("OPENAI_SESSION_TOKEN","OpenAI Session Token (ChatGPT Plus)", True),
     ("GOOGLE_CLOUD_PROJECT","Google Cloud Project ID",             False),
@@ -276,8 +278,9 @@ def run_setup_wizard(keys: Optional[list[str]] = None) -> None:
     _ANGEL_KEYS     = {"ANGEL_API_KEY", "ANGEL_CLIENT_CODE", "ANGEL_PASSWORD", "ANGEL_TOTP_SECRET"}
     _UPSTOX_KEYS    = {"UPSTOX_API_KEY", "UPSTOX_API_SECRET"}
     _FYERS_KEYS     = {"FYERS_APP_ID", "FYERS_SECRET_KEY"}
-    _AI_KEYS        = {"AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY",
-                       "OPENAI_SESSION_TOKEN", "GOOGLE_CLOUD_PROJECT"}
+    _AI_KEYS        = {"AI_PROVIDER", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENAI_BASE_URL",
+                       "OPENAI_MODEL", "GEMINI_API_KEY", "OPENAI_SESSION_TOKEN",
+                       "GOOGLE_CLOUD_PROJECT"}
     _TELEGRAM_KEYS  = {"TELEGRAM_BOT_TOKEN"}
 
     sections: dict[str, list] = {
@@ -369,9 +372,11 @@ def _wizard_ai_provider(items: list[tuple[str, str, bool]]) -> None:
         "  [cyan][4][/cyan] [bold]ChatGPT Plus / Team subscription[/bold]  [dim](session token, unofficial)[/dim]\n"
         "  [cyan][5][/cyan] [bold]Google Gemini[/bold] — API key  [dim](free tier at aistudio.google.com)[/dim]\n"
         "  [cyan][6][/cyan] [bold]Gemini Advanced subscription[/bold]  [dim](Vertex AI via gcloud, GCP project needed)[/dim]\n"
-        "  [cyan][7][/cyan] Skip / keep existing\n"
+        "  [cyan][7][/cyan] [bold]Custom (OpenAI-compatible)[/bold]  [dim](OpenRouter, PaleDotBlue, Groq, Together, etc.)[/dim]\n"
+        "  [cyan][8][/cyan] [bold]Ollama (local)[/bold]  [dim](free, runs on your machine)[/dim]\n"
+        "  [cyan][9][/cyan] Skip / keep existing\n"
     )
-    choice = Prompt.ask("  Choice", choices=["1", "2", "3", "4", "5", "6", "7"], default="7")
+    choice = Prompt.ask("  Choice", choices=["1", "2", "3", "4", "5", "6", "7", "8", "9"], default="9")
 
     if choice == "1":
         _save_cred("AI_PROVIDER", "anthropic")
@@ -411,6 +416,38 @@ def _wizard_ai_provider(items: list[tuple[str, str, bool]]) -> None:
             "  Make sure you have run: [dim]gcloud auth application-default login[/dim]\n"
         )
         _prompt_and_save("GOOGLE_CLOUD_PROJECT", "Google Cloud Project ID", secret=False)
+
+    elif choice == "7":
+        _save_cred("AI_PROVIDER", "openai")
+        console.print(
+            "\n  [bold]Custom OpenAI-compatible endpoint[/bold]\n"
+            "  [dim]Works with: OpenRouter, PaleDotBlue, Groq, Together, Fireworks,\n"
+            "  LM Studio, vLLM, or any provider that speaks the OpenAI API format.[/dim]\n"
+        )
+        console.print(
+            "  [dim]Common base URLs:[/dim]\n"
+            "    OpenRouter:   [cyan]https://openrouter.ai/api/v1[/cyan]\n"
+            "    Groq:         [cyan]https://api.groq.com/openai/v1[/cyan]\n"
+            "    Together:     [cyan]https://api.together.xyz/v1[/cyan]\n"
+        )
+        _prompt_and_save("OPENAI_BASE_URL", "Base URL (e.g. https://openrouter.ai/api/v1)", secret=False)
+        _prompt_and_save("OPENAI_API_KEY", "API Key for this provider", secret=True)
+        console.print(
+            "\n  [dim]Model name depends on your provider. Examples:[/dim]\n"
+            "    OpenRouter:   [cyan]anthropic/claude-sonnet-4[/cyan]  or  [cyan]google/gemini-2.5-pro[/cyan]\n"
+            "    Groq:         [cyan]llama-3.3-70b-versatile[/cyan]\n"
+            "    PaleDotBlue:  check your provider's model list\n"
+            "    [dim]Default: gpt-4o (only works with OpenAI itself)[/dim]\n"
+        )
+        _prompt_and_save("OPENAI_MODEL", "Model name", secret=False)
+
+    elif choice == "8":
+        _save_cred("AI_PROVIDER", "ollama")
+        console.print(
+            "\n  [green]✓ Set to Ollama (local).[/green]\n"
+            "  Make sure Ollama is running: [dim]ollama serve[/dim]\n"
+            "  Pull a model if needed:      [dim]ollama pull llama3.1[/dim]\n"
+        )
 
 
 def _save_cred(key: str, value: str) -> None:
@@ -526,7 +563,13 @@ def cmd_credentials(args: list[str]) -> None:
         value = Prompt.ask("  New value", password=is_secret)
         if value.strip():
             set_credential(key, value.strip())
-            console.print(f"[green]✓ {key} updated.[/green]\n")
+            console.print(f"[green]✓ {key} updated.[/green]")
+            # Hint: AI-related changes need a provider reload to take effect
+            _AI_CREDS = {"AI_PROVIDER", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL",
+                         "ANTHROPIC_API_KEY", "GEMINI_API_KEY"}
+            if key in _AI_CREDS:
+                console.print("[dim]Run 'provider openai' (or your provider name) to apply the change.[/dim]")
+            console.print()
 
     elif sub == "delete":
         if len(args) < 2:

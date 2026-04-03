@@ -298,7 +298,9 @@ class OpenAIProvider(LLMProvider):
         base_url:      str | None = None,
         api_key:       str | None = None,
     ) -> None:
-        super().__init__(model, registry, system_prompt)
+        # Resolve model: env var wins over passed-in default (allows runtime override)
+        resolved_model = os.environ.get("OPENAI_MODEL") or model
+        super().__init__(resolved_model, registry, system_prompt)
         try:
             import openai as _sdk
             self._sdk = _sdk
@@ -1715,7 +1717,7 @@ def _auto_detect_provider() -> str:
 
 def _default_model(provider: str) -> str:
     if provider == PROVIDER_OPENAI:
-        return OPENAI_DEFAULT_MODEL
+        return os.environ.get("OPENAI_MODEL", OPENAI_DEFAULT_MODEL)
     if provider in (PROVIDER_GEMINI, PROVIDER_GEMINI_SUB):
         return GEMINI_DEFAULT_MODEL
     if provider == PROVIDER_OLLAMA:
@@ -1861,20 +1863,31 @@ class TradingAgent:
         """Print available providers and how to configure them."""
         console.print("\n[bold]Available AI providers:[/bold]")
         rows = [
-            ("anthropic",           "ANTHROPIC_API_KEY",      "Claude API key or Claude Max"),
+            ("anthropic",           "ANTHROPIC_API_KEY",      "Claude API key"),
+            ("claude_subscription", "claude CLI installed",    "Claude Pro/Max subscription"),
             ("openai",              "OPENAI_API_KEY",          "OpenAI API key"),
-            ("gemini",              "GEMINI_API_KEY",          "Google AI Studio key (free tier available)"),
-            ("claude_subscription", "claude CLI installed",    "Claude Pro/Max browser subscription"),
-            ("openai_subscription", "OPENAI_SESSION_TOKEN",   "ChatGPT Plus/Team session (unofficial)"),
-            ("gemini_subscription", "GOOGLE_CLOUD_PROJECT",   "Vertex AI / Google Workspace (GCP)"),
+            ("gemini",              "GEMINI_API_KEY",          "Google AI Studio key (free tier)"),
+            ("ollama",              "ollama running locally",  "Local models (free, no key needed)"),
+            ("openai_subscription", "OPENAI_SESSION_TOKEN",   "ChatGPT Plus/Team (unofficial)"),
+            ("gemini_subscription", "GOOGLE_CLOUD_PROJECT",   "Vertex AI / GCP"),
         ]
         for name, cred, note in rows:
             active = "✓" if name == _infer_current_name(self._provider) else " "
             console.print(f"  [{active}] [cyan]{name:<22}[/cyan]  {cred:<28}  [dim]{note}[/dim]")
+
+        # Show custom endpoint hint if OPENAI_BASE_URL is set
+        base_url = os.environ.get("OPENAI_BASE_URL", "")
+        if base_url:
+            console.print(f"\n  [dim]Custom endpoint: {base_url}[/dim]")
+
         console.print(
             "\n  Switch with: [bold]provider <name>[/bold]  "
-            "e.g. [cyan]provider claude_subscription[/cyan]\n"
-            "  Or run [bold]credentials setup[/bold] → AI Provider to configure persistently.\n"
+            "e.g. [cyan]provider gemini[/cyan]\n"
+            "  [bold]Custom endpoint[/bold] (OpenRouter, Groq, etc.):\n"
+            "    [cyan]credentials set OPENAI_BASE_URL[/cyan]  → set the base URL\n"
+            "    [cyan]credentials set OPENAI_API_KEY[/cyan]   → set the API key\n"
+            "    [cyan]provider openai[/cyan]                  → switch to it\n"
+            "  Or run [bold]credentials setup[/bold] → AI Provider for guided config.\n"
         )
 
     @property
