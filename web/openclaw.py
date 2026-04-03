@@ -24,7 +24,9 @@ MANIFEST: dict = {
     "version": "1.0.0",
     "base_url": "",          # filled in at runtime from request host
     "auth": {
-        "type": "none",      # Phase 3 will add: "type": "bearer"
+        "type": "none",
+        # NOTE: skills server is intended for local use (127.0.0.1) only.
+        # Do not expose on 0.0.0.0 without adding bearer token auth first.
     },
     "skills": [
         {

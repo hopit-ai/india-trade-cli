@@ -4,9 +4,9 @@ type: software
 title: "India Trade CLI"
 abstract: "AI-powered multi-agent stock & options analysis platform for Indian markets (NSE/BSE/NFO)."
 authors:
-  - family-names: "Indian"
-    given-names: "Archie"
-    alias: "ArchieIndian"
+  - name: "hopit-ai"
+    alias: "hopit-ai"
+    email: "arkid@hopit.ai"
 repository-code: "https://github.com/hopit-ai/india-trade-cli"
 license: MIT
 keywords:

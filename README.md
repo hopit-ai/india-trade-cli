@@ -43,7 +43,7 @@ analyze RELIANCE
 
 ### Prerequisites
 
-- **Python 3.11+** (3.11 and 3.12 are tested in CI; 3.13+ should work but py_vollib/numba may not be available)
+- **Python 3.11 or 3.12** (both tested in CI; Python 3.13+ is not supported due to `requires-python = "<3.13"` — numba/py_vollib compatibility)
 
 ### Step 1: Install
 
@@ -254,10 +254,12 @@ agent/ market/ engine/ analysis/
 ### Start the skill server
 
 ```bash
-uvicorn web.api:app --host 0.0.0.0 --port 8765
+uvicorn web.api:app --host 127.0.0.1 --port 8765
 ```
 
 Or from the REPL: `web`
+
+> **Security:** The skills server has no authentication. Keep it bound to `127.0.0.1` (localhost only). Do not expose on `0.0.0.0` without adding a reverse proxy with authentication.
 
 ### Discover skills
 
@@ -353,6 +355,9 @@ See [#83](https://github.com/hopit-ai/india-trade-cli/issues/83) for the full in
 | `mtf RELIANCE` | Multi-timeframe analysis (weekly/daily/hourly) |
 
 ### Strategy Builder (experimental)
+
+> **Warning:** The strategy builder executes AI-generated Python code on your machine. Only run strategies from sources you trust. Never copy-paste strategy code from untrusted sources into the strategy files directory (`~/.trading_platform/strategies/`).
+
 | Command | Description |
 |---------|-------------|
 | `strategy new` | Describe a strategy in plain English, AI interviews you, generates code, backtests |

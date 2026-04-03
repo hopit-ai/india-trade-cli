@@ -4,9 +4,12 @@ web/api.py
 FastAPI web server — browser-based login for all supported brokers.
 
 Run with:
-    uvicorn web.api:app --host 0.0.0.0 --port 8765
+    uvicorn web.api:app --host 127.0.0.1 --port 8765
     # or from the REPL:
     trade ❯ web
+
+Security note: bind to 127.0.0.1 (default) for local-only access.
+Only expose on 0.0.0.0 behind a reverse proxy with authentication.
 
 Supported brokers:
     Zerodha   — Kite Connect OAuth redirect
@@ -44,8 +47,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request as _Request
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse as _JSONResponse
 
 # Load .env + keychain at server startup
 from dotenv import load_dotenv
@@ -60,7 +63,18 @@ app = FastAPI(title="india-trade-cli", docs_url=None, redoc_url=None)
 from web.skills import router as _skills_router
 from web.openclaw import MANIFEST as _MANIFEST
 from fastapi import Request
+from fastapi.exceptions import HTTPException as _HTTPException
 import copy
+
+
+def _require_localhost(request: _Request) -> None:
+    """Raise 403 if the request does not come from localhost."""
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        raise _HTTPException(
+            status_code=403,
+            detail="This endpoint is only accessible from localhost.",
+        )
 
 app.include_router(_skills_router)
 
@@ -606,7 +620,8 @@ async def status_page():
 # ── JSON API ──────────────────────────────────────────────────
 
 @app.get("/api/status")
-async def api_status():
+async def api_status(request: Request):
+    _require_localhost(request)
     return {
         "zerodha":   {"configured": _has_zerodha(),   "authenticated": _zerodha_auth()},
         "groww":     {"configured": _has_groww(),     "authenticated": _groww_auth()},
@@ -617,7 +632,8 @@ async def api_status():
 
 
 @app.get("/api/portfolio")
-async def api_portfolio():
+async def api_portfolio(request: Request):
+    _require_localhost(request)
     holdings:  list[dict] = []
     positions: list[dict] = []
     total_cash = total_margin = total_balance = 0.0
