@@ -108,7 +108,7 @@ def get_broker() -> BrokerAPI:
     """Return the primary broker. Raises if login() has not been called."""
     if not _primary_key or _primary_key not in _brokers:
         raise RuntimeError(
-            "No active broker session. Run login() first or start the platform with `trade`."
+            "No broker is connected. Run the 'login' command to connect your broker."
         )
     return _brokers[_primary_key]
 

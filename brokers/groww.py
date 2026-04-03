@@ -128,7 +128,21 @@ class GrowwAPI(BrokerAPI):
             },
             timeout=10,
         )
-        r.raise_for_status()
+        try:
+            r.raise_for_status()
+        except Exception:
+            status = r.status_code
+            if status == 401:
+                raise RuntimeError(
+                    "Groww login failed: invalid credentials.\n"
+                    "Check your Client ID and Secret, then re-enter with:\n"
+                    "  credentials delete GROWW_CLIENT_ID\n"
+                    "  credentials delete GROWW_CLIENT_SECRET"
+                )
+            elif status == 429:
+                raise RuntimeError("Groww login failed: rate limited. Wait a minute and try again.")
+            else:
+                raise RuntimeError(f"Groww login failed (HTTP {status}): {r.text[:200]}")
         self._save_token(r.json())
         return self.get_profile()
 

@@ -201,7 +201,12 @@ class FyersAPI(BrokerAPI):
                     "  > login\n"
                     "Then re-enter the correct values from myapi.fyers.in"
                 )
-            raise RuntimeError(f"Fyers login failed: {response}")
+            raise RuntimeError(
+                f"Fyers login failed: {error_msg}\n"
+                "Possible causes: expired auth code, wrong redirect URL, or network issue.\n"
+                "Try logging in again. If it persists, verify your app config at myapi.fyers.in\n"
+                "and ensure Redirect URL is exactly: http://127.0.0.1:8765/fyers/callback"
+            )
 
         self._access_token = token
         self._token_ts     = time.time()
