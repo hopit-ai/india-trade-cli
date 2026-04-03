@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 import brokers.session as session_mod
 from brokers.session import (
     _BROKER_NAMES, _BROKER_LABELS, _BROKER_MENU,
-    get_broker, get_all_brokers, is_multi_broker,
+    get_broker, get_all_brokers, is_multi_broker, register_broker,
 )
 from brokers.mock import MockBrokerAPI
 
@@ -147,3 +147,35 @@ class TestDisconnectBroker:
         session_mod._primary_key = "mock"
         session_mod.disconnect_broker("0")  # prints error but doesn't crash
         assert "mock" in session_mod._brokers  # still there
+
+
+# ── register_broker ──────────────────────────────────────────
+
+class TestRegisterBroker:
+    def setup_method(self):
+        session_mod._brokers = {}
+        session_mod._primary_key = ""
+
+    def teardown_method(self):
+        session_mod._brokers = {}
+        session_mod._primary_key = ""
+
+    def test_register_sets_primary(self):
+        mock = MockBrokerAPI()
+        register_broker("mock", mock, primary=True)
+        assert get_broker() is mock
+        assert session_mod._primary_key == "mock"
+
+    def test_register_non_primary(self):
+        mock1 = MockBrokerAPI()
+        mock2 = MockBrokerAPI()
+        register_broker("mock", mock1, primary=True)
+        register_broker("secondary", mock2, primary=False)
+        assert get_broker() is mock1  # primary unchanged
+        assert is_multi_broker() is True
+
+    def test_register_first_broker_always_primary(self):
+        mock = MockBrokerAPI()
+        register_broker("mock", mock, primary=False)
+        # First broker becomes primary even if primary=False
+        assert session_mod._primary_key == "mock"

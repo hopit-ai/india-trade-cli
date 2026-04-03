@@ -11,7 +11,7 @@
 If you discover a security vulnerability, please report it responsibly:
 
 1. **Do NOT open a public issue.**
-2. Email the maintainers with:
+2. Email **mitra.arkid@gmail.com** with:
    - Description of the vulnerability
    - Steps to reproduce
    - Potential impact
@@ -27,4 +27,14 @@ Security issues we care about:
 
 ## Credentials Handling
 
-This project stores credentials in the OS keychain (macOS Keychain / Linux Secret Service / Windows Credential Locker) via the `keyring` library. Secrets should never be logged, printed, or written to disk in plain text.
+This project uses two storage mechanisms for sensitive data:
+
+- **API keys and secrets** (broker API keys, AI provider keys) are stored in the OS keychain (macOS Keychain / Linux Secret Service / Windows Credential Locker) via the `keyring` library. These are never written to plain text files.
+
+- **Broker session tokens** (access tokens obtained after OAuth/TOTP login) are cached as JSON files under `~/.trading_platform/` to allow session resumption without re-authentication. These files:
+  - Contain short-lived access tokens (not API secrets)
+  - Are automatically deleted on `logout`
+  - Have built-in expiry checks (6–20 hours depending on broker)
+  - Are stored with default file permissions (user-only on most systems)
+
+Secrets should never be logged, printed to console, or committed to version control.
