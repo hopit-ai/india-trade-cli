@@ -316,19 +316,31 @@ def get_bulk_deals(days: int = 5, symbol: Optional[str] = None) -> list[Deal]:
     # 1. Try snapshot (today's deals)
     deals = _bulk_via_snapshot(session)
 
+    # If filtering by symbol and snapshot had no match, also try historical
+    # (snapshot only has today; historical covers the last N days)
+    if symbol:
+        filtered = [d for d in deals if d.symbol.upper() == symbol.upper()]
+        if not filtered:
+            # 2. Try historical endpoint (wider date range)
+            hist = _bulk_via_historical(session, days, symbol)
+            if hist:
+                return hist
+            # 3. CSV archive fallback
+            csv_deals = _bulk_via_csv()
+            return [d for d in csv_deals if d.symbol.upper() == symbol.upper()]
+        return filtered
+
+    # No symbol filter: snapshot has data, return it
+    if deals:
+        return deals
+
     # 2. Try historical endpoint (wider date range)
-    if not deals:
-        deals = _bulk_via_historical(session, days, symbol)
-        if deals:
-            return deals  # historical already filtered by symbol via params
+    deals = _bulk_via_historical(session, days, symbol)
+    if deals:
+        return deals
 
     # 3. CSV archive fallback
-    if not deals:
-        deals = _bulk_via_csv()
-
-    if symbol:
-        deals = [d for d in deals if d.symbol.upper() == symbol.upper()]
-    return deals
+    return _bulk_via_csv()
 
 
 # ── Display ──────────────────────────────────────────────────
