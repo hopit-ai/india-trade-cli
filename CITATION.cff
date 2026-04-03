@@ -7,7 +7,7 @@ authors:
   - family-names: "Indian"
     given-names: "Archie"
     alias: "ArchieIndian"
-repository-code: "https://github.com/ArchieIndian/india-trade-cli"
+repository-code: "https://github.com/hopit-ai/india-trade-cli"
 license: MIT
 keywords:
   - trading

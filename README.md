@@ -4,7 +4,7 @@ AI-powered multi-agent stock & options analysis platform for Indian markets (NSE
 
 > **Philosophy:** Every trade must be justified. Analyze first, debate second, execute third.
 
-[![CI](https://github.com/archieindian/india-trade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/archieindian/india-trade-cli/actions/workflows/ci.yml)
+[![CI](https://github.com/hopit-ai/india-trade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/hopit-ai/india-trade-cli/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -48,7 +48,7 @@ analyze RELIANCE
 ### Step 1: Install
 
 ```bash
-git clone https://github.com/ArchieIndian/india-trade-cli.git
+git clone https://github.com/hopit-ai/india-trade-cli.git
 cd india-trade-cli
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
@@ -461,10 +461,10 @@ Contributions welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full g
 
 ### Areas where help is needed
 
-Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for current priorities. Good areas to contribute:
+Check [open issues](https://github.com/hopit-ai/india-trade-cli/issues) for current priorities. Good areas to contribute:
 
-- **Trade execution & broker integrations** ([#80](https://github.com/ArchieIndian/india-trade-cli/issues/80)) — bridge TraderAgent plans to real orders, deepen Zerodha/Angel One/Upstox support, add new brokers (Dhan, ICICI Direct, 5paisa)
-- **Integration tests** ([#79](https://github.com/ArchieIndian/india-trade-cli/issues/79)) — live broker/market-data test suite
+- **Trade execution & broker integrations** ([#80](https://github.com/hopit-ai/india-trade-cli/issues/80)) — bridge TraderAgent plans to real orders, deepen Zerodha/Angel One/Upstox support, add new brokers (Dhan, ICICI Direct, 5paisa)
+- **Integration tests** ([#79](https://github.com/hopit-ai/india-trade-cli/issues/79)) — live broker/market-data test suite
 - **Options backtesting** — strategy-specific backtest engine
 - **Options scanner** — scan for high IV, unusual OI
 - **Web dashboard** — FastAPI backend exists, frontend needed
@@ -516,7 +516,7 @@ Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for 
 - Web UI dashboard (FastAPI — OAuth login flow exists, dashboard pending)
 - SEBI compliance layer
 
-See [all open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for the full list.
+See [all open issues](https://github.com/hopit-ai/india-trade-cli/issues) for the full list.
 
 ---
 

@@ -79,7 +79,7 @@ def _build_pdf(content: str, title: str) -> "FPDF":
     pdf.set_x(pdf.l_margin)
     pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(150, 150, 150)
-    pdf.multi_cell(w, 4, "India Trade CLI | AI-Powered Multi-Agent Stock Analysis | github.com/ArchieIndian/india-trade-cli")
+    pdf.multi_cell(w, 4, "India Trade CLI | AI-Powered Multi-Agent Stock Analysis | github.com/hopit-ai/india-trade-cli")
 
     return pdf
 
