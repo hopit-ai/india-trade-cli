@@ -563,7 +563,13 @@ def cmd_credentials(args: list[str]) -> None:
         value = Prompt.ask("  New value", password=is_secret)
         if value.strip():
             set_credential(key, value.strip())
-            console.print(f"[green]✓ {key} updated.[/green]\n")
+            console.print(f"[green]✓ {key} updated.[/green]")
+            # Hint: AI-related changes need a provider reload to take effect
+            _AI_CREDS = {"AI_PROVIDER", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL",
+                         "ANTHROPIC_API_KEY", "GEMINI_API_KEY"}
+            if key in _AI_CREDS:
+                console.print("[dim]Run 'provider openai' (or your provider name) to apply the change.[/dim]")
+            console.print()
 
     elif sub == "delete":
         if len(args) < 2:

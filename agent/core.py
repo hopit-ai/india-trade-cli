@@ -298,7 +298,9 @@ class OpenAIProvider(LLMProvider):
         base_url:      str | None = None,
         api_key:       str | None = None,
     ) -> None:
-        super().__init__(model, registry, system_prompt)
+        # Resolve model: env var wins over passed-in default (allows runtime override)
+        resolved_model = os.environ.get("OPENAI_MODEL") or model
+        super().__init__(resolved_model, registry, system_prompt)
         try:
             import openai as _sdk
             self._sdk = _sdk
