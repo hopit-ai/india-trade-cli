@@ -17,8 +17,13 @@ from dataclasses import dataclass
 from datetime    import datetime, timezone
 from typing      import Optional
 
-import feedparser
 import httpx
+
+try:
+    import feedparser
+    _FEEDPARSER_AVAILABLE = True
+except ImportError:
+    _FEEDPARSER_AVAILABLE = False
 
 
 # ── NewsItem ─────────────────────────────────────────────────
@@ -58,6 +63,8 @@ def get_rss_feed(url: str, source: str = "RSS", n: int = 10) -> list[NewsItem]:
     Parse any RSS feed and return the latest n items.
     Gracefully returns empty list on failure.
     """
+    if not _FEEDPARSER_AVAILABLE:
+        return []
     try:
         feed    = feedparser.parse(url)
         items   = []

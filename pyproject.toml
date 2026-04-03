@@ -75,7 +75,10 @@ include = ["brokers*", "market*", "analysis*", "agent*", "engine*", "ui*", "app*
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m 'not network'"
+markers = [
+    "network: tests that require network access (yfinance, NSE API, etc.)",
+]
 
 [tool.ruff]
 line-length = 100

@@ -41,13 +41,10 @@ from rich.table   import Table
 from rich.text    import Text
 
 from .base     import BrokerAPI
-from .zerodha  import ZerodhaAPI
-from .groww    import GrowwAPI
 from .mock     import MockBrokerAPI
-from .angelone import AngelOneAPI
-from .upstox   import UpstoxAPI
-from .fyers    import FyersAPI
 
+# Lazy-import broker modules — their SDKs (kiteconnect, smartapi-python)
+# are optional and may not be installed.  Imported on first use in _get_broker_class().
 from config.credentials import get_credential
 
 console = Console()
@@ -93,6 +90,19 @@ _BROKER_MENU = [
 
 
 # ── Public accessors ──────────────────────────────────────────
+
+def register_broker(key: str, broker: BrokerAPI, *, primary: bool = True) -> None:
+    """
+    Register an externally-created broker instance.
+
+    Used by --no-broker mode to inject a MockBrokerAPI without going
+    through the interactive login flow.
+    """
+    global _brokers, _primary_key
+    _brokers[key] = broker
+    if primary or not _primary_key:
+        _primary_key = key
+
 
 def get_broker() -> BrokerAPI:
     """Return the primary broker. Raises if login() has not been called."""
@@ -164,11 +174,13 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         return key, broker
 
     elif key == "zerodha":
+        from .zerodha import ZerodhaAPI
         api_key    = get_credential("KITE_API_KEY",    "Zerodha API Key",    secret=False)
         api_secret = get_credential("KITE_API_SECRET", "Zerodha API Secret", secret=True)
         return key, ZerodhaAPI(api_key=api_key, api_secret=api_secret)
 
     elif key == "groww":
+        from .groww import GrowwAPI
         client_id     = get_credential("GROWW_CLIENT_ID",     "Groww Client ID",    secret=False)
         client_secret = get_credential("GROWW_CLIENT_SECRET", "Groww Client Secret", secret=True)
         redirect_uri  = os.environ.get(
@@ -181,6 +193,7 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         )
 
     elif key == "angelone":
+        from .angelone import AngelOneAPI
         api_key     = get_credential("ANGEL_API_KEY",      "Angel One API Key",              secret=False)
         client_code = get_credential("ANGEL_CLIENT_CODE",  "Angel One Client Code (Login ID)", secret=False)
         password    = get_credential("ANGEL_PASSWORD",     "Angel One Trading Password",      secret=True)
@@ -193,6 +206,7 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         )
 
     elif key == "upstox":
+        from .upstox import UpstoxAPI
         api_key    = get_credential("UPSTOX_API_KEY",    "Upstox API Key",    secret=False)
         api_secret = get_credential("UPSTOX_API_SECRET", "Upstox API Secret", secret=True)
         redirect_uri = os.environ.get(
@@ -205,6 +219,7 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         )
 
     else:  # fyers
+        from .fyers import FyersAPI
         app_id     = get_credential("FYERS_APP_ID",    "Fyers App ID",     secret=False)
         secret_key = get_credential("FYERS_SECRET_KEY", "Fyers Secret Key", secret=True)
         redirect_uri = os.environ.get(
