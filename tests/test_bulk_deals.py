@@ -23,36 +23,40 @@ from market.bulk_deals import (
 # ── Sample NSE response payloads ────────────────────────────
 
 # Snapshot endpoint response (/api/snapshot-capital-market-largedeal)
+# Uses short field names: date, symbol, clientName, buySell, qty, watp
 SNAPSHOT_RESPONSE = {
     "BULK_DEALS_DATA": [
         {
-            "BD_DT_DATE": "01-APR-2026",
-            "BD_SYMBOL": "RELIANCE",
-            "BD_CLIENT_NAME": "GOLDMAN SACHS FPI",
-            "BD_BUY_SELL": "BUY",
-            "BD_QTY_TRD": 500000,
-            "BD_TP_WATP": 2450.75,
-            "BD_REMARKS": "-",
+            "date": "02-Apr-2026",
+            "symbol": "RELIANCE",
+            "name": "Reliance Industries Ltd",
+            "clientName": "GOLDMAN SACHS FPI",
+            "buySell": "BUY",
+            "qty": "500000",
+            "watp": "2450.75",
+            "remarks": "-",
         },
         {
-            "BD_DT_DATE": "01-APR-2026",
-            "BD_SYMBOL": "INFY",
-            "BD_CLIENT_NAME": "SBI MUTUAL FUND",
-            "BD_BUY_SELL": "SELL",
-            "BD_QTY_TRD": 200000,
-            "BD_TP_WATP": 1580.50,
-            "BD_REMARKS": "-",
+            "date": "02-Apr-2026",
+            "symbol": "INFY",
+            "name": "Infosys Ltd",
+            "clientName": "SBI MUTUAL FUND",
+            "buySell": "SELL",
+            "qty": "200000",
+            "watp": "1580.50",
+            "remarks": "-",
         },
     ],
     "BLOCK_DEALS_DATA": [
         {
-            "BD_DT_DATE": "01-APR-2026",
-            "BD_SYMBOL": "TCS",
-            "BD_CLIENT_NAME": "LIC OF INDIA",
-            "BD_BUY_SELL": "BUY",
-            "BD_QTY_TRD": 100000,
-            "BD_TP_WATP": 3800.00,
-            "BD_REMARKS": "-",
+            "date": "02-Apr-2026",
+            "symbol": "TCS",
+            "name": "Tata Consultancy Services Ltd",
+            "clientName": "LIC OF INDIA",
+            "buySell": "BUY",
+            "qty": "100000",
+            "watp": "3800.00",
+            "remarks": "-",
         },
     ],
     "SHORT_DEALS_DATA": [],
@@ -127,8 +131,8 @@ class TestClassifyEntity:
 # ── Deal parsing ─────────────────────────────────────────────
 
 class TestParseDealItem:
-    def test_parse_bd_prefix_fields(self):
-        """Parse items using BD_* field names (snapshot/historicalOR format)."""
+    def test_parse_snapshot_fields(self):
+        """Parse items using snapshot field names (date, qty, watp — strings)."""
         item = SNAPSHOT_RESPONSE["BULK_DEALS_DATA"][0]
         deal = _parse_deal_item(item, "BULK")
         assert deal.symbol == "RELIANCE"
@@ -138,6 +142,17 @@ class TestParseDealItem:
         assert deal.price == 2450.75
         assert deal.entity_type == "FII"
         assert deal.deal_class == "BULK"
+
+    def test_parse_bd_prefix_fields(self):
+        """Parse items using BD_* field names (historicalOR format)."""
+        item = HISTORICAL_RESPONSE["data"][0]
+        deal = _parse_deal_item(item, "BULK")
+        assert deal.symbol == "HDFC"
+        assert deal.client == "MORGAN STANLEY ASIA PTE LTD"
+        assert deal.deal_type == "SELL"
+        assert deal.quantity == 300000
+        assert deal.price == 1650.25
+        assert deal.entity_type == "FII"
 
     def test_parse_legacy_field_names(self):
         """Parse items using legacy field names (dealDate, clientName etc.)."""
@@ -155,6 +170,8 @@ class TestParseDealItem:
         deal = _parse_deal_item(item, "BLOCK")
         assert deal.deal_class == "BLOCK"
         assert deal.symbol == "TCS"
+        assert deal.quantity == 100000
+        assert deal.price == 3800.00
         assert deal.entity_type == "DII"
 
 
