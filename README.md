@@ -463,6 +463,7 @@ Contributions welcome! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full g
 
 Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for current priorities. Good areas to contribute:
 
+- **Trade execution & broker integrations** ([#80](https://github.com/ArchieIndian/india-trade-cli/issues/80)) — bridge TraderAgent plans to real orders, deepen Zerodha/Angel One/Upstox support, add new brokers (Dhan, ICICI Direct, 5paisa)
 - **Integration tests** ([#79](https://github.com/ArchieIndian/india-trade-cli/issues/79)) — live broker/market-data test suite
 - **Options backtesting** — strategy-specific backtest engine
 - **Options scanner** — scan for high IV, unusual OI
