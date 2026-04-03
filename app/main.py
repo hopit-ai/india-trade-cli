@@ -96,9 +96,15 @@ if __name__ == "__main__":
         non_daemon = [t for t in threading.enumerate()
                       if t.is_alive() and not t.daemon and t != threading.main_thread()]
         if non_daemon:
-            # Non-daemon threads exist — force kill after brief wait
-            import signal
-            signal.alarm(2) if hasattr(signal, 'alarm') else None
-            os._exit(exit_code)
+            # Non-daemon threads exist (e.g. WebSocket SDK) — wait up to
+            # 2 seconds for them to finish, then force exit.
+            for t in non_daemon:
+                t.join(timeout=2)
+            # If any are still alive after the wait, force kill
+            still_alive = [t for t in non_daemon if t.is_alive()]
+            if still_alive:
+                os._exit(exit_code)
+            else:
+                sys.exit(exit_code)
         else:
             sys.exit(exit_code)
