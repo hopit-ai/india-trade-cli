@@ -236,6 +236,111 @@ Alerts auto-push to Telegram when triggered. The REPL shows a status badge when 
 
 ---
 
+## OpenClaw Integration
+
+Expose every CLI capability as **HTTP skill endpoints** that any OpenClaw agent can discover and call — no CLI installation needed.
+
+```
+OpenClaw Agent
+    │  GET /.well-known/openclaw.json   ← discover available skills
+    │  POST /skills/analyze             ← call a skill
+    ▼
+india-trade-cli Skill Server (FastAPI)
+    │
+    ▼ (existing Python modules, unchanged)
+agent/ market/ engine/ analysis/
+```
+
+### Start the skill server
+
+```bash
+uvicorn web.api:app --host 0.0.0.0 --port 8765
+```
+
+Or from the REPL: `web`
+
+### Discover skills
+
+```bash
+curl http://localhost:8765/.well-known/openclaw.json
+```
+
+Returns a manifest with all 17 skills, their input schemas, and descriptions. Any OpenClaw agent reads this URL to know what's available.
+
+### Available skills
+
+| Skill | Input | Speed |
+|-------|-------|-------|
+| `quote` | `{ "symbol": "RELIANCE" }` | Instant |
+| `options_chain` | `{ "symbol": "NIFTY" }` | Instant |
+| `flows` | `{}` | Instant |
+| `earnings` | `{ "symbols": ["TCS"] }` | Instant |
+| `macro` | `{}` | Instant |
+| `deals` | `{ "symbol": "INFY" }` | Instant |
+| `morning_brief` | `{}` | ~2s |
+| `backtest` | `{ "symbol": "INFY", "strategy": "rsi" }` | ~5s |
+| `pairs` | `{ "stock_a": "HDFCBANK", "stock_b": "ICICIBANK" }` | ~5s |
+| `chat` | `{ "message": "Analyse RELIANCE", "session_id": "abc" }` | ~5s |
+| `chat/reset` | `{ "session_id": "abc" }` | Instant |
+| `analyze` | `{ "symbol": "RELIANCE" }` | 30–90s (8 LLM calls) |
+| `deep_analyze` | `{ "symbol": "RELIANCE" }` | 3–8 min (11 LLM calls) |
+| `alerts/add` | `{ "symbol": "RELIANCE", "condition": "ABOVE", "threshold": 2800 }` | Instant |
+| `alerts/list` | `{}` | Instant |
+| `alerts/remove` | `{ "alert_id": "abc12345" }` | Instant |
+| `alerts/check` | `{}` | ~2s |
+
+All endpoints return `{ "status": "ok", "data": { ... } }` on success or `{ "status": "error", "message": "..." }` on failure.
+
+### Example: call a skill
+
+```bash
+# Live quote
+curl -X POST http://localhost:8765/skills/quote \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "RELIANCE"}'
+
+# Full multi-agent analysis (needs LLM key configured)
+curl -X POST http://localhost:8765/skills/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "RELIANCE"}'
+
+# Multi-turn chat
+curl -X POST http://localhost:8765/skills/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is the RSI on NIFTY?", "session_id": "my-agent"}'
+```
+
+### Alerts with webhooks
+
+OpenClaw agents can register a callback URL — the server POSTs to it the moment an alert fires:
+
+```bash
+curl -X POST http://localhost:8765/skills/alerts/add \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symbol": "RELIANCE",
+    "condition": "ABOVE",
+    "threshold": 2800,
+    "webhook_url": "https://my-agent.example.com/on-alert"
+  }'
+```
+
+When triggered, the server POSTs:
+```json
+{
+  "event": "alert_triggered",
+  "alert_id": "abc12345",
+  "symbol": "RELIANCE",
+  "description": "RELIANCE price ABOVE ₹2,800.00",
+  "triggered_at": "2026-04-03T11:00:00",
+  "ltp": 2815.5
+}
+```
+
+See [#83](https://github.com/hopit-ai/india-trade-cli/issues/83) for the full integration roadmap (manifest registration, API key auth, Docker image).
+
+---
+
 ## All CLI Commands
 
 ### Analysis (AI-powered)
@@ -466,7 +571,9 @@ india-trade-cli/
 |-- config/                   # Configuration
 |   +-- credentials.py        # OS keychain credential management
 |-- web/                      # Web API (FastAPI)
-|   +-- api.py                # REST + WebSocket endpoints
+|   |-- api.py                # Broker OAuth login + OpenClaw skill server
+|   |-- skills.py             # 17 OpenClaw skill endpoints (POST /skills/*)
+|   +-- openclaw.py           # OpenClaw discovery manifest (/.well-known/openclaw.json)
 |-- requirements.txt
 |-- pyproject.toml
 +-- .env.example
@@ -534,6 +641,8 @@ Check [open issues](https://github.com/hopit-ai/india-trade-cli/issues) for curr
 - GEX analysis (dealer gamma positioning)
 - Broker order placement flow (Zerodha, Fyers, Upstox, Angel One, Groww)
 - DCF valuation model with reverse DCF, FCF quality, scenarios
+
+- OpenClaw integration — 17 HTTP skill endpoints + webhook alerts + session-aware chat
 
 ### Experimental
 - Interactive strategy builder (plain English to backtest to paper trade to save)
