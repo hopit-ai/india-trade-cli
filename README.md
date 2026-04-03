@@ -55,11 +55,19 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
-### Step 2: Get a free Gemini API key
+### Step 2: Set up an AI provider
 
+Pick **one** of these options:
+
+**Option A — Gemini (free)**
 1. Go to [aistudio.google.com](https://aistudio.google.com) and sign in with Google
 2. Click **Get API Key** → **Create API key**
 3. Copy the key (starts with `AIza...`)
+
+**Option B — Claude (if you have a Pro/Max subscription)**
+1. Install the Claude CLI: `npm install -g @anthropic-ai/claude-code`
+2. Run `claude login` and authenticate in your browser
+3. That's it — no API key needed, the platform calls the CLI directly
 
 ### Step 3: Get free market data (Fyers)
 
@@ -81,7 +89,7 @@ trade
 
 First run walks you through:
 1. **Broker** → Choose **Fyers** → enter App ID + Secret Key → browser opens for login
-2. **AI Provider** → Choose **Gemini** → paste your API key
+2. **AI Provider** → Choose **Gemini** (paste API key) or **Claude subscription** (no key needed)
 3. **NewsAPI** → paste your key (or press Enter to skip)
 
 You're in the REPL. Try it:
