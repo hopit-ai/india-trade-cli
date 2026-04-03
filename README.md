@@ -4,6 +4,7 @@ AI-powered multi-agent stock & options analysis platform for Indian markets (NSE
 
 > **Philosophy:** Every trade must be justified. Analyze first, debate second, execute third.
 
+[![CI](https://github.com/archieindian/india-trade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/archieindian/india-trade-cli/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -481,6 +482,21 @@ Check [open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for 
 - SEBI compliance layer
 
 See [all open issues](https://github.com/ArchieIndian/india-trade-cli/issues) for the full list.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `ModuleNotFoundError: kiteconnect` | Broker SDKs are optional. Install only the one you use: `pip install kiteconnect` for Zerodha, or use Demo mode (`login 0`). |
+| `ModuleNotFoundError: feedparser` | Install with `pip install feedparser`. RSS news feeds are optional — the CLI works without them. |
+| `py_vollib` errors on Python 3.13 | py_vollib uses numba which doesn't support 3.13 yet. Use Python 3.11 or 3.12. Options Greeks will use fallback calculations. |
+| NSE API returns empty data | NSE rate-limits automated requests. Wait a few minutes and retry. The CLI uses browser-like headers to reduce blocks. |
+| `No active broker session` | Run `login` or `login 0` (demo mode) before using broker-dependent commands like `portfolio` or `orders`. |
+| AI commands return errors | Run `credentials setup` to configure your AI provider (Anthropic, OpenAI, or Gemini). Free tier available with Google AI Studio. |
+| `keyring` errors on Linux | Install the SecretService backend: `sudo apt install gnome-keyring` or set credentials via environment variables in `.env`. |
+| Tests failing locally | Run `pip install pytest pytest-mock && pytest tests/ -v`. Some tests require optional dependencies — check the error for which package to install. |
 
 ---
 
