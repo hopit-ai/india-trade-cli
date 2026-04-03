@@ -75,6 +75,11 @@ Pick **one** of these options:
 2. Go to [myapi.fyers.in](https://myapi.fyers.in) → **Create App**
    - Redirect URL: `http://127.0.0.1:8765/fyers/callback` (must be exact)
 3. Note the **App ID** and **Secret Key**
+4. When you run `trade` and choose Fyers, enter these credentials. A browser window opens for Fyers login. After login, the browser redirects to a URL like:
+   ```
+   http://127.0.0.1:8765/fyers/callback?auth_code=eyJ0...&state=...
+   ```
+   Copy the `auth_code` value (everything between `auth_code=` and `&`) and paste it into the terminal when prompted.
 
 ### Step 4: Get news headlines (optional)
 
@@ -88,7 +93,7 @@ trade
 ```
 
 First run walks you through:
-1. **Broker** → Choose **Fyers** → enter App ID + Secret Key → browser opens for Fyers login → after login, the browser redirects to a URL containing `auth_code=XXXXX` → paste that code back into the terminal
+1. **Broker** → Choose **Fyers** → enter App ID + Secret Key (from Step 3 above)
 2. **AI Provider** → Choose **Gemini** (paste API key) or **Claude subscription** (no key needed)
 3. **NewsAPI** → paste your key (or press Enter to skip)
 
