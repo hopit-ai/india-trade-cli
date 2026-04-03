@@ -11,7 +11,7 @@ Thanks for your interest in contributing! This document explains how to get star
 
 ## Development Setup
 
-**Requires Python 3.11+.** CI tests against 3.11 and 3.12. Python 3.13+ should work but py_vollib (optional) may not be available.
+**Requires Python 3.11 or 3.12.** CI tests against both. Python 3.13+ is not supported (`requires-python = "<3.13"`) due to numba/py_vollib compatibility.
 
 ```bash
 python -m venv .venv
