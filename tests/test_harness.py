@@ -474,3 +474,313 @@ class TestHierarchicalTraderMd:
             local_path=lo,
         )
         assert "Local watchlist: NIFTY" in ctx
+
+
+# ── #4 Concurrent tool execution (ToolRegistry) ──────────────
+
+
+class TestConcurrentToolExecution:
+    def _make_registry_with_tools(self, safe_count=3, unsafe_count=1):
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        call_order = []
+
+        for i in range(safe_count):
+            name = f"safe_tool_{i}"
+            reg.register(
+                name=name,
+                description=f"Safe tool {i}",
+                parameters={"type": "object", "properties": {}},
+                fn=lambda n=name: call_order.append(n) or {"tool": n},
+                is_concurrency_safe=True,
+            )
+
+        for i in range(unsafe_count):
+            name = f"unsafe_tool_{i}"
+            reg.register(
+                name=name,
+                description=f"Unsafe tool {i}",
+                parameters={"type": "object", "properties": {}},
+                fn=lambda n=name: call_order.append(n) or {"tool": n},
+                is_concurrency_safe=False,
+            )
+
+        return reg, call_order
+
+    def test_execute_parallel_returns_all_results(self):
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        reg.register(
+            "t1",
+            "Tool 1",
+            {"type": "object", "properties": {}},
+            fn=lambda: {"v": 1},
+            is_concurrency_safe=True,
+        )
+        reg.register(
+            "t2",
+            "Tool 2",
+            {"type": "object", "properties": {}},
+            fn=lambda: {"v": 2},
+            is_concurrency_safe=True,
+        )
+
+        calls = [
+            {"id": "id1", "name": "t1", "input": {}},
+            {"id": "id2", "name": "t2", "input": {}},
+        ]
+        results = reg.execute_parallel(calls)
+        assert len(results) == 2
+        ids = {r["tool_use_id"] for r in results}
+        assert ids == {"id1", "id2"}
+
+    def test_execute_parallel_preserves_order(self):
+        import time
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        # slow tool registered first
+        reg.register(
+            "slow",
+            "Slow",
+            {"type": "object", "properties": {}},
+            fn=lambda: time.sleep(0.05) or {"v": "slow"},
+            is_concurrency_safe=True,
+        )
+        reg.register(
+            "fast",
+            "Fast",
+            {"type": "object", "properties": {}},
+            fn=lambda: {"v": "fast"},
+            is_concurrency_safe=True,
+        )
+
+        calls = [
+            {"id": "s_id", "name": "slow", "input": {}},
+            {"id": "f_id", "name": "fast", "input": {}},
+        ]
+        results = reg.execute_parallel(calls)
+        # Results must preserve call order regardless of completion order
+        assert results[0]["tool_use_id"] == "s_id"
+        assert results[1]["tool_use_id"] == "f_id"
+
+    def test_unsafe_tools_run_sequentially(self):
+        import time
+        from agent.tools import ToolRegistry
+
+        execution_times = []
+        reg = ToolRegistry()
+
+        def make_fn(delay):
+            def fn():
+                start = time.monotonic()
+                time.sleep(delay)
+                execution_times.append(time.monotonic() - start)
+                return {}
+
+            return fn
+
+        reg.register(
+            "u1",
+            "Unsafe 1",
+            {"type": "object", "properties": {}},
+            fn=make_fn(0.05),
+            is_concurrency_safe=False,
+        )
+        reg.register(
+            "u2",
+            "Unsafe 2",
+            {"type": "object", "properties": {}},
+            fn=make_fn(0.05),
+            is_concurrency_safe=False,
+        )
+
+        calls = [
+            {"id": "u1_id", "name": "u1", "input": {}},
+            {"id": "u2_id", "name": "u2", "input": {}},
+        ]
+        total_start = time.monotonic()
+        reg.execute_parallel(calls)
+        total = time.monotonic() - total_start
+        # Sequential: should take ~0.1s; parallel would take ~0.05s
+        assert total >= 0.08, "Unsafe tools should run sequentially"
+
+    def test_safe_tools_run_in_parallel(self):
+        import time
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+
+        def slow_fn():
+            time.sleep(0.1)
+            return {}
+
+        for i in range(3):
+            reg.register(
+                f"s{i}",
+                f"Safe {i}",
+                {"type": "object", "properties": {}},
+                fn=slow_fn,
+                is_concurrency_safe=True,
+            )
+
+        calls = [{"id": f"id{i}", "name": f"s{i}", "input": {}} for i in range(3)]
+        start = time.monotonic()
+        reg.execute_parallel(calls)
+        elapsed = time.monotonic() - start
+        # 3 tools × 0.1s each; if parallel: ~0.1s; if sequential: ~0.3s
+        assert elapsed < 0.25, "Concurrency-safe tools should run in parallel"
+
+    def test_mixed_safe_and_unsafe(self):
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        reg.register(
+            "safe",
+            "Safe",
+            {"type": "object", "properties": {}},
+            fn=lambda: {"safe": True},
+            is_concurrency_safe=True,
+        )
+        reg.register(
+            "unsafe",
+            "Unsafe",
+            {"type": "object", "properties": {}},
+            fn=lambda: {"unsafe": True},
+            is_concurrency_safe=False,
+        )
+        calls = [
+            {"id": "s_id", "name": "safe", "input": {}},
+            {"id": "u_id", "name": "unsafe", "input": {}},
+        ]
+        results = reg.execute_parallel(calls)
+        assert len(results) == 2
+
+    def test_failed_tool_returns_error_not_exception(self):
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        reg.register(
+            "boom",
+            "Explodes",
+            {"type": "object", "properties": {}},
+            fn=lambda: 1 / 0,
+            is_concurrency_safe=True,
+        )
+        calls = [{"id": "b_id", "name": "boom", "input": {}}]
+        results = reg.execute_parallel(calls)
+        import json
+
+        content = json.loads(results[0]["content"])
+        assert "error" in content
+
+
+# ── #5 Session history (JSONL persistence) ───────────────────
+
+
+class TestSessionHistory:
+    def test_history_path_returns_path(self):
+        from agent.harness import _history_path
+
+        p = _history_path()
+        assert str(p).endswith(".jsonl")
+
+    def test_load_history_empty_when_no_file(self, tmp_path):
+        from agent.harness import _load_history
+
+        msgs = _load_history(history_file=tmp_path / "missing.jsonl")
+        assert msgs == []
+
+    def test_append_and_load_roundtrip(self, tmp_path):
+        from agent.harness import _append_history, _load_history
+
+        f = tmp_path / "h.jsonl"
+        messages = [
+            {"role": "user", "content": "Should I buy RELIANCE?"},
+            {"role": "assistant", "content": "Based on analysis..."},
+        ]
+        _append_history(messages, history_file=f)
+        loaded = _load_history(history_file=f)
+        assert loaded == messages
+
+    def test_multiple_appends_accumulate(self, tmp_path):
+        from agent.harness import _append_history, _load_history
+
+        f = tmp_path / "h.jsonl"
+        _append_history(
+            [{"role": "user", "content": "Q1"}, {"role": "assistant", "content": "A1"}],
+            history_file=f,
+        )
+        _append_history(
+            [{"role": "user", "content": "Q2"}, {"role": "assistant", "content": "A2"}],
+            history_file=f,
+        )
+        loaded = _load_history(history_file=f)
+        assert len(loaded) == 4
+
+    def test_load_history_respects_max_messages(self, tmp_path):
+        from agent.harness import _append_history, _load_history
+
+        f = tmp_path / "h.jsonl"
+        for i in range(10):
+            _append_history(
+                [{"role": "user", "content": f"Q{i}"}, {"role": "assistant", "content": f"A{i}"}],
+                history_file=f,
+            )
+        loaded = _load_history(max_messages=4, history_file=f)
+        assert len(loaded) == 4
+        # Should be the most recent messages
+        assert loaded[-1]["content"] == "A9"
+
+    def test_load_history_returns_even_number(self, tmp_path):
+        """History should always be complete user/assistant pairs."""
+        from agent.harness import _append_history, _load_history
+
+        f = tmp_path / "h.jsonl"
+        for i in range(5):
+            _append_history(
+                [{"role": "user", "content": f"Q{i}"}, {"role": "assistant", "content": f"A{i}"}],
+                history_file=f,
+            )
+        # max_messages=3 is odd — should round down to 2
+        loaded = _load_history(max_messages=3, history_file=f)
+        assert len(loaded) % 2 == 0
+
+    def test_run_passes_history_to_provider(self, tmp_path):
+        from agent.harness import run
+
+        hist_file = tmp_path / "h.jsonl"
+        captured = {}
+
+        def fake_chat(messages, stream=True):
+            captured["messages"] = messages
+            return "done"
+
+        with patch("agent.harness._make_provider") as mock_prov:
+            provider = MagicMock()
+            provider.chat.side_effect = fake_chat
+            mock_prov.return_value = provider
+            with patch("agent.harness._load_trader_context", return_value="ctx"):
+                run("New question", history_file=hist_file)
+
+        # First message should be the user query
+        assert captured["messages"][-1]["role"] == "user"
+        assert "New question" in captured["messages"][-1]["content"]
+
+    def test_run_saves_history_after_response(self, tmp_path):
+        from agent.harness import _load_history, run
+
+        hist_file = tmp_path / "h.jsonl"
+
+        with patch("agent.harness._make_provider") as mock_prov:
+            provider = MagicMock()
+            provider.chat.return_value = "Analysis complete."
+            mock_prov.return_value = provider
+            with patch("agent.harness._load_trader_context", return_value="ctx"):
+                run("Buy RELIANCE?", history_file=hist_file)
+
+        history = _load_history(history_file=hist_file)
+        assert any(m["content"] == "Buy RELIANCE?" for m in history)
+        assert any(m["content"] == "Analysis complete." for m in history)

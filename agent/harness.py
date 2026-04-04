@@ -340,6 +340,67 @@ def _register_execute_tool(registry, broker) -> None:
     )
 
 
+# ── Session history (JSONL persistence) ──────────────────────
+
+HISTORY_FILE = Path.home() / ".trading_platform" / "harness_history.jsonl"
+HISTORY_MAX_MESSAGES = 20  # default: keep last 10 user/assistant pairs
+
+
+def _history_path() -> Path:
+    """Return the default harness history file path."""
+    return HISTORY_FILE
+
+
+def _load_history(
+    max_messages: int = HISTORY_MAX_MESSAGES,
+    history_file: Path | None = None,
+) -> list[dict]:
+    """
+    Load recent conversation history from the JSONL file.
+
+    Returns up to max_messages messages (always an even number — complete pairs).
+    Most recent messages are kept when truncating.
+    Returns [] when the file doesn't exist.
+    """
+    path = history_file if history_file is not None else HISTORY_FILE
+    if not path.exists():
+        return []
+
+    messages: list[dict] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                import json as _json
+
+                messages.append(_json.loads(line))
+    except Exception:
+        return []
+
+    # Keep last N messages, rounded down to even (complete pairs)
+    if len(messages) > max_messages:
+        messages = messages[-max_messages:]
+    if len(messages) % 2 != 0:
+        messages = messages[1:]  # drop oldest to keep even
+
+    return messages
+
+
+def _append_history(messages: list[dict], history_file: Path | None = None) -> None:
+    """
+    Append a list of messages (user + assistant) to the JSONL history file.
+    Creates the file and parent directories if needed.
+    """
+    import json as _json
+
+    path = history_file if history_file is not None else HISTORY_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    lines = "\n".join(_json.dumps(m, ensure_ascii=False) for m in messages) + "\n"
+    with path.open("a", encoding="utf-8") as f:
+        f.write(lines)
+
+
 # ── Provider factory (isolated for testability) ───────────────
 
 
@@ -356,24 +417,30 @@ def _make_provider(registry, system_prompt: str):
 # ── Internal chat wrapper (isolated for testability) ──────────
 
 
-def _get_agent_chat(provider, query: str) -> str:
-    """Run one chat turn on the provider and return the response."""
-    return provider.chat([{"role": "user", "content": query}], stream=True)
+def _get_agent_chat(provider, messages: list[dict]) -> str:
+    """Run one chat turn on the provider with pre-built message list."""
+    return provider.chat(messages, stream=True)
 
 
 # ── Main entry point ──────────────────────────────────────────
 
 
-def run(query: str, broker=None) -> str:
+def run(
+    query: str,
+    broker=None,
+    history_file: Path | None = None,
+) -> str:
     """
     Run the trading harness for a natural language query.
 
     Creates an isolated provider (separate from the main `ai` agent history)
-    with the harness system prompt and merged TRADER.md context.
+    with the harness system prompt, merged TRADER.md context, and session
+    history from JSONL so context is preserved across harness calls.
 
     Args:
-        query:  Natural language question or instruction from the user.
-        broker: Connected broker instance (or None — disables execute_trade).
+        query:        Natural language question or instruction.
+        broker:       Connected broker instance (or None — disables execute_trade).
+        history_file: Override the JSONL history file path (used in tests).
 
     Returns:
         Final response text from the LLM.
@@ -390,6 +457,10 @@ def run(query: str, broker=None) -> str:
 
     provider = _make_provider(registry=registry, system_prompt=system_prompt)
 
+    # Load session history and append the new user message
+    prior = _load_history(history_file=history_file)
+    messages = prior + [{"role": "user", "content": query}]
+
     mode_label = {
         HARNESS_MODE_PROMPT: "[cyan]prompt[/cyan]",
         HARNESS_MODE_PLAN: "[yellow]plan[/yellow]",
@@ -399,7 +470,18 @@ def run(query: str, broker=None) -> str:
     console.print()
     console.rule(f"[bold cyan]Trading Harness[/bold cyan] · {mode_label}", style="cyan")
 
-    response = _get_agent_chat(provider, query)
+    response = _get_agent_chat(provider, messages)
 
     console.rule(style="cyan")
+
+    # Persist this turn to JSONL
+    if response:
+        _append_history(
+            [
+                {"role": "user", "content": query},
+                {"role": "assistant", "content": response},
+            ],
+            history_file=history_file,
+        )
+
     return response or ""

@@ -126,6 +126,55 @@ class ToolRegistry:
         except Exception as exc:
             return {"error": str(exc), "trace": traceback.format_exc()[-500:]}
 
+    def execute_parallel(self, tool_calls: list[dict]) -> list[dict]:
+        """
+        Execute a batch of tool calls, running concurrency-safe tools in parallel.
+
+        Inspired by Claude Code's concurrent tool execution: tools marked
+        is_concurrency_safe=True run via ThreadPoolExecutor; unsafe tools run
+        sequentially after. Results are always returned in the original call order.
+
+        Args:
+            tool_calls: List of dicts with keys: id, name, input
+
+        Returns:
+            List of tool_result dicts (Anthropic format) in original call order.
+        """
+        import json
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        safe = [tc for tc in tool_calls if self.is_concurrency_safe(tc["name"])]
+        unsafe = [tc for tc in tool_calls if not self.is_concurrency_safe(tc["name"])]
+
+        results: dict[str, Any] = {}
+
+        # Run safe tools in parallel
+        if safe:
+            with ThreadPoolExecutor(max_workers=len(safe)) as pool:
+                futures = {
+                    pool.submit(self.execute, tc["name"], tc["input"]): tc["id"] for tc in safe
+                }
+                for future in as_completed(futures):
+                    tool_id = futures[future]
+                    try:
+                        results[tool_id] = future.result()
+                    except Exception as exc:
+                        results[tool_id] = {"error": str(exc)}
+
+        # Run unsafe tools sequentially
+        for tc in unsafe:
+            results[tc["id"]] = self.execute(tc["name"], tc["input"])
+
+        # Rebuild in original order
+        return [
+            {
+                "type": "tool_result",
+                "tool_use_id": tc["id"],
+                "content": json.dumps(results[tc["id"]]),
+            }
+            for tc in tool_calls
+        ]
+
     @property
     def names(self) -> list[str]:
         return list(self._tools.keys())
