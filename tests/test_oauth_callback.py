@@ -6,7 +6,6 @@ import time
 import urllib.request
 from http.server import HTTPServer
 
-import pytest
 
 from brokers.session import _oauth_local_server
 
