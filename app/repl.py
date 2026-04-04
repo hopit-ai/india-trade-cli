@@ -106,6 +106,7 @@ COMMANDS = [
     "provider",
     "risk-report",
     "execute",
+    "harness",
     "save-pdf",
     "explain",
     "explain-save",
@@ -1692,6 +1693,24 @@ def run_repl(broker: BrokerAPI) -> None:
                             wants_explain,
                             llm_provider=agent._provider if wants_explain else None,
                         )
+
+            # ── Trading harness (free-form agentic loop) ──────────
+            elif command == "harness":
+                query = " ".join(args).strip()
+                if not query:
+                    console.print(
+                        "[dim]Usage: harness <your question>\n"
+                        "  Examples:\n"
+                        "    harness Should I buy RELIANCE? I have ₹2L\n"
+                        "    harness What's the market doing today?\n"
+                        "    harness Check my portfolio Greeks and suggest hedges[/dim]"
+                    )
+                else:
+                    from agent.harness import run as harness_run
+
+                    output = harness_run(query, broker=broker)
+                    _last_output = output or ""
+                    _last_command = f"Harness: {query[:40]}"
 
             elif command == "provider":
                 if args:

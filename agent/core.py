@@ -204,18 +204,10 @@ class AnthropicProvider(LLMProvider):
                     )
                 local.append({"role": "assistant", "content": content})
 
-                # Execute tools → tool_result blocks
-                results: list[dict] = []
+                # Execute tools — safe tools run in parallel, unsafe sequentially
                 for tc in tool_calls:
                     _print_tool_call(tc["name"], tc["input"])
-                    result = self.registry.execute(tc["name"], tc["input"])
-                    results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tc["id"],
-                            "content": json.dumps(result),
-                        }
-                    )
+                results = self.registry.execute_parallel(tool_calls)
                 local.append({"role": "user", "content": results})
             else:
                 final = text

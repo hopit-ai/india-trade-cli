@@ -308,3 +308,73 @@ class TestNotifyIntegration:
             mgr._notify(alert)
 
         mock_webhook.assert_not_called()
+
+
+# ── Duplicate-guard tests ─────────────────────────────────────
+
+
+class TestAlertDeduplication:
+    """add_price_alert / add_technical_alert must not create duplicate active alerts."""
+
+    def test_price_alert_no_duplicate(self, tmp_path):
+        with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
+            mgr = AlertManager()
+            a1 = mgr.add_price_alert("RELIANCE", "ABOVE", 2600.0)
+            a2 = mgr.add_price_alert("RELIANCE", "ABOVE", 2600.0)
+        assert a1.id == a2.id  # same object returned
+        assert len(mgr._alerts) == 1
+
+    def test_price_alert_different_threshold_creates_new(self, tmp_path):
+        with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
+            mgr = AlertManager()
+            a1 = mgr.add_price_alert("RELIANCE", "ABOVE", 2600.0)
+            a2 = mgr.add_price_alert("RELIANCE", "ABOVE", 2700.0)
+        assert a1.id != a2.id
+        assert len(mgr._alerts) == 2
+
+    def test_price_alert_different_condition_creates_new(self, tmp_path):
+        with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
+            mgr = AlertManager()
+            a1 = mgr.add_price_alert("RELIANCE", "ABOVE", 2600.0)
+            a2 = mgr.add_price_alert("RELIANCE", "BELOW", 2600.0)
+        assert a1.id != a2.id
+        assert len(mgr._alerts) == 2
+
+    def test_price_alert_after_triggered_creates_fresh(self, tmp_path):
+        """Once an alert is triggered, a new one for the same level should be allowed."""
+        with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
+            mgr = AlertManager()
+            a1 = mgr.add_price_alert("RELIANCE", "ABOVE", 2600.0)
+            a1.triggered = True  # simulate trigger
+            a2 = mgr.add_price_alert("RELIANCE", "ABOVE", 2600.0)
+        assert a1.id != a2.id  # new alert created
+        assert len(mgr._alerts) == 2
+
+    def test_technical_alert_no_duplicate(self, tmp_path):
+        with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
+            mgr = AlertManager()
+            a1 = mgr.add_technical_alert("INFY", "RSI", "ABOVE", 70.0)
+            a2 = mgr.add_technical_alert("INFY", "RSI", "ABOVE", 70.0)
+        assert a1.id == a2.id
+        assert len(mgr._alerts) == 1
+
+    def test_technical_alert_different_indicator_creates_new(self, tmp_path):
+        with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
+            mgr = AlertManager()
+            a1 = mgr.add_technical_alert("INFY", "RSI", "ABOVE", 70.0)
+            a2 = mgr.add_technical_alert("INFY", "MACD", "ABOVE", 70.0)
+        assert a1.id != a2.id
+        assert len(mgr._alerts) == 2
+
+    def test_execute_trade_repeated_calls_do_not_multiply_alerts(self, tmp_path):
+        """
+        Simulates what trade_executor does: calling add_price_alert for SL/target
+        multiple times (e.g. harness runs execute_trade 3 times for same plan).
+        Should result in exactly 2 alerts (one SL, one target), not 6.
+        """
+        with patch("engine.alerts.ALERTS_FILE", tmp_path / "alerts.json"):
+            mgr = AlertManager()
+            for _ in range(3):
+                mgr.add_price_alert("RELIANCE", "BELOW", 2300.0)  # stop-loss
+                mgr.add_price_alert("RELIANCE", "ABOVE", 2600.0)  # target
+        assert len(mgr._alerts) == 2
