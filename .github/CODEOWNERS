@@ -5,8 +5,8 @@
 #
 # Rules are evaluated last-match-wins. The bottom-most matching rule takes effect.
 
-# ── Default: everything requires review from the core maintainer ──────────────
-* @ArchieIndian
+# ── Default: any of the core reviewers can approve ───────────────────────────
+* @ArchieIndian @sai19 @vinodreddyg @sonaleela @lazzyPie @chshivam
 
 # ── CI / workflows — only core maintainer (sensitive) ────────────────────────
 .github/ @ArchieIndian
