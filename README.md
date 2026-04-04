@@ -85,15 +85,20 @@ Pick **one** of these options:
 
 ### Step 3: Get free market data (Fyers)
 
-1. Create a free account at [fyers.in](https://fyers.in)
-2. Go to [myapi.fyers.in](https://myapi.fyers.in) → **Create App**
-   - Redirect URL: `http://127.0.0.1:8765/fyers/callback` (must be exact)
-3. Note the **App ID** and **Secret Key**
-4. When you run `trade` and choose Fyers, enter these credentials. A browser window opens for Fyers login. After login, the browser redirects to a URL like:
+1. Create a free account at [fyers.in](https://fyers.in) (any Fyers trading/demat account works)
+2. Go to the API dashboard at [myapi.fyers.in](https://myapi.fyers.in) and log in with your Fyers credentials
+3. Click **Create App** and fill in:
+   - **App Name:** anything you like (e.g. `TradeCLI`)
+   - **Redirect URL:** `http://127.0.0.1:8765/fyers/callback` (must be exact)
+   - **App Type:** Personal
+   - **Description:** optional
+4. After creating the app, you'll see your **App ID** (format: `XXXX-100`) and **Secret Key** — copy both
+5. Run `trade`, choose **[5] Fyers**, and paste the App ID and Secret Key when prompted
+6. A browser window opens for Fyers OAuth login. After login, the browser redirects to a URL like:
    ```
    http://127.0.0.1:8765/fyers/callback?auth_code=eyJ0...&state=...
    ```
-   Copy the `auth_code` value and paste it into the terminal when prompted.
+   The redirect page will show a 404 error — **this is normal**. Copy the `auth_code` value from the URL bar (everything between `auth_code=` and `&state=`) and paste it into the terminal.
 
 ### Step 4: Get news headlines (optional)
 
@@ -177,10 +182,15 @@ API keys are stored in your OS keychain (macOS Keychain / Linux Secret Service /
 
 ### Fyers Setup (recommended — free, real-time NSE/BSE data)
 
-1. Create account at [fyers.in](https://fyers.in)
-2. Create API app at [myapi.fyers.in](https://myapi.fyers.in) — Redirect URL: `http://127.0.0.1:8765/fyers/callback`
-3. Run `trade` → `login` → choose Fyers → enter App ID and Secret Key
-4. Browser opens for OAuth login. Token saved for 12 hours. WebSocket auto-connects for real-time quotes.
+1. **Create account** — Sign up at [fyers.in](https://fyers.in) if you don't have one (any Fyers trading/demat account works, free to open)
+2. **Create API app** — Go to [myapi.fyers.in](https://myapi.fyers.in), log in, and click **Create App**:
+   - **App Name:** anything (e.g. `TradeCLI`)
+   - **Redirect URL:** must be exactly `http://127.0.0.1:8765/fyers/callback`
+   - **App Type:** Personal
+3. **Copy credentials** — After creation, note the **App ID** (format: `XXXX-100`) and **Secret Key**
+4. **Connect** — Run `trade` → choose `[5] Fyers` → paste App ID and Secret Key when prompted
+5. **Authorize** — A browser opens for Fyers login. After login, the browser redirects to a URL with an `auth_code` parameter. The page shows a 404 — that's expected. Copy the `auth_code` value from the URL bar (between `auth_code=` and `&state=`) and paste it into the terminal
+6. **Done** — Token is saved for 12 hours. WebSocket auto-connects for real-time quotes. Next time, just run `trade` and choose Fyers — credentials are in your OS keychain.
 
 ### NewsAPI (optional but recommended)
 
