@@ -1055,7 +1055,9 @@ def run_repl(broker: BrokerAPI) -> None:
 
     while True:
         try:
-            raw = session.prompt(_build_prompt, bottom_toolbar=_build_toolbar, refresh_interval=1.0).strip()
+            raw = session.prompt(
+                _build_prompt, bottom_toolbar=_build_toolbar, refresh_interval=1.0
+            ).strip()
         except (KeyboardInterrupt, EOFError):
             console.print("\n[yellow]Use 'quit' to exit.[/yellow]")
             continue

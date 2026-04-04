@@ -395,9 +395,7 @@ def _do_auth(key: str, broker: BrokerAPI) -> None:
             token = Prompt.ask("[bold]Paste the [cyan]request_token[/cyan] here[/bold]")
             broker.complete_login(request_token=token)
         else:
-            console.print(
-                f"[dim]  {redirect}?[bold]code=XXXXXX[/bold][/dim]\n"
-            )
+            console.print(f"[dim]  {redirect}?[bold]code=XXXXXX[/bold][/dim]\n")
             code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
             broker.complete_login(auth_code=code)
 

@@ -41,8 +41,7 @@ class TestOAuthLocalServer:
         def _hit():
             time.sleep(0.05)
             urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/zerodha/callback"
-                "?request_token=ZTOKEN&status=success"
+                f"http://127.0.0.1:{port}/zerodha/callback?request_token=ZTOKEN&status=success"
             )
 
         threading.Thread(target=_hit, daemon=True).start()
@@ -54,9 +53,7 @@ class TestOAuthLocalServer:
 
         def _hit():
             time.sleep(0.05)
-            urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/upstox/callback?code=UPCODE99"
-            )
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/upstox/callback?code=UPCODE99")
 
         threading.Thread(target=_hit, daemon=True).start()
         result = _oauth_local_server(port, "/upstox/callback", "code", timeout=5)
@@ -77,9 +74,7 @@ class TestOAuthLocalServer:
 
         def _fetch():
             time.sleep(0.05)
-            resp = urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/fyers/callback?auth_code=ABC"
-            )
+            resp = urllib.request.urlopen(f"http://127.0.0.1:{port}/fyers/callback?auth_code=ABC")
             result_holder["status"] = resp.status
             result_holder["body"] = resp.read().decode()
 
@@ -105,9 +100,7 @@ class TestOAuthLocalServer:
             time.sleep(0.1)
             # Real OAuth callback second
             try:
-                urllib.request.urlopen(
-                    f"http://127.0.0.1:{port}/fyers/callback?auth_code=REAL123"
-                )
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/fyers/callback?auth_code=REAL123")
             except Exception:
                 pass
 
@@ -143,9 +136,7 @@ class TestOAuthLocalServer:
 
         def _hit():
             time.sleep(0.05)
-            urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/cb?code=CODE&state=STATE"
-            )
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/cb?code=CODE&state=STATE")
 
         threading.Thread(target=_hit, daemon=True).start()
         result = _oauth_local_server(port, "/cb", "code", "state", timeout=5)
@@ -157,9 +148,7 @@ class TestOAuthLocalServer:
 
         def _hit():
             time.sleep(0.05)
-            urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/cb?auth_code=ONLY"
-            )
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/cb?auth_code=ONLY")
 
         threading.Thread(target=_hit, daemon=True).start()
         result = _oauth_local_server(port, "/cb", "auth_code", "state", timeout=5)
