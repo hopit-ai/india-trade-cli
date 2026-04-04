@@ -277,6 +277,8 @@ def _oauth_local_server(
         b"</body></html>"
     )
 
+    _done = threading.Event()
+
     class _Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):  # silence access log
             pass
@@ -287,24 +289,28 @@ def _oauth_local_server(
                 qs = parse_qs(parsed.query)
                 values = {p: (qs.get(p) or [""])[0] for p in param_names}
                 result.put(values)
+                _done.set()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(_SUCCESS_HTML)))
                 self.end_headers()
                 self.wfile.write(_SUCCESS_HTML)
             else:
-                # Any stray request (favicon, etc.) — ignore
+                # Stray request (favicon, pre-flight, etc.) — respond and keep waiting
                 self.send_response(204)
                 self.end_headers()
 
     try:
         server = HTTPServer(("127.0.0.1", port), _Handler)
+        server.timeout = 1  # handle_request poll interval
     except OSError:
         return None  # port busy → fall back to manual paste
 
     def _serve():
         try:
-            server.handle_request()  # blocks until one request arrives
+            # Loop until the correct callback path is hit or the caller gives up
+            while not _done.is_set():
+                server.handle_request()
         finally:
             server.server_close()
 
@@ -314,7 +320,7 @@ def _oauth_local_server(
         values = result.get(timeout=timeout)
         return values
     except queue.Empty:
-        server.server_close()
+        _done.set()  # stop the server loop
         return None
 
 
