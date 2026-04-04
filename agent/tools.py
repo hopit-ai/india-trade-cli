@@ -24,7 +24,7 @@ class ToolRegistry:
     """Holds all tools with their schemas and Python implementations."""
 
     def __init__(self) -> None:
-        self._tools: dict[str, dict] = {}  # name → {fn, description, params}
+        self._tools: dict[str, dict] = {}  # name → {fn, description, params, flags}
 
     def register(
         self,
@@ -32,12 +32,62 @@ class ToolRegistry:
         description: str,
         parameters: dict,  # JSON Schema object for the params
         fn: Callable,
+        *,
+        is_read_only: bool = False,
+        is_destructive: bool = False,
+        is_concurrency_safe: bool = False,
+        permission: str = "auto",  # "auto" | "ask" | "deny"
     ) -> None:
+        """
+        Register a tool with optional permission flags (inspired by Claude Code).
+
+        Flags:
+          is_read_only        — Tool only reads data, never modifies state.
+                                Read-only tools are auto-approved in all modes.
+          is_destructive      — Tool modifies real-world state (places orders, etc).
+                                Destructive tools default to permission="ask".
+          is_concurrency_safe — Tool can run in parallel with other tools safely.
+                                Used for future parallel execution optimisation.
+          permission          — "auto" (run freely) | "ask" (always confirm) |
+                                "deny" (blocked; only overridable by env/config).
+        """
+        # Destructive tools are always "ask" unless explicitly overridden
+        if is_destructive and permission == "auto":
+            permission = "ask"
+
         self._tools[name] = {
             "fn": fn,
             "description": description,
             "parameters": parameters,
+            "is_read_only": is_read_only,
+            "is_destructive": is_destructive,
+            "is_concurrency_safe": is_concurrency_safe,
+            "permission": permission,
         }
+
+    # ── Permission queries ────────────────────────────────────
+
+    def is_read_only(self, name: str) -> bool:
+        return self._tools.get(name, {}).get("is_read_only", False)
+
+    def is_destructive(self, name: str) -> bool:
+        return self._tools.get(name, {}).get("is_destructive", False)
+
+    def is_concurrency_safe(self, name: str) -> bool:
+        return self._tools.get(name, {}).get("is_concurrency_safe", False)
+
+    def permission(self, name: str) -> str:
+        return self._tools.get(name, {}).get("permission", "auto")
+
+    def destructive_names(self) -> list[str]:
+        """Return names of all destructive tools."""
+        return [n for n, t in self._tools.items() if t.get("is_destructive")]
+
+    def read_only_names(self) -> list[str]:
+        """Return names of all read-only tools."""
+        return [n for n, t in self._tools.items() if t.get("is_read_only")]
+
+    # ── Schemas ───────────────────────────────────────────────
 
     def anthropic_schema(self) -> list[dict]:
         return [
@@ -47,6 +97,7 @@ class ToolRegistry:
                 "input_schema": t["parameters"],
             }
             for name, t in self._tools.items()
+            if t.get("permission") != "deny"
         ]
 
     def openai_schema(self) -> list[dict]:
@@ -60,12 +111,15 @@ class ToolRegistry:
                 },
             }
             for name, t in self._tools.items()
+            if t.get("permission") != "deny"
         ]
 
     def execute(self, name: str, arguments: dict) -> Any:
         """Run a tool by name with given arguments. Returns JSON-serialisable result."""
         if name not in self._tools:
             return {"error": f"Unknown tool: {name}"}
+        if self._tools[name].get("permission") == "deny":
+            return {"error": f"Tool '{name}' is blocked by permission rules."}
         try:
             result = self._tools[name]["fn"](**arguments)
             return _serialise(result)
@@ -1066,5 +1120,14 @@ def build_registry() -> ToolRegistry:
             "analysis.dcf", fromlist=["dcf_for_symbol"]
         ).dcf_for_symbol(symbol, growth_rate, wacc),
     )
+
+    # ── Tag all registered tools as read-only + concurrency-safe ──
+    # Every tool in the base registry is a read/analyse tool — none place orders.
+    # Destructive tools (execute_trade) are added separately by the harness.
+    for tool in reg._tools.values():
+        tool["is_read_only"] = True
+        tool["is_concurrency_safe"] = True
+        tool["is_destructive"] = False
+        tool["permission"] = "auto"
 
     return reg

@@ -79,18 +79,23 @@ class TestBuildTraderContext:
 
 
 class TestLoadTraderContext:
-    def test_reads_trader_md_if_present(self, tmp_path):
+    def test_reads_global_trader_md_if_present(self, tmp_path):
         md = tmp_path / "TRADER.md"
         md.write_text("# My custom trader context")
-        with patch("agent.harness.TRADER_MD_PATH", md):
-            ctx = _load_trader_context()
+        ctx = _load_trader_context(
+            global_path=md,
+            project_path=tmp_path / "p.md",
+            local_path=tmp_path / "l.md",
+        )
         assert "My custom trader context" in ctx
 
     def test_builds_from_env_when_no_file(self, tmp_path):
-        missing = tmp_path / "TRADER.md"  # does not exist
-        with patch("agent.harness.TRADER_MD_PATH", missing):
-            with patch("agent.harness._get_connected_broker", side_effect=Exception):
-                ctx = _load_trader_context()
+        with patch("agent.harness._get_connected_broker", side_effect=Exception):
+            ctx = _load_trader_context(
+                global_path=tmp_path / "g.md",
+                project_path=tmp_path / "p.md",
+                local_path=tmp_path / "l.md",
+            )
         assert "PAPER" in ctx or "capital" in ctx.lower()
 
 
@@ -269,3 +274,203 @@ class TestHarnessRun:
             with patch("agent.harness._register_execute_tool") as mock_reg:
                 run("Buy RELIANCE", broker=broker)
         mock_reg.assert_called_once()
+
+
+# ── Tool flags in ToolRegistry ────────────────────────────────
+
+
+class TestToolFlags:
+    def test_base_registry_tools_are_read_only(self):
+        from agent.tools import build_registry
+
+        reg = build_registry()
+        for name in reg.names:
+            assert reg.is_read_only(name), f"{name} should be read-only"
+
+    def test_base_registry_tools_are_concurrency_safe(self):
+        from agent.tools import build_registry
+
+        reg = build_registry()
+        for name in reg.names:
+            assert reg.is_concurrency_safe(name), f"{name} should be concurrency-safe"
+
+    def test_base_registry_no_destructive_tools(self):
+        from agent.tools import build_registry
+
+        reg = build_registry()
+        assert reg.destructive_names() == []
+
+    def test_execute_trade_is_destructive(self):
+        from agent.harness import _register_execute_tool
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        broker = MagicMock()
+        _register_execute_tool(reg, broker)
+        assert reg.is_destructive("execute_trade")
+
+    def test_execute_trade_is_not_read_only(self):
+        from agent.harness import _register_execute_tool
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        broker = MagicMock()
+        _register_execute_tool(reg, broker)
+        assert not reg.is_read_only("execute_trade")
+
+    def test_execute_trade_permission_is_ask(self):
+        from agent.harness import _register_execute_tool
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        broker = MagicMock()
+        _register_execute_tool(reg, broker)
+        assert reg.permission("execute_trade") == "ask"
+
+    def test_denied_tool_blocked_from_schema(self):
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        reg.register(
+            name="dangerous_tool",
+            description="Should be hidden",
+            parameters={"type": "object", "properties": {}},
+            fn=lambda: None,
+            permission="deny",
+        )
+        names = [t["name"] for t in reg.anthropic_schema()]
+        assert "dangerous_tool" not in names
+
+    def test_denied_tool_blocked_from_execute(self):
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        reg.register(
+            name="dangerous_tool",
+            description="Blocked",
+            parameters={"type": "object", "properties": {}},
+            fn=lambda: {"should": "not run"},
+            permission="deny",
+        )
+        result = reg.execute("dangerous_tool", {})
+        assert "error" in result
+        assert "blocked" in result["error"].lower()
+
+
+# ── Permission modes (HARNESS_MODE) ──────────────────────────
+
+
+class TestPermissionModes:
+    def test_default_mode_is_prompt(self):
+        from agent.harness import harness_mode
+
+        env = {k: v for k, v in os.environ.items() if k != "HARNESS_MODE"}
+        with patch.dict(os.environ, env, clear=True):
+            assert harness_mode() == "prompt"
+
+    def test_plan_mode_from_env(self):
+        from agent.harness import harness_mode
+
+        with patch.dict(os.environ, {"HARNESS_MODE": "plan"}):
+            assert harness_mode() == "plan"
+
+    def test_auto_mode_from_env(self):
+        from agent.harness import harness_mode
+
+        with patch.dict(os.environ, {"HARNESS_MODE": "auto"}):
+            assert harness_mode() == "auto"
+
+    def test_auto_mode_denies_execute_trade(self):
+        from agent.harness import _register_execute_tool
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        broker = MagicMock()
+        with patch.dict(os.environ, {"HARNESS_MODE": "auto"}):
+            _register_execute_tool(reg, broker)
+        assert reg.permission("execute_trade") == "deny"
+
+    def test_auto_mode_execute_trade_not_in_schema(self):
+        from agent.harness import _register_execute_tool
+        from agent.tools import ToolRegistry
+
+        reg = ToolRegistry()
+        broker = MagicMock()
+        with patch.dict(os.environ, {"HARNESS_MODE": "auto"}):
+            _register_execute_tool(reg, broker)
+        schema_names = [t["name"] for t in reg.anthropic_schema()]
+        assert "execute_trade" not in schema_names
+
+    def test_prompt_mode_mentioned_in_system_prompt(self):
+        with patch.dict(os.environ, {"HARNESS_MODE": "prompt"}):
+            prompt = _build_harness_system_prompt("")
+        assert "prompt" in prompt.lower()
+
+    def test_plan_mode_mentioned_in_system_prompt(self):
+        with patch.dict(os.environ, {"HARNESS_MODE": "plan"}):
+            prompt = _build_harness_system_prompt("")
+        assert "plan" in prompt.lower()
+
+    def test_auto_mode_read_only_mentioned_in_system_prompt(self):
+        with patch.dict(os.environ, {"HARNESS_MODE": "auto"}):
+            prompt = _build_harness_system_prompt("")
+        assert "read-only" in prompt.lower() or "do not" in prompt.lower()
+
+
+# ── Hierarchical TRADER.md loading ───────────────────────────
+
+
+class TestHierarchicalTraderMd:
+    def test_global_only(self, tmp_path):
+        g = tmp_path / "global.md"
+        g.write_text("# Global profile")
+        ctx = _load_trader_context(
+            global_path=g,
+            project_path=tmp_path / "missing.md",
+            local_path=tmp_path / "missing_local.md",
+        )
+        assert "Global profile" in ctx
+
+    def test_project_extends_global(self, tmp_path):
+        g = tmp_path / "global.md"
+        g.write_text("# Global")
+        p = tmp_path / "project.md"
+        p.write_text("# Project rules")
+        ctx = _load_trader_context(
+            global_path=g,
+            project_path=p,
+            local_path=tmp_path / "missing.md",
+        )
+        assert "Global" in ctx
+        assert "Project rules" in ctx
+
+    def test_local_extends_both(self, tmp_path):
+        g = tmp_path / "global.md"
+        g.write_text("# Global")
+        p = tmp_path / "project.md"
+        p.write_text("# Project")
+        lo = tmp_path / "local.md"
+        lo.write_text("# Today: watch HDFC")
+        ctx = _load_trader_context(global_path=g, project_path=p, local_path=lo)
+        assert "Global" in ctx
+        assert "Project" in ctx
+        assert "Today: watch HDFC" in ctx
+
+    def test_falls_back_to_auto_build_when_none_exist(self, tmp_path):
+        with patch("agent.harness._get_connected_broker", side_effect=Exception):
+            ctx = _load_trader_context(
+                global_path=tmp_path / "g.md",
+                project_path=tmp_path / "p.md",
+                local_path=tmp_path / "l.md",
+            )
+        assert "PAPER" in ctx or "capital" in ctx.lower()
+
+    def test_local_only_no_global_or_project(self, tmp_path):
+        lo = tmp_path / "local.md"
+        lo.write_text("# Local watchlist: NIFTY")
+        ctx = _load_trader_context(
+            global_path=tmp_path / "g.md",
+            project_path=tmp_path / "p.md",
+            local_path=lo,
+        )
+        assert "Local watchlist: NIFTY" in ctx
