@@ -84,6 +84,22 @@ class Alert:
 # ── Alert Manager ─────────────────────────────────────────────
 
 
+def _is_market_hours() -> bool:
+    """
+    Returns True only during NSE trading hours: Mon–Fri, 9:15–15:30 IST.
+    Prevents alerts firing on stale prices outside market hours.
+    """
+    from datetime import timezone, timedelta
+
+    IST = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(IST)
+    if now.weekday() >= 5:  # Saturday=5, Sunday=6
+        return False
+    market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    return market_open <= now <= market_close
+
+
 class AlertManager:
     """Manages alerts with persistence and background polling."""
 
@@ -91,6 +107,7 @@ class AlertManager:
         self._alerts: list[Alert] = []
         self._poller_thread: Optional[threading.Thread] = None
         self._polling = False
+        self._lock = threading.Lock()  # protects triggered flag against tick races
         self._load()
 
     # ── Public API ────────────────────────────────────────────
@@ -245,42 +262,57 @@ class AlertManager:
         self.start_polling(interval=60)
 
     def _on_tick(self, tick) -> None:
-        """Called on every WebSocket tick — evaluate price alerts instantly."""
+        """Called on every WebSocket tick — evaluate price alerts instantly.
+
+        Uses a lock to prevent the race condition where multiple rapid ticks
+        all see triggered=False simultaneously and each fire a notification.
+        Only fires during market hours (9:15–15:30 IST, Mon–Fri).
+        """
         if self.active_count() == 0:
             return
+        if not _is_market_hours():
+            return
 
-        for alert in self._alerts:
-            if alert.triggered:
-                continue
-            if alert.alert_type != "PRICE":
-                continue
+        ltp = tick.ltp if hasattr(tick, "ltp") else 0
+        if ltp <= 0:
+            return
 
-            # Match tick symbol to alert symbol
-            tick_sym = tick.symbol if hasattr(tick, "symbol") else ""
-            alert_sym_variants = [
-                f"{alert.exchange}:{alert.symbol}-EQ",
-                f"{alert.exchange}:{alert.symbol}",
-            ]
-            if tick_sym not in alert_sym_variants:
-                continue
+        tick_sym = tick.symbol if hasattr(tick, "symbol") else ""
 
-            ltp = tick.ltp if hasattr(tick, "ltp") else 0
-            if ltp <= 0:
-                continue
+        to_notify: list[tuple[Alert, float]] = []
 
-            triggered = False
-            if alert.condition == "ABOVE" and ltp >= alert.threshold:
-                triggered = True
-            elif alert.condition == "BELOW" and ltp <= alert.threshold:
-                triggered = True
-            elif alert.condition == "CROSSES" and ltp >= alert.threshold:
-                triggered = True
+        with self._lock:
+            for alert in self._alerts:
+                if alert.triggered:
+                    continue
+                if alert.alert_type != "PRICE":
+                    continue
 
-            if triggered:
-                alert.triggered = True
-                alert.triggered_at = datetime.now().isoformat(timespec="seconds")
-                self._save()
-                self._notify(alert, ltp=ltp)
+                alert_sym_variants = [
+                    f"{alert.exchange}:{alert.symbol}-EQ",
+                    f"{alert.exchange}:{alert.symbol}",
+                ]
+                if tick_sym not in alert_sym_variants:
+                    continue
+
+                condition_met = False
+                if alert.condition == "ABOVE" and ltp >= alert.threshold:
+                    condition_met = True
+                elif alert.condition == "BELOW" and ltp <= alert.threshold:
+                    condition_met = True
+                elif alert.condition == "CROSSES" and ltp >= alert.threshold:
+                    condition_met = True
+
+                if condition_met:
+                    # Set inside lock — prevents other threads double-firing
+                    alert.triggered = True
+                    alert.triggered_at = datetime.now().isoformat(timespec="seconds")
+                    to_notify.append((alert, ltp))
+
+        if to_notify:
+            self._save()
+            for alert, price in to_notify:
+                self._notify(alert, ltp=price)
 
     def start_polling(self, interval: int = 60) -> None:
         """Start background alert checking (daemon thread). Fallback when no WebSocket."""
@@ -328,7 +360,7 @@ class AlertManager:
 
     def _poll_loop(self, interval: int) -> None:
         while self._polling:
-            if self.active_count() > 0:
+            if self.active_count() > 0 and _is_market_hours():
                 triggered = self.check_alerts()
                 for alert in triggered:
                     self._notify(alert)
