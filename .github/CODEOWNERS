@@ -1,0 +1,40 @@
+# CODEOWNERS
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Collaborators: @ArchieIndian @sai19 @vinodreddyg @chshivam @sonaleela @lazzyPie
+#
+# Rules are evaluated last-match-wins. The bottom-most matching rule takes effect.
+
+# ── Default: everything requires review from the core maintainer ──────────────
+* @ArchieIndian
+
+# ── CI / workflows — only core maintainer (sensitive) ────────────────────────
+.github/ @ArchieIndian
+
+# ── Broker integrations ───────────────────────────────────────────────────────
+brokers/ @ArchieIndian @sai19
+
+# ── AI agent layer ────────────────────────────────────────────────────────────
+agent/ @ArchieIndian @vinodreddyg
+
+# ── Market data providers ─────────────────────────────────────────────────────
+market/ @ArchieIndian @sai19
+
+# ── Analysis engines (technical, fundamental, options, DCF) ──────────────────
+analysis/ @ArchieIndian @vinodreddyg
+
+# ── Trading engine (backtest, risk, memory, strategy) ────────────────────────
+engine/ @ArchieIndian @chshivam
+
+# ── Telegram bot ─────────────────────────────────────────────────────────────
+bot/ @ArchieIndian @sonaleela
+
+# ── Web API / OpenClaw skills ─────────────────────────────────────────────────
+web/ @ArchieIndian @lazzyPie
+
+# ── Tests — any change to tests needs core maintainer sign-off ───────────────
+tests/ @ArchieIndian
+
+# ── Docs and config ───────────────────────────────────────────────────────────
+README.md @ArchieIndian
+pyproject.toml @ArchieIndian
