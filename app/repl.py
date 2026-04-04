@@ -105,7 +105,7 @@ COMMANDS = [
     "profile",
     "provider",
     "risk-report",
-    "paper-execute",
+    "execute",
     "save-pdf",
     "explain",
     "explain-save",
@@ -1482,8 +1482,8 @@ def run_repl(broker: BrokerAPI) -> None:
                         "[dim]Run 'telegram setup' for guided configuration, or check your bot token.[/dim]"
                     )
 
-            # ── Paper execution ──────────────────────────────────
-            elif command == "paper-execute":
+            # ── Trade execution (live or paper, auto-detected) ───
+            elif command in ("execute", "paper-execute"):
                 if not _last_trade_plans:
                     console.print(
                         "[dim]No trade plans available. Run 'analyze <SYMBOL>' first.[/dim]"
@@ -1491,13 +1491,11 @@ def run_repl(broker: BrokerAPI) -> None:
                 else:
                     profile_name = args[0].lower() if args else "neutral"
                     if profile_name not in ("aggressive", "neutral", "conservative"):
-                        console.print(
-                            "[red]Usage: paper-execute [aggressive|neutral|conservative][/red]"
-                        )
+                        console.print("[red]Usage: execute [aggressive|neutral|conservative][/red]")
                     else:
                         plan = _last_trade_plans.get(profile_name)
                         if plan:
-                            from engine.paper_execute import execute_trade_plan
+                            from engine.trade_executor import execute_trade_plan
 
                             execute_trade_plan(plan, broker)
                         else:

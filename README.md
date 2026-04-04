@@ -370,12 +370,12 @@ Supports single-symbol strategies (RSI, MACD, EMA crossover, Bollinger Bands) an
 | `pairs` | Scan for pair trading opportunities |
 | `pairs HDFCBANK ICICIBANK` | Analyze a specific stock pair |
 
-### Paper Trading
+### Trade Execution
 | Command | Description |
 |---------|-------------|
-| `paper-execute` | Execute last trade plan (neutral risk) |
-| `paper-execute aggressive` | Execute aggressive plan |
-| `paper-execute conservative` | Execute conservative plan |
+| `execute` | Execute last trade plan (neutral risk) — LIVE or PAPER, auto-detected |
+| `execute aggressive` | Execute aggressive plan |
+| `execute conservative` | Execute conservative plan |
 
 ### Trade Memory & Learning
 | Command | Description |
@@ -529,7 +529,7 @@ india-trade-cli/
 |   |-- profile.py            # Personal trading style profile
 |   |-- alerts.py             # Price + technical + conditional alerts
 |   |-- paper.py              # Paper trading engine
-|   |-- paper_execute.py      # Execute trade plans in paper mode
+|   |-- trade_executor.py     # Execute trade plans (live or paper, with safety gate)
 |   |-- output.py             # PDF export + simple explainer
 |   |-- portfolio.py          # Portfolio tracker + aggregated Greeks
 |   |-- strategy.py           # Strategy recommendation engine
