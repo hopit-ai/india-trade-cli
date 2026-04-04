@@ -247,8 +247,80 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         )
 
 
+def _oauth_local_server(
+    port: int,
+    path: str,
+    *param_names: str,
+    timeout: int = 180,
+) -> dict[str, str] | None:
+    """
+    Bind a temporary HTTP server on 127.0.0.1:port, wait for ONE GET request
+    to `path`, extract query params listed in `param_names`, then shut down.
+
+    Returns a dict of {param: value} on success, or None if the port is
+    already in use (fall back to manual paste) or the timeout is reached.
+
+    The browser gets a "Login successful — close this tab" page.
+    """
+    import queue
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import parse_qs, urlparse
+
+    result: queue.Queue[dict | None] = queue.Queue()
+    _SUCCESS_HTML = (
+        b"<!DOCTYPE html><html><head><meta charset=utf-8>"
+        b"<style>body{font-family:sans-serif;text-align:center;padding:4em;color:#1a1a1a}"
+        b"h2{color:#16a34a}</style></head><body>"
+        b"<h2>&#10003; Login successful</h2>"
+        b"<p>You can close this tab and return to the terminal.</p>"
+        b"</body></html>"
+    )
+
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):  # silence access log
+            pass
+
+        def do_GET(self):
+            parsed = urlparse(self.path)
+            if parsed.path == path:
+                qs = parse_qs(parsed.query)
+                values = {p: (qs.get(p) or [""])[0] for p in param_names}
+                result.put(values)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(_SUCCESS_HTML)))
+                self.end_headers()
+                self.wfile.write(_SUCCESS_HTML)
+            else:
+                # Any stray request (favicon, etc.) — ignore
+                self.send_response(204)
+                self.end_headers()
+
+    try:
+        server = HTTPServer(("127.0.0.1", port), _Handler)
+    except OSError:
+        return None  # port busy → fall back to manual paste
+
+    def _serve():
+        try:
+            server.handle_request()  # blocks until one request arrives
+        finally:
+            server.server_close()
+
+    threading.Thread(target=_serve, daemon=True).start()
+
+    try:
+        values = result.get(timeout=timeout)
+        return values
+    except queue.Empty:
+        server.server_close()
+        return None
+
+
 def _do_auth(key: str, broker: BrokerAPI) -> None:
     """Run the auth flow for a broker. TOTP brokers auto-login; others use browser redirect."""
+    from urllib.parse import urlparse
 
     # Angel One: fully automated TOTP login — no browser redirect needed
     if key in _TOTP_BROKERS:
@@ -256,43 +328,72 @@ def _do_auth(key: str, broker: BrokerAPI) -> None:
         broker.complete_login()
         return
 
-    # All others: open browser, paste token/code back
     login_url = broker.get_login_url()
     console.print(f"\n[bold cyan]🌐 Opening login page for {key.title()}…[/bold cyan]")
     console.print(f"   URL: [link={login_url}]{login_url}[/link]\n")
+
+    # ── Per-broker OAuth config ───────────────────────────────────
+    if key == "fyers":
+        redirect = os.environ.get("FYERS_REDIRECT_URL", "http://127.0.0.1:8765/fyers/callback")
+        _path = urlparse(redirect).path
+        _port = urlparse(redirect).port or 8765
+        _params = ("auth_code",)
+    elif key == "zerodha":
+        redirect = "http://localhost:8765/zerodha/callback"
+        _path = "/zerodha/callback"
+        _port = 8765
+        _params = ("request_token",)
+    elif key == "groww":
+        redirect = os.environ.get("GROWW_REDIRECT_URL", "http://localhost:8765/groww/callback")
+        _path = urlparse(redirect).path
+        _port = urlparse(redirect).port or 8765
+        _params = ("code",)
+    else:  # upstox
+        redirect = os.environ.get("UPSTOX_REDIRECT_URL", "http://localhost:8765/upstox/callback")
+        _path = urlparse(redirect).path
+        _port = urlparse(redirect).port or 8765
+        _params = ("code",)
+
+    # Start local callback listener BEFORE opening the browser so we never
+    # miss the redirect even on very fast connections.
+    console.print("[dim]  Waiting for browser login (up to 3 minutes)…[/dim]")
     webbrowser.open(login_url)
 
-    if key == "zerodha":
-        console.print(
-            "[dim]After login, the browser will redirect to a URL like:[/dim]\n"
-            "[dim]  http://localhost:8765/...?[bold]request_token=XXXXXX[/bold]&status=success[/dim]\n"
-        )
-        token = Prompt.ask("[bold]Paste the [cyan]request_token[/cyan] here[/bold]")
-        broker.complete_login(request_token=token)
+    captured = _oauth_local_server(_port, _path, *_params, timeout=180)
 
-    elif key == "groww":
+    if captured:
+        # ── Auto-captured ─────────────────────────────────────────
+        console.print("[dim]  Auth code received automatically.[/dim]")
+        if key == "fyers":
+            broker.complete_login(auth_code=captured["auth_code"])
+        elif key == "zerodha":
+            broker.complete_login(request_token=captured["request_token"])
+        else:  # groww / upstox
+            broker.complete_login(auth_code=captured["code"])
+    else:
+        # ── Fallback: port busy or timed out — manual paste ───────
         console.print(
-            "[dim]After login, the browser will redirect to a URL like:[/dim]\n"
-            "[dim]  http://localhost:8765/groww/callback?[bold]code=XXXXXX[/bold][/dim]\n"
+            "[yellow]  Could not auto-capture the code (port busy or timed out).[/yellow]\n"
+            "[dim]  Copy it from your browser's address bar:[/dim]"
         )
-        code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
-        broker.complete_login(auth_code=code)
-
-    elif key == "upstox":
-        console.print(
-            "[dim]After login, the browser will redirect to a URL like:[/dim]\n"
-            "[dim]  http://localhost:8765/upstox/callback?[bold]code=XXXXXX[/bold][/dim]\n"
-        )
-        code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
-        broker.complete_login(auth_code=code)
-
-    elif key == "fyers":
-        console.print(
-            "[dim]After login, the browser will redirect to a URL like:[/dim]\n"
-            "[dim]  http://127.0.0.1:8765/fyers/callback?[bold]auth_code=XXXXXX[/bold][/dim]\n"
-        )
-        code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
-        broker.complete_login(auth_code=code)
+        if key == "fyers":
+            console.print(
+                "[dim]  http://127.0.0.1:8765/fyers/callback?[bold]auth_code=XXXXXX[/bold][/dim]\n"
+            )
+            code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
+            broker.complete_login(auth_code=code)
+        elif key == "zerodha":
+            console.print(
+                "[dim]  http://localhost:8765/...?[bold]request_token=XXXXXX[/bold]&status=success[/dim]\n"
+            )
+            token = Prompt.ask("[bold]Paste the [cyan]request_token[/cyan] here[/bold]")
+            broker.complete_login(request_token=token)
+        else:
+            console.print(
+                f"[dim]  {redirect}?[bold]code=XXXXXX[/bold][/dim]\n"
+            )
+            code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
+            broker.complete_login(auth_code=code)
 
 
 def _start_websocket(broker: BrokerAPI) -> None:
