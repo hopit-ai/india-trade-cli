@@ -120,14 +120,34 @@ class AlertManager:
         exchange: str = "NSE",
         webhook_url: Optional[str] = None,
     ) -> Alert:
-        """Create a price-based alert (ABOVE / BELOW / CROSSES)."""
+        """Create a price-based alert (ABOVE / BELOW / CROSSES).
+
+        Returns existing alert without creating a duplicate if an identical
+        non-triggered alert (same symbol, exchange, condition, threshold) already exists.
+        """
+        sym = symbol.upper()
+        exch = exchange.upper()
+        cond = condition.upper()
+        thr = float(threshold)
+
+        for existing in self._alerts:
+            if (
+                not existing.triggered
+                and existing.alert_type == "PRICE"
+                and existing.symbol == sym
+                and existing.exchange == exch
+                and existing.condition == cond
+                and existing.threshold == thr
+            ):
+                return existing  # already watching this level
+
         alert = Alert(
             id=str(uuid.uuid4())[:8],
             alert_type="PRICE",
-            symbol=symbol.upper(),
-            exchange=exchange.upper(),
-            condition=condition.upper(),
-            threshold=float(threshold),
+            symbol=sym,
+            exchange=exch,
+            condition=cond,
+            threshold=thr,
             created_at=datetime.now().isoformat(timespec="seconds"),
             webhook_url=webhook_url,
         )
@@ -146,15 +166,37 @@ class AlertManager:
         exchange: str = "NSE",
         webhook_url: Optional[str] = None,
     ) -> Alert:
-        """Create a technical-indicator alert (RSI > 70, etc.)."""
+        """Create a technical-indicator alert (RSI > 70, etc.).
+
+        Returns existing alert without creating a duplicate if an identical
+        non-triggered alert already exists.
+        """
+        sym = symbol.upper()
+        exch = exchange.upper()
+        cond = condition.upper()
+        ind = indicator.upper()
+        thr = float(threshold)
+
+        for existing in self._alerts:
+            if (
+                not existing.triggered
+                and existing.alert_type == "TECHNICAL"
+                and existing.symbol == sym
+                and existing.exchange == exch
+                and existing.condition == cond
+                and existing.indicator == ind
+                and existing.threshold == thr
+            ):
+                return existing  # already watching this indicator level
+
         alert = Alert(
             id=str(uuid.uuid4())[:8],
             alert_type="TECHNICAL",
-            symbol=symbol.upper(),
-            exchange=exchange.upper(),
-            condition=condition.upper(),
-            threshold=float(threshold),
-            indicator=indicator.upper(),
+            symbol=sym,
+            exchange=exch,
+            condition=cond,
+            threshold=thr,
+            indicator=ind,
             created_at=datetime.now().isoformat(timespec="seconds"),
             webhook_url=webhook_url,
         )
