@@ -1,7 +1,7 @@
 """
 agent/deep_agent.py
 ───────────────────
-Full LLM multi-agent mode ("--deep") — inspired by TradingAgents paper.
+Full LLM multi-agent mode ("--deep") — every agent is LLM-powered.
 
 Every agent is LLM-powered (vs default mode where analysts are pure Python).
 11+ LLM calls per analysis — expensive but much deeper reasoning.

@@ -1,8 +1,7 @@
 """
 agent/multi_agent.py
 ────────────────────
-Multi-agent stock analysis system inspired by the TradingAgents framework
-(Xiao et al., 2025 — https://arxiv.org/abs/2412.20138).
+Multi-agent stock analysis system for Indian markets.
 
 Architecture:
   ┌─────────────────────────────────────────────────────────────────┐
@@ -1683,6 +1682,10 @@ Weigh the bull and bear arguments against the analyst data. Consider:
 - Which side has stronger evidence?
 - What does the risk profile suggest?
 - Is the timing right (technicals, events, VIX)?
+
+**Decisiveness rule**: Do NOT default to HOLD simply because both sides raised valid points.
+Every debate has a stronger side — identify it and commit to that stance.
+HOLD is only correct when the evidence is genuinely split AND the risk/reward is unfavourable.
 
 Provide your FINAL VERDICT in this exact format:
 
