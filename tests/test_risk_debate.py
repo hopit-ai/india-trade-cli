@@ -118,8 +118,10 @@ class TestRiskDebateResultDataclass:
 class TestRiskDebatePrompts:
     def test_aggressive_prompt_contains_key_themes(self):
         rendered = AGGRESSIVE_DEBATER_PROMPT.format(
-            symbol="RELIANCE", exchange="NSE",
-            scorecard="BUY 75%", debate_summary="WINNER: BULL",
+            symbol="RELIANCE",
+            exchange="NSE",
+            scorecard="BUY 75%",
+            debate_summary="WINNER: BULL",
             risk_params="Capital: ₹2L | VIX: 14",
         )
         assert "AGGRESSIVE" in rendered
@@ -128,8 +130,10 @@ class TestRiskDebatePrompts:
 
     def test_conservative_prompt_contains_key_themes(self):
         rendered = CONSERVATIVE_DEBATER_PROMPT.format(
-            symbol="RELIANCE", exchange="NSE",
-            scorecard="BUY 75%", debate_summary="WINNER: BULL",
+            symbol="RELIANCE",
+            exchange="NSE",
+            scorecard="BUY 75%",
+            debate_summary="WINNER: BULL",
             risk_params="Capital: ₹2L | VIX: 14",
         )
         assert "CONSERVATIVE" in rendered
@@ -138,8 +142,10 @@ class TestRiskDebatePrompts:
 
     def test_neutral_prompt_includes_both_views(self):
         rendered = NEUTRAL_DEBATER_PROMPT.format(
-            symbol="RELIANCE", exchange="NSE",
-            scorecard="BUY 75%", debate_summary="WINNER: BULL",
+            symbol="RELIANCE",
+            exchange="NSE",
+            scorecard="BUY 75%",
+            debate_summary="WINNER: BULL",
             risk_params="Capital: ₹2L | VIX: 14",
             aggressive_view="go big",
             conservative_view="go small",
@@ -168,40 +174,55 @@ class TestRunRiskDebate:
     def test_returns_risk_debate_result(self):
         analyzer, _ = self._make_analyzer()
         result = analyzer._run_risk_debate(
-            "RELIANCE", "NSE",
-            _make_scorecard("BUY"), _make_debate(), [_make_report()],
+            "RELIANCE",
+            "NSE",
+            _make_scorecard("BUY"),
+            _make_debate(),
+            [_make_report()],
         )
         assert isinstance(result, RiskDebateResult)
 
     def test_calls_llm_three_times(self):
         analyzer, mock_llm = self._make_analyzer()
         analyzer._run_risk_debate(
-            "RELIANCE", "NSE",
-            _make_scorecard("BUY"), _make_debate(), [_make_report()],
+            "RELIANCE",
+            "NSE",
+            _make_scorecard("BUY"),
+            _make_debate(),
+            [_make_report()],
         )
         assert mock_llm.chat.call_count == 3
 
     def test_aggressive_view_from_first_call(self):
         analyzer, _ = self._make_analyzer(["aggressive_resp", "conservative_resp", "neutral_resp"])
         result = analyzer._run_risk_debate(
-            "RELIANCE", "NSE",
-            _make_scorecard("BUY"), _make_debate(), [_make_report()],
+            "RELIANCE",
+            "NSE",
+            _make_scorecard("BUY"),
+            _make_debate(),
+            [_make_report()],
         )
         assert result.aggressive_view == "aggressive_resp"
 
     def test_conservative_view_from_second_call(self):
         analyzer, _ = self._make_analyzer(["a", "conservative_resp", "n"])
         result = analyzer._run_risk_debate(
-            "RELIANCE", "NSE",
-            _make_scorecard("BUY"), _make_debate(), [_make_report()],
+            "RELIANCE",
+            "NSE",
+            _make_scorecard("BUY"),
+            _make_debate(),
+            [_make_report()],
         )
         assert result.conservative_view == "conservative_resp"
 
     def test_neutral_view_from_third_call(self):
         analyzer, _ = self._make_analyzer(["a", "c", "neutral_resp"])
         result = analyzer._run_risk_debate(
-            "RELIANCE", "NSE",
-            _make_scorecard("BUY"), _make_debate(), [_make_report()],
+            "RELIANCE",
+            "NSE",
+            _make_scorecard("BUY"),
+            _make_debate(),
+            [_make_report()],
         )
         assert result.neutral_view == "neutral_resp"
 
@@ -209,16 +230,22 @@ class TestRunRiskDebate:
         neutral = "5% capital, SL at ₹2300\nmore detail here"
         analyzer, _ = self._make_analyzer(["a", "c", neutral])
         result = analyzer._run_risk_debate(
-            "RELIANCE", "NSE",
-            _make_scorecard("BUY"), _make_debate(), [_make_report()],
+            "RELIANCE",
+            "NSE",
+            _make_scorecard("BUY"),
+            _make_debate(),
+            [_make_report()],
         )
         assert result.consensus == "5% capital, SL at ₹2300"
 
     def test_neutral_prompt_includes_aggressive_and_conservative_views(self):
         analyzer, mock_llm = self._make_analyzer(["agg_view", "cons_view", "neutral_view"])
         analyzer._run_risk_debate(
-            "RELIANCE", "NSE",
-            _make_scorecard("BUY"), _make_debate(), [_make_report()],
+            "RELIANCE",
+            "NSE",
+            _make_scorecard("BUY"),
+            _make_debate(),
+            [_make_report()],
         )
         # Third call (neutral) should include the first two views
         third_call_content = mock_llm.chat.call_args_list[2][1]["messages"][0]["content"]

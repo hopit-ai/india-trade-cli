@@ -1533,8 +1533,7 @@ class MultiAgentAnalyzer:
             )
 
         debate_summary = (
-            f"Investment debate winner: {debate.winner}\n"
-            f"Facilitator summary: {debate.facilitator}"
+            f"Investment debate winner: {debate.winner}\nFacilitator summary: {debate.facilitator}"
         )
         scorecard_summary = scorecard.summary()
 
@@ -1550,15 +1549,21 @@ class MultiAgentAnalyzer:
         if self.verbose:
             console.print("[bold red]Aggressive[/bold red] debater — maximum upside, tight risk...")
         aggressive_view = self.llm.chat(
-            messages=[{"role": "user", "content": AGGRESSIVE_DEBATER_PROMPT.format(**shared_context)}],
+            messages=[
+                {"role": "user", "content": AGGRESSIVE_DEBATER_PROMPT.format(**shared_context)}
+            ],
             stream=self.verbose,
         )
 
         # Conservative debater
         if self.verbose:
-            console.print("\n[bold blue]Conservative[/bold blue] debater — capital preservation first...")
+            console.print(
+                "\n[bold blue]Conservative[/bold blue] debater — capital preservation first..."
+            )
         conservative_view = self.llm.chat(
-            messages=[{"role": "user", "content": CONSERVATIVE_DEBATER_PROMPT.format(**shared_context)}],
+            messages=[
+                {"role": "user", "content": CONSERVATIVE_DEBATER_PROMPT.format(**shared_context)}
+            ],
             stream=self.verbose,
         )
 
@@ -1566,11 +1571,16 @@ class MultiAgentAnalyzer:
         if self.verbose:
             console.print("\n[bold cyan]Neutral[/bold cyan] debater — calibrated middle path...")
         neutral_view = self.llm.chat(
-            messages=[{"role": "user", "content": NEUTRAL_DEBATER_PROMPT.format(
-                **shared_context,
-                aggressive_view=aggressive_view,
-                conservative_view=conservative_view,
-            )}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": NEUTRAL_DEBATER_PROMPT.format(
+                        **shared_context,
+                        aggressive_view=aggressive_view,
+                        conservative_view=conservative_view,
+                    ),
+                }
+            ],
             stream=self.verbose,
         )
 

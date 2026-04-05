@@ -236,6 +236,7 @@ class TestOllamaProvider:
         mock_sdk = self._mock_sdk()
         with patch.dict("sys.modules", {"openai": mock_sdk}):
             from agent.tools import build_registry
+
             p = get_provider(provider="ollama", registry=build_registry())
         assert isinstance(p, OpenAIProvider)
 
@@ -251,6 +252,7 @@ class TestOllamaProvider:
         mock_sdk = self._mock_sdk()
         with patch.dict("sys.modules", {"openai": mock_sdk}):
             from agent.tools import build_registry
+
             p = get_provider(provider="ollama", registry=build_registry())
         assert "localhost" in p.provider_name
         assert "11434" in p.provider_name
@@ -262,6 +264,7 @@ class TestOllamaProvider:
         mock_sdk = self._mock_sdk()
         with patch.dict("sys.modules", {"openai": mock_sdk}):
             from agent.tools import build_registry
+
             p = get_provider(provider="ollama", registry=build_registry())
         assert "192.168.1.10" in p.provider_name
 
@@ -272,6 +275,7 @@ class TestOllamaProvider:
         mock_sdk = self._mock_sdk()
         with patch.dict("sys.modules", {"openai": mock_sdk}):
             from agent.tools import build_registry
+
             p = get_provider(provider="ollama", registry=build_registry())
         assert p.model == "mistral-nemo"
 
@@ -298,6 +302,7 @@ class TestOllamaProvider:
         mock_sdk = self._mock_sdk()
         with patch.dict("sys.modules", {"openai": mock_sdk}):
             from agent.tools import build_registry
+
             p = get_provider(provider="ollama", registry=build_registry())
         # Should look like "localhost:11434 / llama3.1"
         assert OLLAMA_DEFAULT_MODEL in p.provider_name
@@ -311,5 +316,6 @@ class TestOllamaProvider:
         # Should not raise even with no keys set
         with patch.dict("sys.modules", {"openai": mock_sdk}):
             from agent.tools import build_registry
+
             p = get_provider(provider="ollama", registry=build_registry())
         assert p is not None

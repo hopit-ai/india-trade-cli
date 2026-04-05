@@ -279,7 +279,9 @@ class DeepAnalyzer:
                     style="magenta",
                 )
             t_risk = time.time()
-            risk_debate_result = multi._run_risk_debate(symbol, exchange, scorecard, debate, reports)
+            risk_debate_result = multi._run_risk_debate(
+                symbol, exchange, scorecard, debate, reports
+            )
             risk_debate_time = time.time() - t_risk
             if self.verbose:
                 console.print(f"[dim]Risk debate completed in {risk_debate_time:.1f}s[/dim]")
