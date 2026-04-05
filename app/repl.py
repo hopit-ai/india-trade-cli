@@ -1395,9 +1395,13 @@ def run_repl(broker: BrokerAPI) -> None:
                 from engine.output import parse_output_flags, handle_output_flags
 
                 clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
+                wants_risk_debate = "--risk-debate" in clean_args
+                clean_args = [a for a in clean_args if a != "--risk-debate"]
                 symbol = clean_args[0].upper() if clean_args else ""
                 if not symbol:
-                    console.print("[red]Usage: deep-analyze <SYMBOL> [--pdf] [--explain][/red]")
+                    console.print(
+                        "[red]Usage: deep-analyze <SYMBOL> [--risk-debate] [--pdf] [--explain][/red]"
+                    )
                 else:
                     agent = get_agent()
                     try:
@@ -1406,6 +1410,7 @@ def run_repl(broker: BrokerAPI) -> None:
                         deep = DeepAnalyzer(
                             registry=agent._registry,
                             llm_provider=agent._provider,
+                            risk_debate=wants_risk_debate,
                         )
                         output = deep.analyze(symbol)
                         _last_output = output or ""
