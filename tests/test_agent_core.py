@@ -8,6 +8,7 @@ from agent.core import (
     _user_msg,
     _assistant_msg,
     _auto_detect_provider,
+    get_provider,
     PROVIDER_OPENAI,
     PROVIDER_GEMINI,
     PROVIDER_ANTHROPIC,
@@ -19,6 +20,7 @@ from agent.core import (
     ANTHROPIC_DEFAULT_MODEL,
     OLLAMA_DEFAULT_MODEL,
     ClaudeCLIProvider,
+    OpenAIProvider,
     MAX_TOOL_ROUNDS,
     ALL_PROVIDERS,
     _print_tool_call,
@@ -217,3 +219,103 @@ class TestPrintToolCall:
         _print_tool_call("get_quote", {"symbol": "RELIANCE"})
         _print_tool_call("unknown_tool", {})
         _print_tool_call("tool", {"a": 1, "b": [1, 2, 3]})
+
+
+# ── Ollama provider ──────────────────────────────────────────
+
+
+class TestOllamaProvider:
+    """Ollama routes through OpenAIProvider with a local base_url. No API key needed."""
+
+    def _mock_sdk(self):
+        return MagicMock()
+
+    def test_get_provider_ollama_returns_openai_provider(self, monkeypatch):
+        """get_provider('ollama') should return an OpenAIProvider instance."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        mock_sdk = self._mock_sdk()
+        with patch.dict("sys.modules", {"openai": mock_sdk}):
+            from agent.tools import build_registry
+
+            p = get_provider(provider="ollama", registry=build_registry())
+        assert isinstance(p, OpenAIProvider)
+
+    def test_default_model_is_llama31(self):
+        """Default Ollama model should be llama3.1."""
+        assert _default_model(PROVIDER_OLLAMA) == OLLAMA_DEFAULT_MODEL
+        assert OLLAMA_DEFAULT_MODEL == "llama3.1"
+
+    def test_default_base_url_is_localhost(self, monkeypatch):
+        """Without OLLAMA_BASE_URL set, should use localhost:11434."""
+        monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        mock_sdk = self._mock_sdk()
+        with patch.dict("sys.modules", {"openai": mock_sdk}):
+            from agent.tools import build_registry
+
+            p = get_provider(provider="ollama", registry=build_registry())
+        assert "localhost" in p.provider_name
+        assert "11434" in p.provider_name
+
+    def test_custom_base_url_via_env(self, monkeypatch):
+        """OLLAMA_BASE_URL env var should override the default endpoint."""
+        monkeypatch.setenv("OLLAMA_BASE_URL", "http://192.168.1.10:11434/v1")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        mock_sdk = self._mock_sdk()
+        with patch.dict("sys.modules", {"openai": mock_sdk}):
+            from agent.tools import build_registry
+
+            p = get_provider(provider="ollama", registry=build_registry())
+        assert "192.168.1.10" in p.provider_name
+
+    def test_custom_model_via_env(self, monkeypatch):
+        """OLLAMA_MODEL env var should override the default model."""
+        monkeypatch.setenv("OLLAMA_MODEL", "mistral-nemo")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        mock_sdk = self._mock_sdk()
+        with patch.dict("sys.modules", {"openai": mock_sdk}):
+            from agent.tools import build_registry
+
+            p = get_provider(provider="ollama", registry=build_registry())
+        assert p.model == "mistral-nemo"
+
+    def test_auto_detect_from_ollama_base_url(self, monkeypatch):
+        """Setting OLLAMA_BASE_URL should auto-detect Ollama as the provider."""
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        assert _auto_detect_provider() == PROVIDER_OLLAMA
+
+    def test_auto_detect_from_ollama_model_env(self, monkeypatch):
+        """Setting OLLAMA_MODEL should auto-detect Ollama as the provider."""
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.setenv("OLLAMA_MODEL", "qwen2.5-coder")
+        assert _auto_detect_provider() == PROVIDER_OLLAMA
+
+    def test_provider_name_includes_model(self, monkeypatch):
+        """provider_name should show host and model for Ollama."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+        mock_sdk = self._mock_sdk()
+        with patch.dict("sys.modules", {"openai": mock_sdk}):
+            from agent.tools import build_registry
+
+            p = get_provider(provider="ollama", registry=build_registry())
+        # Should look like "localhost:11434 / llama3.1"
+        assert OLLAMA_DEFAULT_MODEL in p.provider_name
+
+    def test_no_api_key_required(self, monkeypatch):
+        """Ollama should construct without any API key in the environment."""
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+        mock_sdk = self._mock_sdk()
+        # Should not raise even with no keys set
+        with patch.dict("sys.modules", {"openai": mock_sdk}):
+            from agent.tools import build_registry
+
+            p = get_provider(provider="ollama", registry=build_registry())
+        assert p is not None

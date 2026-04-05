@@ -1,7 +1,7 @@
 """
 agent/deep_agent.py
 ───────────────────
-Full LLM multi-agent mode ("--deep") — inspired by TradingAgents paper.
+Full LLM multi-agent mode ("--deep") — every agent is LLM-powered.
 
 Every agent is LLM-powered (vs default mode where analysts are pure Python).
 11+ LLM calls per analysis — expensive but much deeper reasoning.
@@ -218,10 +218,12 @@ class DeepAnalyzer:
         registry: ToolRegistry,
         llm_provider: Any,
         verbose: bool = True,
+        risk_debate: bool = False,
     ) -> None:
         self.registry = registry
         self.llm = llm_provider
         self.verbose = verbose
+        self.risk_debate = risk_debate
 
     def analyze(self, symbol: str, exchange: str = "NSE") -> str:
         """Run full LLM deep analysis."""
@@ -260,9 +262,29 @@ class DeepAnalyzer:
 
         t1 = time.time()
         # Create a temporary MultiAgentAnalyzer just for debate + synthesis
-        multi = MultiAgentAnalyzer(self.registry, self.llm, verbose=self.verbose)
+        multi = MultiAgentAnalyzer(
+            self.registry, self.llm, verbose=self.verbose, risk_debate=self.risk_debate
+        )
         debate = multi._run_debate(symbol, exchange, reports)
         debate_time = time.time() - t1
+
+        # ── Phase 2.5: Risk Debate ───────────────────────────
+        risk_debate_result = None
+        risk_debate_time = 0.0
+        if self.risk_debate and scorecard.verdict != "HOLD":
+            if self.verbose:
+                console.print()
+                console.rule(
+                    "[bold magenta]Risk Team — Aggressive / Conservative / Neutral[/bold magenta]",
+                    style="magenta",
+                )
+            t_risk = time.time()
+            risk_debate_result = multi._run_risk_debate(
+                symbol, exchange, scorecard, debate, reports
+            )
+            risk_debate_time = time.time() - t_risk
+            if self.verbose:
+                console.print(f"[dim]Risk debate completed in {risk_debate_time:.1f}s[/dim]")
 
         # ── Phase 3: Synthesis ───────────────────────────────
         if self.verbose:
@@ -270,7 +292,7 @@ class DeepAnalyzer:
             console.rule("[bold green]Deep Synthesis[/bold green]", style="green")
 
         t2 = time.time()
-        synthesis = multi._run_synthesis(symbol, exchange, reports, debate)
+        synthesis = multi._run_synthesis(symbol, exchange, reports, debate, risk_debate_result)
         synthesis_time = time.time() - t2
 
         # ── Trade plans ──────────────────────────────────────
@@ -305,12 +327,14 @@ class DeepAnalyzer:
         except Exception:
             pass
 
-        total = analyst_time + debate_time + synthesis_time
+        total = analyst_time + debate_time + risk_debate_time + synthesis_time
+        llm_calls = 11 + (3 if risk_debate_time > 0 else 0)
+        risk_str = f", risk: {risk_debate_time:.1f}s" if risk_debate_time > 0 else ""
         console.print(
             f"\n[dim]Deep analysis complete in {total:.1f}s "
-            f"(analysts: {analyst_time:.1f}s, debate: {debate_time:.1f}s, "
-            f"synthesis: {synthesis_time:.1f}s) — "
-            f"11 LLM calls[/dim]"
+            f"(analysts: {analyst_time:.1f}s, debate: {debate_time:.1f}s"
+            f"{risk_str}, synthesis: {synthesis_time:.1f}s) — "
+            f"{llm_calls} LLM calls[/dim]"
         )
         console.rule(style="magenta")
 

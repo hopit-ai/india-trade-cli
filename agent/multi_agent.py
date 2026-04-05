@@ -1,8 +1,7 @@
 """
 agent/multi_agent.py
 ────────────────────
-Multi-agent stock analysis system inspired by the TradingAgents framework
-(Xiao et al., 2025 — https://arxiv.org/abs/2412.20138).
+Multi-agent stock analysis system for Indian markets.
 
 Architecture:
   ┌─────────────────────────────────────────────────────────────────┐
@@ -46,7 +45,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -195,6 +194,16 @@ class DebateResult:
 
 
 @dataclass
+class RiskDebateResult:
+    """Output from the three-way risk debate (aggressive / conservative / neutral)."""
+
+    aggressive_view: str  # argues for larger size, tighter stop, no hedge
+    conservative_view: str  # argues for smaller size, wider stop, protective hedge
+    neutral_view: str  # synthesises a calibrated middle path
+    consensus: str = ""  # brief consensus on sizing from the three views
+
+
+@dataclass
 class TradeRecommendation:
     """Final output from the multi-agent pipeline."""
 
@@ -211,7 +220,8 @@ class TradeRecommendation:
     risks: list[str]
     analyst_reports: list[AnalystReport]
     debate: DebateResult
-    raw_synthesis: str  # full LLM output
+    risk_debate: Optional[RiskDebateResult] = None  # None when verdict is HOLD
+    raw_synthesis: str = ""  # full LLM output
 
 
 # ── Analyst Agents (pure Python, no LLM) ─────────────────────
@@ -1012,11 +1022,13 @@ class MultiAgentAnalyzer:
     Orchestrates the full multi-agent analysis pipeline.
 
     Pipeline:
-      1. Run 5 analyst agents (parallel or sequential, 1 uses LLM for sentiment)
-      2. Feed analyst reports into bull/bear debate (2 LLM calls)
+      1. Run analyst agents (parallel or sequential)
+      2. Feed analyst reports into bull/bear debate (5 LLM calls)
+      2.5. Three-way risk debate: aggressive / conservative / neutral (3 LLM calls)
+           Skipped when scorecard verdict is HOLD — no point sizing a no-trade.
       3. Synthesize final verdict + trade recommendation (1 LLM call)
 
-    Total: 4 LLM calls per analysis.
+    Total: ~9 LLM calls per analysis (6 for debate stages, 1 synthesis, 1 news, 1 sentiment).
 
     Usage:
         from agent.multi_agent import MultiAgentAnalyzer
@@ -1033,11 +1045,13 @@ class MultiAgentAnalyzer:
         llm_provider: Any,
         parallel: bool = True,
         verbose: bool = True,
+        risk_debate: bool = False,
     ) -> None:
         self.registry = registry
         self.llm = llm_provider
         self.parallel = parallel
         self.verbose = verbose
+        self.risk_debate = risk_debate  # enable 3-way risk debate (aggressive/conservative/neutral)
 
         news_analyst = NewsMacroAnalyst(registry)
         news_analyst.set_llm(llm_provider)
@@ -1100,13 +1114,29 @@ class MultiAgentAnalyzer:
         if self.verbose:
             self._print_debate(debate, debate_time)
 
+        # ── Phase 2.5: Risk Debate ───────────────────────────
+        risk_debate: Optional[RiskDebateResult] = None
+        risk_debate_time = 0.0
+        if self.risk_debate and scorecard.verdict != "HOLD":
+            if self.verbose:
+                console.print()
+                console.rule(
+                    "[bold magenta]Risk Team — Aggressive / Conservative / Neutral[/bold magenta]",
+                    style="magenta",
+                )
+            t_risk = time.time()
+            risk_debate = self._run_risk_debate(symbol, exchange, scorecard, debate, reports)
+            risk_debate_time = time.time() - t_risk
+            if self.verbose:
+                console.print(f"[dim]Risk debate completed in {risk_debate_time:.1f}s[/dim]")
+
         # ── Phase 3: Synthesis ───────────────────────────────
         if self.verbose:
             console.print()
             console.rule("[bold green]Fund Manager — Final Synthesis[/bold green]", style="green")
 
         t2 = time.time()
-        synthesis = self._run_synthesis(symbol, exchange, reports, debate)
+        synthesis = self._run_synthesis(symbol, exchange, reports, debate, risk_debate)
         synthesis_time = time.time() - t2
 
         # ── Phase 4: Store to Memory ─────────────────────────
@@ -1144,12 +1174,13 @@ class MultiAgentAnalyzer:
             pass  # trade plan generation is non-critical
 
         # Print timing summary
-        total = analyst_time + debate_time + synthesis_time
+        total = analyst_time + debate_time + risk_debate_time + synthesis_time
+        risk_str = f", risk: {risk_debate_time:.1f}s" if risk_debate_time > 0 else ""
         console.print()
         console.print(
             f"[dim]Analysis complete in {total:.1f}s "
-            f"(analysts: {analyst_time:.1f}s, debate: {debate_time:.1f}s, "
-            f"synthesis: {synthesis_time:.1f}s)[/dim]"
+            f"(analysts: {analyst_time:.1f}s, debate: {debate_time:.1f}s"
+            f"{risk_str}, synthesis: {synthesis_time:.1f}s)[/dim]"
         )
         console.rule(style="cyan")
         console.print()
@@ -1471,6 +1502,98 @@ class MultiAgentAnalyzer:
         """Display the bull/bear debate results."""
         console.print(f"\n[dim]Debate completed in {elapsed:.1f}s[/dim]")
 
+    # ── Phase 2.5: Risk Debate ───────────────────────────────
+
+    def _run_risk_debate(
+        self,
+        symbol: str,
+        exchange: str,
+        scorecard: AnalystScorecard,
+        debate: DebateResult,
+        reports: list[AnalystReport],
+    ) -> RiskDebateResult:
+        """
+        Three-way risk debate: Aggressive / Conservative / Neutral.
+
+        Each debater receives the scorecard + investment debate and argues
+        for a different position-sizing and risk-management approach.
+        A consensus note is derived from all three views.
+
+        Total: 3 LLM calls (one per debater).
+        Only called when scorecard.verdict != HOLD.
+        """
+        # Build shared context for all three debaters
+        risk_report = next((r for r in reports if r.analyst == "Risk Manager"), None)
+        risk_params = ""
+        if risk_report and not risk_report.error:
+            risk_params = (
+                f"Capital: {risk_report.data.get('capital', 'N/A')} | "
+                f"Max risk/trade: {risk_report.data.get('max_risk_per_trade', 'N/A')} | "
+                f"VIX: {risk_report.data.get('vix', 'N/A')}"
+            )
+
+        debate_summary = (
+            f"Investment debate winner: {debate.winner}\nFacilitator summary: {debate.facilitator}"
+        )
+        scorecard_summary = scorecard.summary()
+
+        shared_context = dict(
+            symbol=symbol,
+            exchange=exchange,
+            scorecard=scorecard_summary,
+            debate_summary=debate_summary,
+            risk_params=risk_params,
+        )
+
+        # Aggressive debater
+        if self.verbose:
+            console.print("[bold red]Aggressive[/bold red] debater — maximum upside, tight risk...")
+        aggressive_view = self.llm.chat(
+            messages=[
+                {"role": "user", "content": AGGRESSIVE_DEBATER_PROMPT.format(**shared_context)}
+            ],
+            stream=self.verbose,
+        )
+
+        # Conservative debater
+        if self.verbose:
+            console.print(
+                "\n[bold blue]Conservative[/bold blue] debater — capital preservation first..."
+            )
+        conservative_view = self.llm.chat(
+            messages=[
+                {"role": "user", "content": CONSERVATIVE_DEBATER_PROMPT.format(**shared_context)}
+            ],
+            stream=self.verbose,
+        )
+
+        # Neutral debater
+        if self.verbose:
+            console.print("\n[bold cyan]Neutral[/bold cyan] debater — calibrated middle path...")
+        neutral_view = self.llm.chat(
+            messages=[
+                {
+                    "role": "user",
+                    "content": NEUTRAL_DEBATER_PROMPT.format(
+                        **shared_context,
+                        aggressive_view=aggressive_view,
+                        conservative_view=conservative_view,
+                    ),
+                }
+            ],
+            stream=self.verbose,
+        )
+
+        # Extract consensus sizing from neutral view (first line with % or ₹)
+        consensus = neutral_view.splitlines()[0] if neutral_view else ""
+
+        return RiskDebateResult(
+            aggressive_view=aggressive_view,
+            conservative_view=conservative_view,
+            neutral_view=neutral_view,
+            consensus=consensus,
+        )
+
     # ── Phase 3: Synthesis ───────────────────────────────────
 
     def _run_synthesis(
@@ -1479,6 +1602,7 @@ class MultiAgentAnalyzer:
         exchange: str,
         reports: list[AnalystReport],
         debate: DebateResult,
+        risk_debate: Optional[RiskDebateResult] = None,
     ) -> str:
         """
         Final synthesis: weigh all analyst reports + debate arguments,
@@ -1528,11 +1652,21 @@ class MultiAgentAnalyzer:
             debate_text += f"## Facilitator Summary\n{debate.facilitator}\n\n"
             debate_text += f"Debate Winner: {debate.winner}\n"
 
+        # Build risk debate section
+        risk_debate_text = ""
+        if risk_debate:
+            risk_debate_text = (
+                f"## Aggressive View\n{risk_debate.aggressive_view}\n\n"
+                f"## Conservative View\n{risk_debate.conservative_view}\n\n"
+                f"## Neutral Synthesis\n{risk_debate.neutral_view}"
+            )
+
         synthesis_prompt = SYNTHESIS_PROMPT.format(
             symbol=symbol,
             exchange=exchange,
             analyst_data=analyst_context,
             debate_text=debate_text,
+            risk_debate_text=risk_debate_text,
             risk_context=risk_context,
             memory_context=memory_context,
             pattern_context=pattern_context,
@@ -1669,6 +1803,9 @@ You must make the final call on {symbol} ({exchange}) after reviewing all eviden
 ## Research Debate (2 Rounds)
 {debate_text}
 
+## Risk Team Debate (Aggressive / Conservative / Neutral)
+{risk_debate_text}
+
 ## Risk Parameters
 {risk_context}
 
@@ -1683,6 +1820,11 @@ Weigh the bull and bear arguments against the analyst data. Consider:
 - Which side has stronger evidence?
 - What does the risk profile suggest?
 - Is the timing right (technicals, events, VIX)?
+- Where do the three risk views (aggressive/conservative/neutral) converge on sizing?
+
+**Decisiveness rule**: Do NOT default to HOLD simply because both sides raised valid points.
+Every debate has a stronger side — identify it and commit to that stance.
+HOLD is only correct when the evidence is genuinely split AND the risk/reward is unfavourable.
 
 Provide your FINAL VERDICT in this exact format:
 
@@ -1708,6 +1850,85 @@ RISKS (2-3 bullets):
 - [secondary risk]
 
 Keep the output concise and terminal-friendly. Use bullets. All prices in INR."""
+
+AGGRESSIVE_DEBATER_PROMPT = """You are the AGGRESSIVE RISK MANAGER at an Indian trading firm.
+The investment team has decided to trade {symbol} ({exchange}).
+
+## Scorecard
+{scorecard}
+
+## Investment Debate Outcome
+{debate_summary}
+
+## Risk Parameters
+{risk_params}
+
+Your role: argue for the most aggressive but still rational position sizing.
+
+Make the case for:
+1. **Position size**: Why should we deploy maximum permitted capital (up to 20% of portfolio)?
+2. **Stop-loss**: Argue for a tighter stop — we have conviction, don't give back too much if wrong
+3. **Strategy**: Prefer higher-leverage instruments (options, futures) over delivery if the setup warrants it
+4. **Hedging**: Minimal or no hedge — hedges cost premium and dilute returns when we're right
+
+Be specific: suggest a concrete position size (% of capital or lot count), stop level, and strategy.
+Cite the strongest signals from the scorecard and debate to justify maximum aggression.
+Keep it to 150-200 words. All prices in INR."""
+
+CONSERVATIVE_DEBATER_PROMPT = """You are the CONSERVATIVE RISK MANAGER at an Indian trading firm.
+The investment team has decided to trade {symbol} ({exchange}).
+
+## Scorecard
+{scorecard}
+
+## Investment Debate Outcome
+{debate_summary}
+
+## Risk Parameters
+{risk_params}
+
+Your role: argue for a cautious, capital-preserving approach to this trade.
+
+Make the case for:
+1. **Position size**: Why should we start small (3-5% of capital) and add only on confirmation?
+2. **Stop-loss**: Argue for a wider stop — avoid being shaken out by normal volatility
+3. **Strategy**: Prefer defined-risk structures (spreads, delivery) over naked options or futures
+4. **Hedging**: Recommend a protective hedge — the cost is worth the downside protection given market conditions
+
+Be specific: suggest a concrete position size, stop level, hedge instrument, and entry approach (phased or single).
+Cite the weakest signals or biggest risks from the scorecard and debate to justify caution.
+Keep it to 150-200 words. All prices in INR."""
+
+NEUTRAL_DEBATER_PROMPT = """You are the NEUTRAL RISK ARBITRATOR at an Indian trading firm.
+You have heard two positions on how to size the {symbol} ({exchange}) trade.
+
+## Scorecard
+{scorecard}
+
+## Investment Debate Outcome
+{debate_summary}
+
+## Risk Parameters
+{risk_params}
+
+## Aggressive View
+{aggressive_view}
+
+## Conservative View
+{conservative_view}
+
+Your role: synthesise a calibrated, evidence-based position between the two extremes.
+
+Provide:
+1. **Recommended position size**: A specific % of capital or lot count — not a range, a number
+2. **Stop-loss level**: One specific price or % from entry
+3. **Strategy**: The single best instrument/structure for this setup
+4. **Hedge (if any)**: Only if VIX is elevated or conviction is below 65%
+5. **Entry approach**: All-in at market, or phased entry with levels
+
+Acknowledge the strongest point from each side, then commit to one calibrated recommendation.
+Keep it to 150-200 words. All prices in INR."""
+
 
 NEWS_SENTIMENT_PROMPT = """You are a NEWS & SENTIMENT ANALYST at an Indian trading firm.
 Analyze the following news headlines and macro data for {symbol} ({exchange}).
