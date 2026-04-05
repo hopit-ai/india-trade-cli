@@ -935,11 +935,41 @@ def _learn_technical(t) -> None:
         )
     params_str = "\n".join(param_lines) if param_lines else "  [dim]None[/dim]"
 
-    backtest_str = (
-        f"[green]✓ Run via:[/green] [bold]strategy use {t.id} SYMBOL[/bold]"
-        if t.backtest_key
-        else "[dim]Not yet available (requires intraday/multi-asset data)[/dim]"
-    )
+    # Load cached backtest result if available
+    cached: dict | None = None
+    if t.backtest_key:
+        try:
+            from engine.backtest_cache import load_result as _cache_load
+
+            cached = _cache_load(t.backtest_key)
+        except Exception:
+            pass
+
+    if t.backtest_key:
+        if cached:
+            ret = cached["total_return"]
+            ret_color = "green" if ret >= 0 else "red"
+            sharpe = cached["sharpe"]
+            sharpe_color = "green" if sharpe >= 1 else "yellow" if sharpe >= 0 else "red"
+            dd = abs(cached["max_drawdown"])
+            backtest_str = (
+                f"[dim]Last run: {cached['symbol']} · {cached['period']} "
+                f"· {cached['run_date']}[/dim]\n"
+                f"  Return      [{ret_color}]{ret:+.1f}%[/{ret_color}]   "
+                f"Sharpe [{sharpe_color}]{sharpe:.2f}[/{sharpe_color}]   "
+                f"Max DD [red]-{dd:.1f}%[/red]\n"
+                f"  Win Rate    {cached['win_rate']:.0f}%   "
+                f"Trades {cached['total_trades']}   "
+                f"Avg Hold {cached['avg_hold']:.0f}d\n"
+                f"  [dim]Re-run: [bold]strategy use {t.id} SYMBOL[/bold][/dim]"
+            )
+        else:
+            backtest_str = (
+                f"[green]✓ Supported.[/green]  "
+                f"[dim]Run [bold]strategy use {t.id} SYMBOL[/bold] to see results.[/dim]"
+            )
+    else:
+        backtest_str = "[dim]Not yet available (requires intraday/multi-asset data)[/dim]"
 
     tf_str = ", ".join(t.timeframes)
     inst_str = ", ".join(t.instruments)
@@ -956,7 +986,7 @@ def _learn_technical(t) -> None:
         f"[bold]PARAMETERS[/bold]\n{params_str}\n\n"
         f"[bold]RISKS[/bold]\n"
         + "\n".join(f"  • {r}" for r in t.risks)
-        + f"\n\n[bold]BACKTEST[/bold]  {backtest_str}"
+        + f"\n\n[bold]BACKTEST[/bold]\n  {backtest_str}"
         + f"\n\n[dim]Tags: {' '.join(t.tags)}[/dim]"
     )
 
@@ -1155,11 +1185,19 @@ def _use_technical(template, symbol: str, raw_args: list[str]) -> None:
     try:
         from engine.backtest import Backtester, STRATEGIES
 
+        from engine.backtest_cache import save_result as _cache_save
+
         strategy_cls = STRATEGIES[template.backtest_key]
         strategy = strategy_cls([])
         bt = Backtester(symbol=symbol, period=period)
         result = bt.run(strategy)
         result.print_summary()
+
+        # Persist so 'strategy learn' can show it without re-running
+        try:
+            _cache_save(template.backtest_key, result, symbol, period)
+        except Exception:
+            pass
 
         # Show last 10 signals in a mini timeline
         try:
