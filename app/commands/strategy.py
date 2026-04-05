@@ -574,6 +574,87 @@ def _print_library_table(templates) -> None:
     console.print(table)
 
 
+# ── Leg formatter helpers ─────────────────────────────────────
+
+
+def _leg_strike_plain(leg) -> str:
+    """Human-readable strike location: 'at current price', '3% above current price', etc."""
+    pct = leg.strike_offset_pct
+    if leg.option_type == "STOCK":
+        return "at current market price"
+    if pct == 0.0:
+        return "at current price (ATM — at-the-money)"
+    if pct > 0:
+        return f"{pct * 100:.0f}% above current price (OTM — out-of-the-money)"
+    return f"{abs(pct) * 100:.0f}% below current price (OTM — out-of-the-money)"
+
+
+def _leg_plain_description(leg) -> str:
+    """One sentence explaining what each leg means for the trader."""
+    action = leg.action
+    otype = leg.option_type
+    multi = leg.lots_multiplier
+
+    multi_note = f" (×{multi} contracts)" if multi > 1 else ""
+
+    if otype == "STOCK":
+        if action == "BUY":
+            return "Own the actual shares — full upside, but also full downside if the stock falls."
+        return "Short-sell the shares — profit if price falls, unlimited loss if it rises."
+
+    if otype == "CE":  # Call option
+        if action == "BUY":
+            return (
+                f"Pay a premium{multi_note} for the right to profit if the stock rises above this level. "
+                f"Loss is limited to the premium paid."
+            )
+        else:
+            return (
+                f"Collect premium{multi_note} now; in return you're obligated to sell shares if the "
+                f"stock rises past this level. Acts as a profit ceiling or a hedge."
+            )
+
+    # PE — Put option
+    if action == "BUY":
+        return (
+            f"Pay a premium{multi_note} for the right to profit if the stock falls below this level. "
+            f"Loss is limited to the premium paid."
+        )
+    return (
+        f"Collect premium{multi_note} now; in return you're obligated to buy shares if the "
+        f"stock falls past this level. Acts as a floor or a hedge."
+    )
+
+
+def _format_legs(legs) -> str:
+    """
+    Format strategy legs with strike location + plain-English role explanation.
+
+    Example output (Iron Condor):
+      SELL  CE  3% above current price (OTM)
+              → Collect premium; obligated to sell if stock rises past this. Acts as a ceiling.
+
+      BUY   CE  6% above current price (OTM)
+              → Pay premium; protects you if stock blows past the short call above.
+      ...
+    """
+    lines = []
+    for leg in legs:
+        otype = leg.option_type
+        action = leg.action
+        strike_loc = _leg_strike_plain(leg)
+        description = _leg_plain_description(leg)
+        multi = f" ×{leg.lots_multiplier}" if leg.lots_multiplier > 1 else ""
+
+        action_color = "green" if action == "BUY" else "red"
+        lines.append(
+            f"  [{action_color}]{action:<5}[/{action_color}] {otype}{multi}  "
+            f"[dim]{strike_loc}[/dim]\n"
+            f"         [dim]→ {description}[/dim]"
+        )
+    return "\n\n".join(lines)
+
+
 # ── strategy learn ────────────────────────────────────────────
 
 
@@ -603,19 +684,6 @@ def _cmd_learn(args: list[str]) -> None:
             )
         return
 
-    # Build legs description
-    leg_lines = []
-    for leg in t.legs:
-        offset_desc = ""
-        if leg.strike_offset_pct == 0.0:
-            offset_desc = "ATM"
-        elif leg.strike_offset_pct > 0:
-            offset_desc = f"+{leg.strike_offset_pct * 100:.0f}% OTM"
-        else:
-            offset_desc = f"{leg.strike_offset_pct * 100:.0f}% OTM"
-        multi = f" ×{leg.lots_multiplier}" if leg.lots_multiplier > 1 else ""
-        leg_lines.append(f"  {leg.action:<5} {leg.option_type} ({offset_desc}){multi}")
-
     complexity_colors = {"beginner": "green", "intermediate": "yellow", "advanced": "red"}
     comp_color = complexity_colors.get(t.complexity, "white")
 
@@ -624,8 +692,8 @@ def _cmd_learn(args: list[str]) -> None:
         f"Ideal IV: {t.ideal_iv} · DTE: {t.ideal_dte[0]}–{t.ideal_dte[1]} days · "
         f"Capital: {t.capital_type}[/dim]\n\n"
         f"[bold yellow]IN PLAIN ENGLISH[/bold yellow]\n{t.layman_explanation}\n\n"
-        f"[bold]LEGS[/bold]\n"
-        + "\n".join(leg_lines)
+        f"[bold]LEGS[/bold]  [dim](what you actually trade)[/dim]\n"
+        + _format_legs(t.legs)
         + f"\n\n[bold]HOW IT WORKS[/bold]\n{t.explanation}\n\n"
         f"[bold]WHEN TO USE[/bold]\n{t.when_to_use}\n\n"
         f"[bold]WHEN NOT TO USE[/bold]\n{t.when_not_to_use}\n\n"
