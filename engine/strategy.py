@@ -97,7 +97,7 @@ def recommend(
     view_up = view.upper()
 
     # Get ATM options data for the symbol
-    atm_ce_premium, atm_pe_premium, atm_strike, lot_size = _get_atm_data(symbol, spot)
+    atm_ce_premium, atm_pe_premium, atm_strike, lot_size = get_atm_data(symbol, spot)
 
     results: list[StrategyResult] = []
 
@@ -361,7 +361,7 @@ def recommend(
 # ── Market data helpers ───────────────────────────────────────
 
 
-def _get_atm_data(symbol: str, spot: float) -> tuple[float, float, float, int]:
+def get_atm_data(symbol: str, spot: float) -> tuple[float, float, float, int]:
     """
     Fetch ATM CE/PE premiums and lot size from the options chain.
     Returns (ce_premium, pe_premium, atm_strike, lot_size).
@@ -395,6 +395,7 @@ def _get_atm_data(symbol: str, spot: float) -> tuple[float, float, float, int]:
     atm = round(spot, -2)
     approx = spot * iv * math.sqrt(t) * 0.4  # rough ATM premium estimate
     lot = _default_lot(symbol)
+
     return round(approx, 2), round(approx, 2), atm, lot
 
 
