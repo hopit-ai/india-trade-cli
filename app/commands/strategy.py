@@ -4,12 +4,15 @@ app/commands/strategy.py
 Interactive strategy builder command.
 
 Subcommands:
-  strategy new [description] [--simple]   — AI-guided strategy creation
-  strategy list                           — show saved strategies
-  strategy backtest <name> [--period 2y]  — re-backtest a saved strategy
-  strategy run <name> [symbol] [--paper]  — generate signal + paper trade
-  strategy show <name>                    — view code + metadata
-  strategy delete <name>                  — remove a saved strategy
+  strategy new [description] [--simple]             — AI-guided strategy creation
+  strategy list                                     — show saved strategies
+  strategy backtest <name> [--period 2y]            — re-backtest a saved strategy
+  strategy run <name> [symbol] [--paper]            — generate signal + paper trade
+  strategy show <name>                              — view code + metadata
+  strategy delete <name>                            — remove a saved strategy
+  strategy library [category]                       — browse the strategy template library
+  strategy learn <name>                             — detailed explanation of a template
+  strategy use <name> SYMBOL [--lots N] [--dte N]  — apply a template with live market data
 """
 
 from __future__ import annotations
@@ -38,15 +41,24 @@ def run(args: list[str]) -> None:
         _cmd_show(args[1:])
     elif sub == "delete":
         _cmd_delete(args[1:])
+    elif sub == "library":
+        _cmd_library(args[1:])
+    elif sub == "learn":
+        _cmd_learn(args[1:])
+    elif sub == "use":
+        _cmd_use(args[1:])
     else:
         console.print(
             "[dim]Usage:\n"
-            "  strategy new [description] [--simple]  Create a new strategy\n"
-            "  strategy list                          List saved strategies\n"
-            "  strategy backtest <name> [--period 2y] Re-backtest\n"
-            "  strategy run <name> [symbol] [--paper] Generate signal\n"
-            "  strategy show <name>                   View code\n"
-            "  strategy delete <name>                 Delete[/dim]"
+            "  strategy new [description] [--simple]             Create a new strategy\n"
+            "  strategy list                                     List saved strategies\n"
+            "  strategy backtest <name> [--period 2y]            Re-backtest\n"
+            "  strategy run <name> [symbol] [--paper]            Generate signal\n"
+            "  strategy show <name>                              View code\n"
+            "  strategy delete <name>                            Delete\n"
+            "  strategy library [category]                       Browse strategy templates\n"
+            "  strategy learn <name>                             Explain a template\n"
+            "  strategy use <name> SYMBOL [--lots N] [--dte N]  Apply template with live data[/dim]"
         )
 
 
@@ -482,3 +494,437 @@ def _cmd_delete(args: list[str]) -> None:
         console.print(f"[dim]Strategy '{name}' deleted.[/dim]")
     else:
         console.print("[dim]Cancelled.[/dim]")
+
+
+# ── strategy library ─────────────────────────────────────────
+
+
+def _cmd_library(args: list[str]) -> None:
+    """Browse the curated options strategy template library."""
+    from engine.strategy_library import strategy_library, CATEGORIES
+
+    category = args[0].lower() if args else ""
+
+    if category and category not in CATEGORIES:
+        # Try it as a search query
+        matches = strategy_library.search(category)
+        if matches:
+            console.print(
+                f"[yellow]Unknown category '{category}'. Showing search results instead:[/yellow]\n"
+            )
+            _print_library_table(matches)
+        else:
+            console.print(
+                f"[red]Unknown category '{category}'.[/red] Valid: {', '.join(CATEGORIES)}"
+            )
+        return
+
+    templates = (
+        strategy_library.list_by_category(category) if category else strategy_library.list_all()
+    )
+
+    title = f"Strategy Library — {category.title()}" if category else "Strategy Library"
+    console.print(f"\n[bold cyan]{title}[/bold cyan] [dim]({len(templates)} strategies)[/dim]\n")
+    _print_library_table(templates)
+    console.print("\n[dim]Run: [bold]strategy learn <id>[/bold]  to see full explanation[/dim]")
+    console.print(
+        "[dim]Run: [bold]strategy use <id> SYMBOL[/bold]  to apply with live data[/dim]\n"
+    )
+
+
+def _print_library_table(templates) -> None:
+    """Render a Rich table of strategy templates."""
+    from rich.table import Table
+
+    current_cat = None
+
+    table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
+    table.add_column("ID", style="cyan", width=28)
+    table.add_column("Name", width=24)
+    table.add_column("Category", width=12)
+    table.add_column("View", width=12)
+    table.add_column("IV", width=6)
+    table.add_column("DTE", width=10)
+    table.add_column("Complexity", width=14)
+
+    for t in templates:
+        if t.category != current_cat:
+            if current_cat is not None:
+                table.add_section()
+            current_cat = t.category
+
+        view_str = "/".join(v[:4] for v in t.views)
+        dte_str = f"{t.ideal_dte[0]}–{t.ideal_dte[1]}d"
+        complexity_color = {
+            "beginner": "green",
+            "intermediate": "yellow",
+            "advanced": "red",
+        }.get(t.complexity, "white")
+
+        table.add_row(
+            t.id,
+            t.name,
+            t.category,
+            view_str,
+            t.ideal_iv,
+            dte_str,
+            f"[{complexity_color}]{t.complexity}[/{complexity_color}]",
+        )
+
+    console.print(table)
+
+
+# ── Leg formatter helpers ─────────────────────────────────────
+
+# Hypothetical spot used for concrete examples throughout the learn panel.
+# ₹24,000 is close to NIFTY and a round number that's easy to reason about.
+_EXAMPLE_SPOT = 24_000
+
+
+def _example_strike(leg) -> int:
+    """Compute the example strike from _EXAMPLE_SPOT and the leg's offset."""
+    if leg.option_type == "STOCK":
+        return _EXAMPLE_SPOT
+    raw = _EXAMPLE_SPOT * (1 + leg.strike_offset_pct)
+    return int(round(raw / 100) * 100)  # round to nearest 100 (Indian index convention)
+
+
+def _leg_strike_plain(leg) -> str:
+    """Human-readable strike location: 'at current price', '3% above current price', etc."""
+    pct = leg.strike_offset_pct
+    if leg.option_type == "STOCK":
+        return "at current market price"
+    if pct == 0.0:
+        return "at current price (ATM — at-the-money)"
+    if pct > 0:
+        return f"{pct * 100:.0f}% above current price (OTM — out-of-the-money)"
+    return f"{abs(pct) * 100:.0f}% below current price (OTM — out-of-the-money)"
+
+
+def _leg_plain_description(leg) -> str:
+    """One sentence explaining what each leg means for the trader."""
+    action = leg.action
+    otype = leg.option_type
+    multi = leg.lots_multiplier
+    multi_note = f" (×{multi} contracts)" if multi > 1 else ""
+
+    if otype == "STOCK":
+        if action == "BUY":
+            return "Own the actual shares — full upside, but also full downside if the stock falls."
+        return "Short-sell the shares — profit if price falls, unlimited loss if it rises."
+
+    if otype == "CE":
+        if action == "BUY":
+            return (
+                f"Pay a premium{multi_note} for the right to profit if the stock rises above this level. "
+                "Loss is limited to the premium paid."
+            )
+        return (
+            f"Collect premium{multi_note} now; in return you're obligated to sell if the "
+            "stock rises past this level. Acts as a profit ceiling or a hedge."
+        )
+
+    # PE
+    if action == "BUY":
+        return (
+            f"Pay a premium{multi_note} for the right to profit if the stock falls below this level. "
+            "Loss is limited to the premium paid."
+        )
+    return (
+        f"Collect premium{multi_note} now; in return you're obligated to buy if the "
+        "stock falls past this level. Acts as a floor or a hedge."
+    )
+
+
+def _leg_scenarios(leg, strike: int) -> tuple[str, str]:
+    """
+    Return (good_scenario, bad_scenario) as plain-English strings for a leg.
+    Uses the concrete example strike so the user can picture real numbers.
+    """
+    action = leg.action
+    otype = leg.option_type
+    s = f"₹{strike:,}"
+
+    if otype == "STOCK":
+        if action == "BUY":
+            return (
+                f"Stock rises above {s} → you profit ₹1 for every ₹1 it goes up",
+                f"Stock falls below {s} → you lose ₹1 for every ₹1 it goes down",
+            )
+        return (
+            f"Stock falls below {s} → you profit as price drops",
+            f"Stock rises above {s} → unlimited loss",
+        )
+
+    if otype == "CE":
+        if action == "BUY":
+            return (
+                f"Stock closes above {s} at expiry → your call gains value, you profit",
+                f"Stock closes at or below {s} → call expires worthless, you lose only the premium paid",
+            )
+        return (
+            f"Stock stays below {s} at expiry → call expires worthless, you keep the full premium",
+            f"Stock rises above {s} → you're obligated to sell at {s}; loss grows the higher it goes",
+        )
+
+    # PE
+    if action == "BUY":
+        return (
+            f"Stock closes below {s} at expiry → your put gains value, you profit",
+            f"Stock closes at or above {s} → put expires worthless, you lose only the premium paid",
+        )
+    return (
+        f"Stock stays above {s} at expiry → put expires worthless, you keep the full premium",
+        f"Stock falls below {s} → you're obligated to buy at {s}; loss grows the lower it goes",
+    )
+
+
+def _format_legs(legs) -> str:
+    """
+    Format each leg with: location, plain description, and concrete example scenarios.
+
+    Example (one Iron Condor leg):
+      SELL  CE  3% above current price (OTM)
+               → Collect premium; obligated to sell if stock rises past this.
+               Example if stock is at ₹24,000 → this strike is ₹24,700
+                 ✓ Stock stays below ₹24,700: call expires worthless, you keep the full premium
+                 ✗ Stock rises above ₹24,700: you're obligated to sell; loss grows the higher it goes
+    """
+    lines = []
+    for leg in legs:
+        action = leg.action
+        otype = leg.option_type
+        strike = _example_strike(leg)
+        strike_loc = _leg_strike_plain(leg)
+        description = _leg_plain_description(leg)
+        good, bad = _leg_scenarios(leg, strike)
+        multi = f" ×{leg.lots_multiplier}" if leg.lots_multiplier > 1 else ""
+
+        action_color = "green" if action == "BUY" else "red"
+        lines.append(
+            f"  [{action_color}]{action:<5}[/{action_color}] {otype}{multi}  "
+            f"[dim]{strike_loc}[/dim]\n"
+            f"         [dim]→ {description}[/dim]\n"
+            f"         [dim]Example (stock @ ₹{_EXAMPLE_SPOT:,}): this strike = ₹{strike:,}[/dim]\n"
+            f"           [green]✓[/green] [dim]{good}[/dim]\n"
+            f"           [red]✗[/red] [dim]{bad}[/dim]"
+        )
+    return "\n\n".join(lines)
+
+
+# ── strategy learn ────────────────────────────────────────────
+
+
+def _cmd_learn(args: list[str]) -> None:
+    """Show a detailed explanation panel for a strategy template."""
+    from engine.strategy_library import strategy_library
+    from rich.panel import Panel
+
+    if not args:
+        console.print("[red]Usage: strategy learn <strategy_id>[/red]")
+        console.print("[dim]Run 'strategy library' to see all available strategy IDs.[/dim]")
+        return
+
+    name = args[0].lower()
+    try:
+        t = strategy_library.get(name)
+    except KeyError:
+        matches = strategy_library.search(name)
+        if matches:
+            console.print(f"[yellow]Strategy '{name}' not found. Did you mean:[/yellow]")
+            for m in matches[:3]:
+                console.print(f"  [cyan]{m.id}[/cyan] — {m.name}")
+        else:
+            console.print(
+                f"[red]Strategy '{name}' not found.[/red] "
+                "Run [bold]strategy library[/bold] to see all."
+            )
+        return
+
+    complexity_colors = {"beginner": "green", "intermediate": "yellow", "advanced": "red"}
+    comp_color = complexity_colors.get(t.complexity, "white")
+
+    content = (
+        f"[dim]{t.category.upper()} · [{comp_color}]{t.complexity}[/{comp_color}] · "
+        f"Ideal IV: {t.ideal_iv} · DTE: {t.ideal_dte[0]}–{t.ideal_dte[1]} days · "
+        f"Capital: {t.capital_type}[/dim]\n\n"
+        f"[bold yellow]IN PLAIN ENGLISH[/bold yellow]\n{t.layman_explanation}\n\n"
+        f"[bold]LEGS[/bold]  [dim](what you actually trade)[/dim]\n"
+        + _format_legs(t.legs)
+        + f"\n\n[bold]HOW IT WORKS[/bold]\n{t.explanation}\n\n"
+        f"[bold]WHEN TO USE[/bold]\n{t.when_to_use}\n\n"
+        f"[bold]WHEN NOT TO USE[/bold]\n{t.when_not_to_use}\n\n"
+        f"[bold]MAX PROFIT[/bold]  {t.max_profit}\n"
+        f"[bold]MAX LOSS[/bold]    {t.max_loss}\n\n"
+        f"[bold]RISKS[/bold]\n"
+        + "\n".join(f"  • {r}" for r in t.risks)
+        + f"\n\n[dim]Tags: {' '.join(t.tags)}[/dim]"
+    )
+
+    console.print(
+        Panel(
+            content,
+            title=f"[bold]{t.name}[/bold]",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+    )
+    console.print(f"\n[dim]Apply with live data: [bold]strategy use {t.id} SYMBOL[/bold][/dim]\n")
+
+
+# ── strategy use ──────────────────────────────────────────────
+
+
+def _cmd_use(args: list[str]) -> None:
+    """Apply a strategy template to a real symbol using live ATM data."""
+    from engine.strategy_library import strategy_library, apply_template
+    from engine.strategy import get_atm_data
+    from rich.panel import Panel
+    from rich.table import Table
+
+    strategy_id, symbol, lots, dte = _parse_use_args(args)
+
+    if not strategy_id:
+        console.print("[red]Usage: strategy use <strategy_id> SYMBOL [--lots N] [--dte N][/red]")
+        console.print("[dim]Run 'strategy library' to see all strategy IDs.[/dim]")
+        return
+
+    if not symbol:
+        console.print("[red]Usage: strategy use <strategy_id> SYMBOL [--lots N] [--dte N][/red]")
+        return
+
+    try:
+        template = strategy_library.get(strategy_id)
+    except KeyError:
+        matches = strategy_library.search(strategy_id)
+        if matches:
+            console.print(f"[yellow]Strategy '{strategy_id}' not found. Did you mean:[/yellow]")
+            for m in matches[:3]:
+                console.print(f"  [cyan]{m.id}[/cyan] — {m.name}")
+        else:
+            console.print(
+                f"[red]Strategy '{strategy_id}' not found.[/red] "
+                "Run [bold]strategy library[/bold] to see all."
+            )
+        return
+
+    # Warn if stock-leg strategy applied to index
+    indices = {"NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"}
+    if template.capital_type == "stock" and symbol.upper() in indices:
+        console.print(
+            f"[yellow]Note: '{template.name}' involves a stock leg. "
+            f"Applying to an index ({symbol}) gives approximate results.[/yellow]"
+        )
+
+    # Fetch spot price
+    spot = None
+    try:
+        from market.quotes import get_ltp
+
+        ltp = get_ltp(f"NSE:{symbol}")
+        if ltp and ltp > 0:
+            spot = float(ltp)
+    except Exception:
+        pass
+
+    if not spot:
+        try:
+            from rich.prompt import FloatPrompt
+
+            spot = FloatPrompt.ask(f"Enter current spot price for {symbol}")
+        except Exception:
+            console.print(
+                f"[red]Could not fetch spot price for {symbol}. Provide it manually.[/red]"
+            )
+            return
+
+    # Fetch ATM data
+    console.print(f"[dim]Fetching ATM data for {symbol} @ ₹{spot:,.0f}...[/dim]")
+    try:
+        atm_ce_prem, atm_pe_prem, atm_strike, lot_size = get_atm_data(symbol, spot)
+    except Exception as e:
+        console.print(f"[red]Could not fetch ATM data: {e}[/red]")
+        return
+
+    # Apply the template
+    result = apply_template(
+        template=template,
+        symbol=symbol,
+        spot=spot,
+        atm_ce_prem=atm_ce_prem,
+        atm_pe_prem=atm_pe_prem,
+        atm_strike=atm_strike,
+        lot_size=lot_size,
+        lots=lots,
+        dte=dte,
+    )
+
+    # Display result
+    console.print(f"\n[bold cyan]{result.name}[/bold cyan] — {symbol} @ ₹{spot:,.0f}\n")
+
+    # Legs table
+    leg_table = Table(show_header=True, header_style="bold dim", box=None, pad_edge=False)
+    leg_table.add_column("Action", width=8)
+    leg_table.add_column("Type", width=8)
+    leg_table.add_column("Strike", justify="right", width=10)
+    leg_table.add_column("Premium", justify="right", width=10)
+    leg_table.add_column("Lots", justify="right", width=6)
+
+    for leg in result.legs:
+        action_color = "green" if leg["action"] == "BUY" else "red"
+        leg_table.add_row(
+            f"[{action_color}]{leg['action']}[/{action_color}]",
+            leg.get("type", "STOCK"),
+            f"₹{leg.get('strike', 0):,.0f}",
+            f"₹{leg.get('premium', 0):.0f}" if "premium" in leg else "—",
+            str(leg.get("lots", lots)),
+        )
+
+    console.print(leg_table)
+
+    # P&L summary panel
+    mp_str = f"₹{result.max_profit:,.0f}" if result.max_profit < 1e9 else "Unlimited"
+    ml_str = f"₹{abs(result.max_loss):,.0f}" if result.max_loss > -1e9 else "Unlimited"
+    be_str = " / ".join(f"₹{b:,.0f}" for b in result.breakeven)
+
+    summary = (
+        f"  Capital Needed : [bold]₹{result.capital_needed:,.0f}[/bold]\n"
+        f"  Max Profit     : [green]↑ {mp_str}[/green]\n"
+        f"  Max Loss       : [red]↓ {ml_str}[/red]\n"
+        f"  Breakeven      : {be_str}\n"
+        f"  R:R Ratio      : {result.rr_ratio}×\n"
+        f"  Best for       : [dim]{result.best_for}[/dim]\n"
+        f"  Risks          : [dim]{result.risks}[/dim]"
+    )
+    console.print(Panel(summary, title="P&L Summary", border_style="dim", padding=(0, 2)))
+    console.print(
+        f"\n[dim]For placement: [bold]trade {symbol} {' / '.join(template.views)}[/bold][/dim]\n"
+    )
+
+
+def _parse_use_args(args: list[str]) -> tuple[str, str, int, int]:
+    """Parse args for 'strategy use'. Returns (strategy_id, symbol, lots, dte)."""
+    lots = 1
+    dte = 30
+    clean: list[str] = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--lots" and i + 1 < len(args):
+            try:
+                lots = int(args[i + 1])
+            except ValueError:
+                pass
+            i += 2
+        elif args[i] == "--dte" and i + 1 < len(args):
+            try:
+                dte = int(args[i + 1])
+            except ValueError:
+                pass
+            i += 2
+        else:
+            clean.append(args[i])
+            i += 1
+
+    strategy_id = clean[0].lower() if len(clean) > 0 else ""
+    symbol = clean[1].upper() if len(clean) > 1 else ""
+    return strategy_id, symbol, lots, dte
