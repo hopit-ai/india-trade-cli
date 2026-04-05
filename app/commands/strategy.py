@@ -576,6 +576,18 @@ def _print_library_table(templates) -> None:
 
 # ── Leg formatter helpers ─────────────────────────────────────
 
+# Hypothetical spot used for concrete examples throughout the learn panel.
+# ₹24,000 is close to NIFTY and a round number that's easy to reason about.
+_EXAMPLE_SPOT = 24_000
+
+
+def _example_strike(leg) -> int:
+    """Compute the example strike from _EXAMPLE_SPOT and the leg's offset."""
+    if leg.option_type == "STOCK":
+        return _EXAMPLE_SPOT
+    raw = _EXAMPLE_SPOT * (1 + leg.strike_offset_pct)
+    return int(round(raw / 100) * 100)  # round to nearest 100 (Indian index convention)
+
 
 def _leg_strike_plain(leg) -> str:
     """Human-readable strike location: 'at current price', '3% above current price', etc."""
@@ -594,7 +606,6 @@ def _leg_plain_description(leg) -> str:
     action = leg.action
     otype = leg.option_type
     multi = leg.lots_multiplier
-
     multi_note = f" (×{multi} contracts)" if multi > 1 else ""
 
     if otype == "STOCK":
@@ -602,55 +613,101 @@ def _leg_plain_description(leg) -> str:
             return "Own the actual shares — full upside, but also full downside if the stock falls."
         return "Short-sell the shares — profit if price falls, unlimited loss if it rises."
 
-    if otype == "CE":  # Call option
+    if otype == "CE":
         if action == "BUY":
             return (
                 f"Pay a premium{multi_note} for the right to profit if the stock rises above this level. "
-                f"Loss is limited to the premium paid."
+                "Loss is limited to the premium paid."
             )
-        else:
-            return (
-                f"Collect premium{multi_note} now; in return you're obligated to sell shares if the "
-                f"stock rises past this level. Acts as a profit ceiling or a hedge."
-            )
+        return (
+            f"Collect premium{multi_note} now; in return you're obligated to sell if the "
+            "stock rises past this level. Acts as a profit ceiling or a hedge."
+        )
 
-    # PE — Put option
+    # PE
     if action == "BUY":
         return (
             f"Pay a premium{multi_note} for the right to profit if the stock falls below this level. "
-            f"Loss is limited to the premium paid."
+            "Loss is limited to the premium paid."
         )
     return (
-        f"Collect premium{multi_note} now; in return you're obligated to buy shares if the "
-        f"stock falls past this level. Acts as a floor or a hedge."
+        f"Collect premium{multi_note} now; in return you're obligated to buy if the "
+        "stock falls past this level. Acts as a floor or a hedge."
+    )
+
+
+def _leg_scenarios(leg, strike: int) -> tuple[str, str]:
+    """
+    Return (good_scenario, bad_scenario) as plain-English strings for a leg.
+    Uses the concrete example strike so the user can picture real numbers.
+    """
+    action = leg.action
+    otype = leg.option_type
+    s = f"₹{strike:,}"
+
+    if otype == "STOCK":
+        if action == "BUY":
+            return (
+                f"Stock rises above {s} → you profit ₹1 for every ₹1 it goes up",
+                f"Stock falls below {s} → you lose ₹1 for every ₹1 it goes down",
+            )
+        return (
+            f"Stock falls below {s} → you profit as price drops",
+            f"Stock rises above {s} → unlimited loss",
+        )
+
+    if otype == "CE":
+        if action == "BUY":
+            return (
+                f"Stock closes above {s} at expiry → your call gains value, you profit",
+                f"Stock closes at or below {s} → call expires worthless, you lose only the premium paid",
+            )
+        return (
+            f"Stock stays below {s} at expiry → call expires worthless, you keep the full premium",
+            f"Stock rises above {s} → you're obligated to sell at {s}; loss grows the higher it goes",
+        )
+
+    # PE
+    if action == "BUY":
+        return (
+            f"Stock closes below {s} at expiry → your put gains value, you profit",
+            f"Stock closes at or above {s} → put expires worthless, you lose only the premium paid",
+        )
+    return (
+        f"Stock stays above {s} at expiry → put expires worthless, you keep the full premium",
+        f"Stock falls below {s} → you're obligated to buy at {s}; loss grows the lower it goes",
     )
 
 
 def _format_legs(legs) -> str:
     """
-    Format strategy legs with strike location + plain-English role explanation.
+    Format each leg with: location, plain description, and concrete example scenarios.
 
-    Example output (Iron Condor):
+    Example (one Iron Condor leg):
       SELL  CE  3% above current price (OTM)
-              → Collect premium; obligated to sell if stock rises past this. Acts as a ceiling.
-
-      BUY   CE  6% above current price (OTM)
-              → Pay premium; protects you if stock blows past the short call above.
-      ...
+               → Collect premium; obligated to sell if stock rises past this.
+               Example if stock is at ₹24,000 → this strike is ₹24,700
+                 ✓ Stock stays below ₹24,700: call expires worthless, you keep the full premium
+                 ✗ Stock rises above ₹24,700: you're obligated to sell; loss grows the higher it goes
     """
     lines = []
     for leg in legs:
-        otype = leg.option_type
         action = leg.action
+        otype = leg.option_type
+        strike = _example_strike(leg)
         strike_loc = _leg_strike_plain(leg)
         description = _leg_plain_description(leg)
+        good, bad = _leg_scenarios(leg, strike)
         multi = f" ×{leg.lots_multiplier}" if leg.lots_multiplier > 1 else ""
 
         action_color = "green" if action == "BUY" else "red"
         lines.append(
             f"  [{action_color}]{action:<5}[/{action_color}] {otype}{multi}  "
             f"[dim]{strike_loc}[/dim]\n"
-            f"         [dim]→ {description}[/dim]"
+            f"         [dim]→ {description}[/dim]\n"
+            f"         [dim]Example (stock @ ₹{_EXAMPLE_SPOT:,}): this strike = ₹{strike:,}[/dim]\n"
+            f"           [green]✓[/green] [dim]{good}[/dim]\n"
+            f"           [red]✗[/red] [dim]{bad}[/dim]"
         )
     return "\n\n".join(lines)
 
