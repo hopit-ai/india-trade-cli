@@ -71,9 +71,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="EMA Crossover",
         category="momentum",
         layman_explanation=(
-            "Two moving averages track the stock's price — one fast, one slow. "
-            "When the fast one crosses above the slow one, the trend is turning up: buy. "
-            "When it crosses below, the trend is turning down: sell."
+            "Think of two runners on a track — one fast (9-day average), one slow (21-day average). "
+            "When the fast runner overtakes the slow runner, the market has picked up speed: buy. "
+            "When the fast runner falls behind, the market is slowing down: sell. "
+            "Example: RELIANCE at ₹1,200 — its 9-day average rises to ₹1,215 and crosses above "
+            "its 21-day average at ₹1,208. That crossing tells you: recent buyers are outrunning "
+            "longer-term sellers. The trend is turning up."
         ),
         explanation=(
             "Uses two exponential moving averages (default 9/21 for intraday, 20/50 for swing). "
@@ -119,8 +122,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="MACD System",
         category="momentum",
         layman_explanation=(
-            "MACD measures the distance between two moving averages and draws a histogram showing whether "
-            "momentum is building or fading. When the histogram flips from red to green, bulls are taking over."
+            "Think of a car's accelerator — MACD doesn't tell you how fast the car is going, "
+            "it tells you whether you're pressing harder or easing off. "
+            "When you start pressing harder (the bar turns green and grows), buy. "
+            "When you lift your foot (bar shrinks or flips red), sell. "
+            "Example: NIFTY's MACD histogram was -18 for five days (sellers accelerating). "
+            "It flips to +4 today — buyers just took over the pedal. "
+            "The absolute value is small, but the direction change is what matters."
         ),
         explanation=(
             "MACD(12,26,9): MACD line = 12 EMA - 26 EMA; signal line = 9 EMA of MACD. "
@@ -167,9 +175,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Supertrend",
         category="momentum",
         layman_explanation=(
-            "Supertrend draws a line above or below price based on recent volatility. "
-            "While price stays above the line, you're in an uptrend. "
-            "The moment price closes below it, the trend has flipped — get out or reverse."
+            "Imagine a safety net beneath a tightrope walker. "
+            "As long as the walker stays above the net, keep watching them climb. "
+            "The moment they fall through — exit immediately. "
+            "The net also rises as the walker climbs, locking in gains. "
+            "Example: NIFTY climbs from ₹22,000 to ₹24,500. The Supertrend net sits at ₹23,800. "
+            "One bad day drops NIFTY to ₹23,750 — below the net. Exit. "
+            "You captured most of the ₹2,500 move and got out before the reversal deepened."
         ),
         explanation=(
             "ATR-based trailing stop: upper band = (High+Low)/2 + multiplier×ATR; "
@@ -215,9 +227,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Heikin Ashi Trend",
         category="momentum",
         layman_explanation=(
-            "Heikin Ashi candles are smoothed versions of normal candles — they filter out market noise. "
-            "A full green candle with no bottom shadow means very strong buying pressure. "
-            "A full red candle with no top shadow means very strong selling. Trade only these 'clean' candles."
+            "Normal price charts are like trying to hear someone in a noisy crowd — chaotic. "
+            "Heikin Ashi is like noise-cancelling headphones: it smooths out the price chaos "
+            "so you can see the real trend clearly. "
+            "A perfectly clean green bar with no downward tail means buyers were completely in charge — "
+            "sellers couldn't push price down even for a moment during that entire candle. "
+            "Example: INFY shows five consecutive clean green Heikin Ashi bars, each closing higher, "
+            "all above its 21-day average. No ambiguity — that's a strong uptrend. Hold long."
         ),
         explanation=(
             "HA Close = (O+H+L+C)/4; HA Open = (prev HA Open + prev HA Close)/2. "
@@ -260,9 +276,11 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="ADX Trend Strength Filter",
         category="momentum",
         layman_explanation=(
-            "ADX measures how strong the current trend is — not which direction, just how strong. "
-            "Above 25 means the market is trending: use momentum strategies. "
-            "Below 20 means the market is ranging: switch to mean-reversion strategies."
+            "Before deciding how to trade, you need to know: is the market actually going somewhere, "
+            "or just wobbling in place? ADX is a thermometer for the market's energy — not direction, just strength. "
+            "Example: NIFTY ADX reads 34 — that's a strong trend. It doesn't matter which way; "
+            "use a trend strategy and ride it. ADX reads 13 — the market is meandering aimlessly. "
+            "Don't try to catch a trend that isn't there. Switch to a range-trading strategy instead."
         ),
         explanation=(
             "ADX > 25 = strong trend → use EMA crossover, MACD, Supertrend. "
@@ -311,9 +329,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Donchian Channel Breakout",
         category="momentum",
         layman_explanation=(
-            "Donchian channels track the highest high and lowest low over the past N days. "
-            "When price breaks above the channel top, something significant is happening — buy the breakout. "
-            "This is the classic 'Turtle Trading' rule used by Richard Dennis in the 1980s."
+            "If a stock has been stuck under a ceiling for 20 days and then bursts through it, "
+            "that's not random — new buyers arrived who are willing to pay more than anyone in the past month. "
+            "That conviction usually keeps going. "
+            "Example: TCS has been ranging ₹3,600–₹3,800 for three weeks. "
+            "Today it closes at ₹3,825 — a new 20-day high. Buy. "
+            "The Turtle Traders of the 1980s turned $1.6 million into $175 million doing exactly this."
         ),
         explanation=(
             "Buy when price closes above the 20-day highest high; sell when below 20-day lowest low. "
@@ -362,10 +383,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Parabolic SAR",
         category="momentum",
         layman_explanation=(
-            "SAR stands for 'Stop and Reverse'. "
-            "A dot appears either above or below the price bar. "
-            "While the dot is below price, you're long. The moment price closes below the dot — "
-            "exit the long and go short. Simple flip-based system."
+            "Imagine a dog on a leash walking behind you. When you walk forward (uptrend), "
+            "the dog follows slightly behind. The moment you turn back, the leash snaps tight. "
+            "The SAR dot is that leash — it trails the stock as it rises. "
+            "Example: BANKNIFTY climbs from ₹46,000 to ₹48,500 over two weeks. "
+            "The dot sits below at ₹47,900. One bad session drops BANKNIFTY to ₹47,850 — "
+            "below the dot. Exit immediately, flip short. One rule, zero ambiguity."
         ),
         explanation=(
             "The SAR accelerates toward price as the trend extends (acceleration factor starts at 0.02, "
@@ -414,10 +437,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Ichimoku Cloud",
         category="momentum",
         layman_explanation=(
-            "Ichimoku draws a 'cloud' of support/resistance around price. "
-            "If price is above the cloud — it's in an uptrend. Below the cloud — downtrend. "
-            "When all five components agree (price, two lines, and the cloud), "
-            "it's one of the strongest trend signals in technical analysis."
+            "The Ichimoku Cloud is like a weather forecast for stocks. "
+            "The coloured cloud is the storm zone: price above it means clear skies (uptrend), "
+            "inside means fog (uncertain), below means stormy (downtrend). "
+            "Example: HDFC Bank at ₹1,820. The cloud spans ₹1,700–₹1,760 — "
+            "price is well above the storm zone, the fast line (₹1,800) is above the slow line (₹1,775), "
+            "and the lagging line confirms. All five components agree: strong buy signal. "
+            "Used by Japanese traders for 70+ years before the West discovered it."
         ),
         explanation=(
             "Five components: Tenkan-sen (9-period midpoint), Kijun-sen (26-period midpoint), "
@@ -460,9 +486,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Bollinger Band Reversion",
         category="mean_reversion",
         layman_explanation=(
-            "Bollinger Bands draw a 'normal range' around price using standard deviation. "
-            "When price touches the bottom band, it has moved unusually far down — it tends to bounce back. "
-            "When it touches the top band, it has moved unusually far up — it tends to pull back."
+            "Picture a rubber band stretched around a ball. When pulled too far out — it snaps back. "
+            "Bollinger Bands work the same way: a stock's 20-day average is the center, "
+            "and the bands mark 'unusually far' above and below it. "
+            "Example: RELIANCE 20-day average = ₹3,000. Lower band = ₹2,840. "
+            "Price drops to ₹2,830 — it has been stretched far below normal. "
+            "Historically, this kind of stretch almost always snaps back to ₹3,000 within a few days. Buy."
         ),
         explanation=(
             "20-period SMA ± 2 standard deviations. "
@@ -509,9 +538,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="RSI Oversold / Overbought",
         category="mean_reversion",
         layman_explanation=(
-            "RSI scores how fast a stock has been rising or falling, from 0 to 100. "
-            "Below 30 means it's fallen too far too fast — likely to bounce (buy). "
-            "Above 70 means it's risen too far too fast — likely to pull back (sell)."
+            "RSI measures how exhausted buyers or sellers are, on a scale of 0 to 100. "
+            "Below 30: sellers are completely out of breath — time to buy. "
+            "Above 70: buyers are gasping — time to sell. "
+            "Example: WIPRO has fallen 12% over eight days. RSI hits 24. "
+            "That's not a company in crisis — that's exhausted sellers who have nothing left to sell. "
+            "The stock almost always bounces from here. Buy the exhaustion, sell the euphoria."
         ),
         explanation=(
             "RSI(14) below 30 = oversold → buy; above 70 = overbought → sell. "
@@ -561,9 +593,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="VWAP Reversion (Intraday)",
         category="mean_reversion",
         layman_explanation=(
-            "VWAP is the average price of every trade done so far today, weighted by volume — "
-            "it's where most money has exchanged hands. "
-            "If price moves more than 2 standard deviations above VWAP, it's too far away and will likely snap back."
+            "VWAP is today's 'fair price' — the average where the most actual money changed hands today. "
+            "Big institutions use it as their benchmark: their mandate says 'buy at or below today's VWAP'. "
+            "So when price drifts well above VWAP, they stop buying — and price drifts back. "
+            "Example: NIFTY's VWAP is ₹24,100 at 10 AM. Price shoots to ₹24,320 (0.9% above). "
+            "Institutions pause. Price drifts back to ₹24,130 by 11 AM. "
+            "Wait for that drift back, then buy the return to fair value."
         ),
         explanation=(
             "Fade price when it is > 2 standard deviations above/below the VWAP band. "
@@ -617,9 +652,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Z-Score Mean Reversion",
         category="mean_reversion",
         layman_explanation=(
-            "Z-score measures how many standard deviations a stock's price is from its recent average. "
-            "If the Z-score is +2, the price is unusually high — it will likely fall back. "
-            "If it's -2, the price is unusually low — it will likely rise back."
+            "Z-score answers: 'Is this price weird, or normal?' "
+            "Example: AXISBANK usually trades around ₹1,000 and swings about ₹20 a day. "
+            "Today it closes at ₹1,080 — ₹80 above normal, which is 4 times its typical daily swing. "
+            "Z-score = +4. That's extreme. Extremes almost always correct back toward normal. "
+            "If it drops to ₹900 (Z-score = -5), that's even more extreme in the other direction — buy hard. "
+            "The math is pure: buy when something is historically cheap, sell when historically expensive."
         ),
         explanation=(
             "Rolling z-score = (close - N-day mean) / N-day std. "
@@ -673,9 +711,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Keltner Channel Reversion",
         category="mean_reversion",
         layman_explanation=(
-            "Keltner Channels are like Bollinger Bands but smoother — they use ATR instead of standard deviation. "
-            "When price stretches too far above the channel, it tends to snap back. "
-            "The smoother channel means fewer false signals than Bollinger Bands."
+            "Keltner Channels are highway guardrails — stocks stay inside them most of the time. "
+            "When a stock strays outside a guardrail, it naturally drifts back to the center lane. "
+            "Example: NIFTY's center is ₹24,000. Upper guardrail at ₹24,350. "
+            "Price closes at ₹24,380 — outside the guardrail. "
+            "Short it, target ₹24,000. "
+            "Works like Bollinger Bands but is smoother, built on actual average daily swings "
+            "rather than pure statistical math."
         ),
         explanation=(
             "Middle = 20 EMA. Upper = 20 EMA + 2×ATR(10). Lower = 20 EMA - 2×ATR(10). "
@@ -725,9 +767,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Opening Range Breakout (ORB)",
         category="scalping",
         layman_explanation=(
-            "In the first 15–30 minutes after market open, price forms a range (a high and a low). "
-            "This range captures the initial tug-of-war between buyers and sellers. "
-            "Once price breaks above that range — bulls won. Break below — bears won. Trade the winner."
+            "The first 15 minutes after 9:15 AM is a knife fight — buyers and sellers "
+            "arguing over where prices should be. That fight creates a range: a high and a low. "
+            "One side will eventually win. When price breaks above that range — buyers won. Ride with them. "
+            "Example: 9:15–9:30, NIFTY ranges ₹24,000–₹24,120. "
+            "At 9:35, price closes at ₹24,145 — above the range. Buy, target ₹24,240 "
+            "(same ₹120 distance as the opening range). Stop-loss below ₹24,000."
         ),
         explanation=(
             "Define the opening range as the high/low of the first 15 or 30 minutes (9:15–9:30 AM IST). "
@@ -782,9 +827,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="RSI Scalping (Ultra-short)",
         category="scalping",
         layman_explanation=(
-            "Use a very fast RSI (period 2 or 5) on a 1-minute chart. "
-            "When RSI drops below 10 — the stock has fallen too fast in seconds — snap back is very likely. "
-            "Take a quick long, exit when RSI crosses back to 50. A very short-hold trade."
+            "Sometimes a big sell order hits the market and a stock drops ₹15 in 3 minutes — "
+            "not because anything is wrong, just because someone was forced to sell in a hurry. "
+            "RSI scalping catches that panic: when the 2-minute RSI falls below 10, "
+            "the selling was so violent that a snap-back is almost certain. "
+            "Example: HDFC Bank drops ₹18 in 4 minutes, 2-minute RSI hits 7. Buy immediately. "
+            "Hold 5-10 minutes, exit at ₹8-12 gain per share. Small profit, very frequent. "
+            "Requires fast execution and strict discipline — not for beginners."
         ),
         explanation=(
             "RSI(2) or RSI(5) on 1m/3m chart. "
@@ -827,9 +876,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="VWAP Scalp",
         category="scalping",
         layman_explanation=(
-            "VWAP is where most of today's trading has happened. "
-            "When price dips to VWAP after being above it all morning, big institutions often step in to buy — "
-            "that support creates a reliable bounce for a scalp trade."
+            "Institutional fund managers are evaluated against VWAP — their mandate says 'execute at VWAP'. "
+            "This means when price dips back to VWAP, they are waiting there with large buy orders. "
+            "You step in just before them. "
+            "Example: NIFTY VWAP = ₹24,100 at 11 AM. Price has been above it all morning at ₹24,180. "
+            "It dips to ₹24,105 — touching VWAP. Buy. Institution shows up, price bounces to ₹24,160. "
+            "Exit. You made ₹55 in 8 minutes by knowing where the buying wall was."
         ),
         explanation=(
             "Long on first touch of VWAP after a sustained move above it (VWAP reclaim). "
@@ -878,9 +930,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Previous Day High / Low Breakout",
         category="scalping",
         layman_explanation=(
-            "Yesterday's high and low are key levels — many traders have stops and orders sitting there. "
-            "When price breaks through yesterday's high on volume, those stops trigger and price accelerates. "
-            "This creates a reliable momentum trade in the direction of the break."
+            "Yesterday's high and low are invisible walls where thousands of stop-loss orders sit. "
+            "When price breaks through yesterday's high, every stop triggers at once — "
+            "a sudden flood of buyers enters and price accelerates. "
+            "Example: Yesterday RELIANCE high = ₹1,280. Today at 10:15 AM, "
+            "price crosses ₹1,283 with heavy volume. Every short-seller's stop triggers. "
+            "Price shoots to ₹1,295 in 20 minutes. "
+            "You entered at ₹1,283, captured ₹12 — an avalanche others set up for you."
         ),
         explanation=(
             "PDH/PDL are strong intraday reference levels. "
@@ -931,9 +987,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Pivot Point Breakout",
         category="breakout",
         layman_explanation=(
-            "Pivot points are price levels calculated from yesterday's data that many traders watch simultaneously. "
-            "R1/R2 are resistance levels above; S1/S2 are support levels below. "
-            "When price breaks through R1 with momentum, it often runs to R2 — and vice versa."
+            "Pivot points are calculated by every trader, every algorithm, every prop desk — "
+            "all using the same formula from yesterday's numbers. "
+            "Because everyone watches the same levels, they become self-fulfilling. "
+            "Example: NIFTY Pivot = ₹24,000, R1 = ₹24,200. Price stalls below ₹24,200 all morning. "
+            "At 1:15 PM it blasts through ₹24,205 on high volume. Next target is R2 = ₹24,380. "
+            "You entered at ₹24,210 and rode ₹170 — just by reading the same map as everyone else."
         ),
         explanation=(
             "Standard pivots: P = (H + L + C) / 3; R1 = 2P - L; R2 = P + (H - L); "
@@ -982,9 +1041,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Inside Bar Breakout",
         category="breakout",
         layman_explanation=(
-            "An inside bar is a candle that fits completely within the previous candle's range — "
-            "the market couldn't make a new high or low. It's a pause, a breath. "
-            "The next candle that breaks outside that range tells you which way the market wants to go."
+            "An inside bar is a day where the market couldn't make a new high or a new low — "
+            "buyers and sellers reached a perfect standoff. Think of it as a coiled spring. "
+            "Example: Monday, HDFC Bank ranged ₹1,750–₹1,820. "
+            "Tuesday closes entirely inside: ₹1,760–₹1,808. "
+            "The spring is coiling. Wednesday morning opens at ₹1,815, breaks above ₹1,820 — "
+            "buyers won the standoff. Buy ₹1,822, stop-loss ₹1,749 (Monday's low). "
+            "The sharper the breakout, the more energy was stored."
         ),
         explanation=(
             "Inside bar: current high < previous high AND current low > previous low. "
@@ -1029,9 +1092,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Flag / Pennant Continuation",
         category="breakout",
         layman_explanation=(
-            "After a strong vertical move (the flagpole), the stock takes a rest and moves sideways in a tight range "
-            "(the flag). When it breaks out of that rest in the same direction as the initial move, "
-            "it tends to travel the same distance as the original flagpole."
+            "A stock jumps 7% in two days — that's the flagpole. Then it drifts sideways for a week "
+            "as traders take profits — that's the flag. Not a reversal, just a rest. "
+            "When price breaks out of that tight sideways range in the same direction, "
+            "the next leg tends to be the same size as the original jump. "
+            "Example: INFY runs from ₹1,500 to ₹1,605 (+7%) in two days. Drifts sideways ₹1,575–₹1,600. "
+            "Breaks above ₹1,602. Buy. Target: ₹1,707 (another +7% from breakout). "
+            "You're buying after the stock has rested and reloaded."
         ),
         explanation=(
             "Flag: a tight rectangular consolidation after a sharp move, sloping slightly against the trend. "
@@ -1082,9 +1149,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Pairs Trading",
         category="pairs",
         layman_explanation=(
-            "Find two stocks that usually move together (e.g. TCS and Infosys). "
-            "When TCS suddenly becomes much more expensive than Infosys relative to their history, "
-            "you buy the cheaper one and sell the expensive one — betting they'll come back together."
+            "TCS and Infosys are siblings — same business, same cycle, almost always move together. "
+            "Normally TCS trades at about 1.4× the price of Infosys. "
+            "One day: TCS jumps to ₹4,200, Infosys stays at ₹2,700. Ratio = 1.56 — TCS is too expensive. "
+            "Buy ₹1 lakh of Infosys, short ₹1 lakh of TCS. "
+            "Over the next few days the ratio drifts back to 1.4. "
+            "Both legs close in profit. The market's direction doesn't matter — only the gap between siblings does."
         ),
         explanation=(
             "Cointegration test to find a stationary pair. "
@@ -1135,9 +1205,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Index Arbitrage",
         category="pairs",
         layman_explanation=(
-            "NIFTY futures should trade at a 'fair price' slightly above the NIFTY index (because you earn interest "
-            "by not buying all 50 stocks). When futures trade above or below this fair value, "
-            "you buy the cheap side and sell the expensive side — pocketing the gap when it closes."
+            "NIFTY futures should cost slightly more than the actual index, because you're agreeing to buy later "
+            "and your cash earns interest in the meantime. That 'fair price' is a formula. "
+            "Example: NIFTY = ₹24,000. Fair value of 30-day futures (at 7% interest) = ₹24,140. "
+            "Futures are trading at ₹24,280 — ₹140 above fair value. "
+            "Sell ₹24,280 futures, buy the equivalent of all 50 NIFTY stocks. Lock in ₹140 per lot. "
+            "By expiry, futures must converge to ₹24,000. The ₹140 profit is yours regardless of market direction."
         ),
         explanation=(
             "Fair value = Spot × e^(r×t) where r = risk-free rate, t = DTE/365. "
@@ -1178,9 +1251,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="ETF Arbitrage",
         category="pairs",
         layman_explanation=(
-            "ETFs like NIFTYBEES should trade at exactly the value of the stocks inside them. "
-            "Sometimes they trade at a small premium or discount. When that gap is large enough "
-            "to cover transaction costs, you buy the cheap side and sell the expensive side."
+            "NIFTYBEES is a basket holding all 50 NIFTY stocks. "
+            "It should be worth exactly what those 50 stocks are worth — but sometimes it isn't. "
+            "Example: The 50 stocks are collectively worth ₹240.10 per NIFTYBEES unit, "
+            "but NIFTYBEES is trading at ₹241.80 on NSE — a ₹1.70 premium. "
+            "Buy the 50 stocks at ₹240.10, sell NIFTYBEES at ₹241.80. "
+            "Collect ₹1.70 per unit as both sides converge. Zero directional risk. Pure gap capture."
         ),
         explanation=(
             "Monitor iNAV (intraday NAV) vs market price of ETF. "
@@ -1225,9 +1301,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Calendar Spread (Futures)",
         category="pairs",
         layman_explanation=(
-            "Near-month and far-month futures on the same stock should differ by the cost of 'waiting' "
-            "(interest you'd earn if you held cash instead). When the spread between them gets unusually wide "
-            "or narrow, you buy one month and sell the other — waiting for the spread to normalise."
+            "January and March NIFTY futures are the same index — the only difference is time. "
+            "The price gap between them should equal roughly 2 months of interest on your capital. "
+            "At 7% annual interest, that's about ₹280 per ₹24,000 lot. "
+            "Example: January futures at ₹24,050, March futures at ₹24,480 — gap of ₹430, not ₹280. "
+            "Sell March at ₹24,480, buy January at ₹24,050. Lock in ₹150 extra. "
+            "By March expiry, the gap must collapse to zero. No prediction needed."
         ),
         explanation=(
             "Fair spread = Spot × r × (T2 - T1)/365. "
@@ -1273,10 +1352,11 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="RBI Policy Trade",
         category="macro",
         layman_explanation=(
-            "When the RBI announces interest rates, markets usually make a big move — "
-            "but nobody knows exactly which way. One approach: buy both a call and a put (straddle) "
-            "before the announcement so you profit regardless of direction. "
-            "Another: wait for the announcement, then trade the momentum."
+            "RBI rate decisions cause big market moves — but nobody knows which way. "
+            "Strategy 1 (straddle): NIFTY at ₹24,000. Buy a ₹24,000 call for ₹120 and a ₹24,000 put for ₹110. "
+            "Total cost: ₹230. If NIFTY moves more than ₹230 in either direction — you profit. "
+            "Strategy 2 (momentum): Wait for the announcement. If markets start rallying hard, "
+            "buy the first pullback. Both strategies work. Neither requires you to predict the RBI."
         ),
         explanation=(
             "Pre-event: buy ATM straddle 2 days before → exit within 30 minutes of announcement. "
@@ -1326,9 +1406,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="FII Flow Following",
         category="macro",
         layman_explanation=(
-            "Foreign Institutional Investors move markets. When they buy heavily for 3 days in a row, "
-            "the market tends to keep rising. When they sell heavily for 3 days, it tends to keep falling. "
-            "Following their footprints is a simple but effective macro signal."
+            "Foreign investors (FIIs) are the single biggest force in Indian markets — "
+            "their buying and selling moves NIFTY by 100-300 points. "
+            "SEBI publishes exactly how much they bought or sold each day. "
+            "Example: FIIs net bought ₹3,200 cr on Monday, ₹4,800 cr on Tuesday, ₹2,600 cr on Wednesday. "
+            "Three consecutive days of heavy buying. On Thursday morning, buy NIFTY futures. "
+            "Don't predict — follow the elephant. When it walks in one direction, get out of the way or join it."
         ),
         explanation=(
             "NSE publishes daily FII/DII buy-sell data. "
@@ -1378,9 +1461,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="VIX Mean Reversion",
         category="macro",
         layman_explanation=(
-            "India VIX measures how scared the market is. "
-            "When VIX spikes above 20, fear is high and options are expensive — sell premium (you'll be overpaid). "
-            "When VIX drops below 11, complacency is extreme and options are cheap — buy them for an upcoming shock."
+            "India VIX is the market's fear-o-meter. "
+            "Example: VIX spikes to 24 during a geopolitical scare. "
+            "A NIFTY straddle that normally costs ₹300 now costs ₹520 — people are overpaying for insurance. "
+            "Sell the straddle at ₹520. Over the next 7 days, fear fades and VIX drops to 14. "
+            "The straddle is now worth ₹180. Buy it back. Pocket ₹340. "
+            "Flip side: VIX at 10 = everyone relaxed, options at ₹150. Buy cheap insurance before the next shock."
         ),
         explanation=(
             "India VIX > 20 → short straddle, iron condor — collect elevated premiums that will deflate as VIX normalises. "
@@ -1429,9 +1515,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Earnings Momentum",
         category="macro",
         layman_explanation=(
-            "Stock options get more expensive before earnings because nobody knows what will happen. "
-            "If you buy options 5 days before results, you benefit from that rising fear. "
-            "Alternatively, buy the stock the day after a strong earnings beat — the momentum often continues."
+            "Before quarterly results, nobody knows if a company will beat or miss. "
+            "That uncertainty alone makes options expensive — fear and greed both peak. "
+            "Strategy 1 (pre-results): Infosys results in 6 days. Buy the ₹1,800 call for ₹22. "
+            "Day before results, the same call costs ₹42 — fear of missing a big move has driven it up. "
+            "Sell at ₹42. ₹20 profit, and you never even took the earnings risk. "
+            "Strategy 2 (post-beat): Infosys beats by 8%. Next morning, buy the stock. "
+            "Analyst upgrades and fund flows typically push it another 5-10% over 2-3 weeks."
         ),
         explanation=(
             "Pre-earnings IV play: buy ATM straddle 5 days before → sell on announcement day (capture IV expansion). "
@@ -1485,9 +1575,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Sector Rotation",
         category="macro",
         layman_explanation=(
-            "Different industries take turns leading the market. "
-            "Each month, look at which two sectors have performed best in the last month — "
-            "put your money there. Next month, rotate to whichever two are leading then."
+            "The economy moves in cycles — banks lead one phase, then IT, then pharma, then FMCG. "
+            "Each phase lasts months, and the winner of last month often keeps winning next month. "
+            "Example: April check — PSU Banks +9%, IT +2%, Pharma -1%, FMCG +3%. "
+            "For May: put your money in the PSU Bank ETF and FMCG ETF. "
+            "Check again at end of May, rotate to whatever is leading then. "
+            "No prediction needed — just follow who is already winning."
         ),
         explanation=(
             "Rank all NIFTY sector indices by trailing 1-month return. "
@@ -1534,9 +1627,13 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Dual Momentum (Antonacci)",
         category="quantitative",
         layman_explanation=(
-            "Every month, answer two questions: (1) Has the stock/index gone up in the last 3 months? "
-            "(absolute momentum — if no, move to cash). (2) Is it doing better than the alternative? "
-            "(relative momentum — if yes, stay). Simple, low-frequency, rules-based."
+            "Once a month, answer two questions. "
+            "Q1: Is NIFTY higher today than it was 3 months ago? "
+            "If no — sell everything, sit in cash or FD. Done. "
+            "If yes — Q2: Did NIFTY do better than Nifty Midcap over those 3 months? "
+            "Hold whichever won. That's the complete system — two questions, once a month. "
+            "Example: April check — NIFTY 3 months ago ₹22,000, today ₹24,100 (+9.5%). Q1: Yes. "
+            "NIFTY +9.5% vs Midcap +6.2%. Q2: Hold NIFTY for May. Check again May 31."
         ),
         explanation=(
             "Absolute momentum: if N-day return of NIFTY > 0 → stay in equities. "
@@ -1581,9 +1678,14 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Factor Strategy — Quality + Momentum",
         category="quantitative",
         layman_explanation=(
-            "Screen all NSE 500 stocks for two things: (1) quality — high profit, low debt. "
-            "(2) momentum — stock price has been rising over the last 6 months. "
-            "Hold the top 20 that pass both tests. Rebalance monthly."
+            "A two-round talent show for 500 NSE stocks. "
+            "Round 1 — Quality: ROE above 20%? Debt-to-equity below 0.5? Profit growing? "
+            "Say 90 stocks pass. "
+            "Round 2 — Momentum: of those 90, which 25 have risen the most in the past 6 months? "
+            "Keep those 25. Rebalance monthly. "
+            "Example: Round 1 leaves Bajaj Finance, Titan, Pidilite, HDFC AMC. "
+            "Round 2 picks the 25 with best 6-month price performance from that shortlist. "
+            "You own great businesses that the market is already rewarding — a potent combination."
         ),
         explanation=(
             "Quality screen: ROE > 15%, Debt/Equity < 1, positive EPS growth. "
@@ -1640,9 +1742,12 @@ TECH_TEMPLATES: dict[str, TechnicalTemplate] = {
         name="Volatility-Adjusted Position Sizing",
         category="quantitative",
         layman_explanation=(
-            "Instead of always trading the same number of shares, "
-            "you trade fewer shares when a stock is moving violently, and more when it's calm. "
-            "This keeps the rupee risk of each trade roughly the same, regardless of which stock you're trading."
+            "If you always buy 100 shares, you're betting 10x more on volatile stocks without realising it. "
+            "100 shares of HDFC Bank (moves ₹20/day) = ₹2,000 daily risk. "
+            "100 shares of BANKNIFTY (moves ₹200/day) = ₹20,000 daily risk — same share count, 10x the risk. "
+            "Volatility sizing fixes this: you decide your risk per trade (say ₹5,000). "
+            "HDFC Bank: buy 250 shares (₹5,000 ÷ ₹20). BANKNIFTY: buy 25 shares (₹5,000 ÷ ₹200). "
+            "Every trade now risks the same rupees. One bad BANKNIFTY day can't wipe out a week of work."
         ),
         explanation=(
             "ATR-based sizing: quantity = (capital × risk_pct) / (ATR × stop_atr_multiplier). "
