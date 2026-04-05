@@ -1045,11 +1045,13 @@ class MultiAgentAnalyzer:
         llm_provider: Any,
         parallel: bool = True,
         verbose: bool = True,
+        risk_debate: bool = False,
     ) -> None:
         self.registry = registry
         self.llm = llm_provider
         self.parallel = parallel
         self.verbose = verbose
+        self.risk_debate = risk_debate  # enable 3-way risk debate (aggressive/conservative/neutral)
 
         news_analyst = NewsMacroAnalyst(registry)
         news_analyst.set_llm(llm_provider)
@@ -1115,7 +1117,7 @@ class MultiAgentAnalyzer:
         # ── Phase 2.5: Risk Debate ───────────────────────────
         risk_debate: Optional[RiskDebateResult] = None
         risk_debate_time = 0.0
-        if scorecard.verdict != "HOLD":
+        if self.risk_debate and scorecard.verdict != "HOLD":
             if self.verbose:
                 console.print()
                 console.rule(

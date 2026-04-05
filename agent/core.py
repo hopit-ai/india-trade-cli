@@ -2008,9 +2008,17 @@ class TradingAgent:
 
         return response
 
-    def run_multi_agent_analysis(self, symbol: str, exchange: str = "NSE") -> str:
+    def run_multi_agent_analysis(
+        self, symbol: str, exchange: str = "NSE", risk_debate: bool = False
+    ) -> str:
         """
-        Run multi-agent analysis pipeline: 5 analysts + bull/bear debate + synthesis.
+        Run multi-agent analysis pipeline: analysts + bull/bear debate + synthesis.
+
+        Args:
+            symbol:      Stock symbol e.g. RELIANCE
+            exchange:    NSE (default) or BSE
+            risk_debate: Enable the 3-way risk debate (aggressive/conservative/neutral)
+                         after the investment debate. Adds 3 LLM calls. Default: False.
 
         Falls back to single-agent analysis if multi-agent fails.
         """
@@ -2022,6 +2030,7 @@ class TradingAgent:
                 llm_provider=self._provider,
                 parallel=True,
                 verbose=True,
+                risk_debate=risk_debate,
             )
             result = analyzer.analyze(symbol, exchange)
             self._last_trade_plans = getattr(analyzer, "last_trade_plans", {})

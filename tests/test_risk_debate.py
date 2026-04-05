@@ -231,7 +231,7 @@ class TestRunRiskDebate:
 
 
 class TestRiskDebateSkippedOnHold:
-    def _build_analyzer_with_mocked_phases(self, verdict: str):
+    def _build_analyzer(self, verdict: str, risk_debate_flag: bool = True):
         """Build an analyzer with all sub-phases mocked so we can inspect calls."""
         mock_registry = MagicMock()
         mock_llm = _make_mock_llm()
@@ -240,12 +240,14 @@ class TestRiskDebateSkippedOnHold:
         analyzer.llm = mock_llm
         analyzer.parallel = False
         analyzer.verbose = False
+        analyzer.risk_debate = risk_debate_flag
         analyzer.analysts = []
         analyzer.last_trade_plans = {}
         return analyzer
 
     def test_risk_debate_not_called_when_hold(self):
-        analyzer = self._build_analyzer_with_mocked_phases("HOLD")
+        """Risk debate skipped when verdict is HOLD even if flag is on."""
+        analyzer = self._build_analyzer("HOLD", risk_debate_flag=True)
         scorecard = _make_scorecard("HOLD")
         debate = _make_debate()
         reports = [_make_report()]
@@ -265,9 +267,32 @@ class TestRiskDebateSkippedOnHold:
 
         mock_risk.assert_not_called()
 
+    def test_risk_debate_not_called_when_flag_off(self):
+        """Risk debate skipped when flag is False, even with a BUY verdict."""
+        analyzer = self._build_analyzer("BUY", risk_debate_flag=False)
+        scorecard = _make_scorecard("BUY")
+        debate = _make_debate()
+        reports = [_make_report()]
+
+        with (
+            patch.object(analyzer, "_run_risk_debate") as mock_risk,
+            patch.object(analyzer, "_run_synthesis", return_value="synthesis"),
+            patch.object(analyzer, "_run_analysts", return_value=reports),
+            patch.object(analyzer, "_run_debate", return_value=debate),
+            patch.object(analyzer, "_print_analyst_summary"),
+            patch.object(analyzer, "_print_debate"),
+            patch("agent.multi_agent.compute_scorecard", return_value=scorecard),
+            patch("agent.multi_agent.console"),
+            patch("engine.memory.trade_memory.store_from_analysis"),
+        ):
+            analyzer.analyze("RELIANCE")
+
+        mock_risk.assert_not_called()
+
     @pytest.mark.parametrize("verdict", ["BUY", "SELL", "STRONG_BUY", "STRONG_SELL"])
-    def test_risk_debate_called_for_non_hold_verdicts(self, verdict):
-        analyzer = self._build_analyzer_with_mocked_phases(verdict)
+    def test_risk_debate_called_when_flag_on_and_non_hold(self, verdict):
+        """Risk debate runs when flag=True and verdict is not HOLD."""
+        analyzer = self._build_analyzer(verdict, risk_debate_flag=True)
         scorecard = _make_scorecard(verdict)
         debate = _make_debate()
         reports = [_make_report()]

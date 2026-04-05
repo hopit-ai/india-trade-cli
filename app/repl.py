@@ -1204,12 +1204,16 @@ def run_repl(broker: BrokerAPI) -> None:
                 from engine.output import parse_output_flags, handle_output_flags
 
                 clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
+                wants_risk_debate = "--risk-debate" in clean_args
+                clean_args = [a for a in clean_args if a != "--risk-debate"]
                 symbol = clean_args[0].upper() if clean_args else ""
                 if not symbol:
-                    console.print("[red]Usage: analyze <SYMBOL> [--pdf] [--explain][/red]")
+                    console.print(
+                        "[red]Usage: analyze <SYMBOL> [--risk-debate] [--pdf] [--explain][/red]"
+                    )
                 else:
                     agent = get_agent()
-                    output = agent.run_multi_agent_analysis(symbol)
+                    output = agent.run_multi_agent_analysis(symbol, risk_debate=wants_risk_debate)
                     _last_output = output or ""
                     _last_command = f"Analysis {symbol}"
                     _last_trade_plans = getattr(agent, "_last_trade_plans", {})
