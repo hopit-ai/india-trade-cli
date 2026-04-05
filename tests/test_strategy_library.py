@@ -83,6 +83,7 @@ class TestStrategyTemplate:
             max_loss="Premium paid",
             ideal_iv="low",
             ideal_dte=(15, 45),
+            layman_explanation="You pay a fee and profit if the stock goes up.",
             explanation="Buy a call option.",
             when_to_use="When strongly bullish.",
             when_not_to_use="When IV is high.",
@@ -165,6 +166,7 @@ class TestTemplatesDict:
             assert t.category in CATEGORIES, f"{sid}: invalid category"
             assert t.views, f"{sid}: empty views"
             assert t.legs, f"{sid}: no legs"
+            assert t.layman_explanation, f"{sid}: no layman_explanation"
             assert t.explanation, f"{sid}: no explanation"
             assert t.when_to_use, f"{sid}: no when_to_use"
             assert t.when_not_to_use, f"{sid}: no when_not_to_use"

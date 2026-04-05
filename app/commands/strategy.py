@@ -623,9 +623,10 @@ def _cmd_learn(args: list[str]) -> None:
         f"[dim]{t.category.upper()} · [{comp_color}]{t.complexity}[/{comp_color}] · "
         f"Ideal IV: {t.ideal_iv} · DTE: {t.ideal_dte[0]}–{t.ideal_dte[1]} days · "
         f"Capital: {t.capital_type}[/dim]\n\n"
+        f"[bold yellow]IN PLAIN ENGLISH[/bold yellow]\n{t.layman_explanation}\n\n"
         f"[bold]LEGS[/bold]\n"
         + "\n".join(leg_lines)
-        + f"\n\n[bold]WHAT IT IS[/bold]\n{t.explanation}\n\n"
+        + f"\n\n[bold]HOW IT WORKS[/bold]\n{t.explanation}\n\n"
         f"[bold]WHEN TO USE[/bold]\n{t.when_to_use}\n\n"
         f"[bold]WHEN NOT TO USE[/bold]\n{t.when_not_to_use}\n\n"
         f"[bold]MAX PROFIT[/bold]  {t.max_profit}\n"

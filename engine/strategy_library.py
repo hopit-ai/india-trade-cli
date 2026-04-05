@@ -72,7 +72,8 @@ class StrategyTemplate:
     max_loss: str  # e.g. "Net debit paid"
     ideal_iv: str  # "low" | "high" | "any"
     ideal_dte: tuple[int, int]  # (min_days, max_days)
-    explanation: str  # 2-4 sentence plain-English description
+    layman_explanation: str  # 1-2 sentences in plain language, zero jargon
+    explanation: str  # 2-4 sentence technical description
     when_to_use: str  # 1-2 sentences
     when_not_to_use: str  # 1-2 sentences
     risks: list[str]  # bullet-point risks
@@ -95,6 +96,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Limited to premium paid",
         ideal_iv="low",
         ideal_dte=(7, 45),
+        layman_explanation=(
+            "You pay a small fee today for the right to buy a stock at today's price later. "
+            "If the stock goes up, you profit. If it doesn't, you only lose the fee you paid — nothing more."
+        ),
         explanation=(
             "Buy an ATM call option for the right to buy the underlying at the strike price. "
             "Profit is unlimited if the stock rises strongly; loss is capped at the premium paid. "
@@ -124,6 +129,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Net debit paid",
         ideal_iv="low",
         ideal_dte=(15, 45),
+        layman_explanation=(
+            "You bet the stock will rise, but only moderately. "
+            "You buy one call and sell another at a higher price to cut your cost — "
+            "your profit is capped, but so is what you can lose."
+        ),
         explanation=(
             "Buy an ATM call and sell an OTM call at the same expiry. "
             "The short call reduces cost but caps your upside at the short strike. "
@@ -153,6 +163,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Spread width minus net credit",
         ideal_iv="high",
         ideal_dte=(15, 45),
+        layman_explanation=(
+            "Someone pays you money now to bet the stock won't fall below a certain level. "
+            "If you're right, you keep the cash. If you're wrong, your loss is capped."
+        ),
         explanation=(
             "Sell an OTM put and buy a further OTM put for protection. "
             "You collect a net credit upfront; keep it all if the stock stays above the short put. "
@@ -182,6 +196,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Effectively unlimited on the downside (put assignment risk)",
         ideal_iv="any",
         ideal_dte=(30, 90),
+        layman_explanation=(
+            "It acts just like owning the stock — rises and falls with it — "
+            "but you only put up a fraction of the capital. "
+            "The catch: if it falls, you lose just as much as if you owned the shares."
+        ),
         explanation=(
             "Buy an ATM call and sell an ATM put at the same strike and expiry. "
             "The payoff mimics owning the stock — unlimited upside, full downside — "
@@ -212,6 +231,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Maximum loss between the two strikes near expiry",
         ideal_iv="low",
         ideal_dte=(15, 45),
+        layman_explanation=(
+            "You sell one expensive bet and use the money to buy two cheaper bets on a bigger move. "
+            "You win big if the stock shoots up or crashes — "
+            "but lose if it just drifts to a middle level."
+        ),
         explanation=(
             "Sell 1 ATM call and buy 2 OTM calls. The position profits from a large rally "
             "or a sharp fall (if entered for a net credit). The loss zone is between the two strikes. "
@@ -239,6 +263,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Limited to premium paid",
         ideal_iv="low",
         ideal_dte=(7, 45),
+        layman_explanation=(
+            "You pay a small fee to profit if the stock falls. "
+            "Think of it as insurance that pays out when prices drop — "
+            "if the stock rises instead, you only lose the fee."
+        ),
         explanation=(
             "Buy an ATM put option for the right to sell the underlying at the strike. "
             "Profits grow as the stock falls; max loss is the premium paid if stock rises or stays flat. "
@@ -268,6 +297,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Net debit paid",
         ideal_iv="low",
         ideal_dte=(15, 45),
+        layman_explanation=(
+            "You bet the stock will fall, but not by a lot. "
+            "Buying one put and selling another cheaper one cuts your upfront cost — "
+            "you give up some profit potential but pay less to enter."
+        ),
         explanation=(
             "Buy an ATM put and sell an OTM put at the same expiry. "
             "Profits from a moderate decline; the short put caps the downside gain "
@@ -297,6 +331,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Spread width minus net credit",
         ideal_iv="high",
         ideal_dte=(15, 45),
+        layman_explanation=(
+            "Someone pays you money now to bet the stock won't rise above a certain level. "
+            "If you're right, you keep the cash. If the stock surges past your limit, your loss is capped."
+        ),
         explanation=(
             "Sell an OTM call and buy a further OTM call for protection. "
             "Collect a net credit; keep it if the stock stays below the short call. "
@@ -326,6 +364,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Effectively unlimited on the upside (call assignment risk)",
         ideal_iv="any",
         ideal_dte=(30, 90),
+        layman_explanation=(
+            "It acts like short-selling the stock without actually borrowing shares — "
+            "you profit as the price falls. "
+            "But if the stock shoots up, you lose just as much as a short-seller would."
+        ),
         explanation=(
             "Buy an ATM put and sell an ATM call at the same strike and expiry. "
             "The payoff mimics short-selling the stock without actually borrowing shares. "
@@ -355,6 +398,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Maximum loss between the two strikes near expiry",
         ideal_iv="low",
         ideal_dte=(15, 45),
+        layman_explanation=(
+            "Same idea as the call ratio backspread but for a falling market — "
+            "you sell one expensive put and buy two cheaper ones on a bigger drop. "
+            "Win on a crash or a rally; lose if the stock lands in the middle."
+        ),
         explanation=(
             "Sell 1 ATM put and buy 2 OTM puts. Profits from a large decline "
             "or a sharp rally (if entered for a net credit). Loss zone is between the two strikes. "
@@ -387,6 +435,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Wing width minus net credit (defined)",
         ideal_iv="high",
         ideal_dte=(20, 45),
+        layman_explanation=(
+            "You collect rent by betting the stock will stay parked between two price levels. "
+            "As long as it doesn't go too high or too low by expiry, you keep all the money. "
+            "Think of it as drawing a profit box around the current price."
+        ),
         explanation=(
             "Sell an OTM call spread and an OTM put spread simultaneously. "
             "Profits if the underlying stays between the two short strikes through expiry. "
@@ -426,6 +479,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Wing width minus net credit",
         ideal_iv="high",
         ideal_dte=(15, 30),
+        layman_explanation=(
+            "Like an iron condor but with a tighter profit zone right at the current price. "
+            "You collect more cash upfront, but the stock needs to land almost exactly where it is now for you to keep it."
+        ),
         explanation=(
             "Sell ATM call and put (straddle) and buy OTM wings for protection. "
             "Higher credit than an iron condor because the short strikes are ATM, "
@@ -455,6 +512,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Unlimited in either direction",
         ideal_iv="high",
         ideal_dte=(15, 30),
+        layman_explanation=(
+            "You collect rent from both the bulls and the bears, betting the stock goes nowhere. "
+            "Great income if the stock stays flat — but if it makes a big move either way, your losses are unlimited."
+        ),
         explanation=(
             "Sell an ATM call and an ATM put at the same strike and expiry. "
             "You collect the combined premium; the stock must stay near the strike to profit. "
@@ -484,6 +545,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Unlimited in either direction",
         ideal_iv="high",
         ideal_dte=(15, 30),
+        layman_explanation=(
+            "A roomier version of the short straddle — you give the stock more space to wander "
+            "before it hurts you, but you collect less cash. Still unlimited loss if it moves big."
+        ),
         explanation=(
             "Sell an OTM call and an OTM put at the same expiry. "
             "The profit zone is wider than a short straddle (between the two short strikes) "
@@ -513,6 +578,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Stock falls to zero minus premium received",
         ideal_iv="any",
         ideal_dte=(20, 45),
+        layman_explanation=(
+            "You own a stock and charge someone a fee for the option to buy it from you at a higher price. "
+            "You earn extra income every month — but if the stock rockets, they take your shares at the agreed price."
+        ),
         explanation=(
             "Own the stock and sell an OTM call against it each month. "
             "The premium reduces your cost basis and provides income; "
@@ -540,6 +609,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Short put strike minus premium (stock falls to zero)",
         ideal_iv="any",
         ideal_dte=(20, 45),
+        layman_explanation=(
+            "You tell the market: 'I'm happy to buy this stock if it falls to ₹X — pay me now for that promise.' "
+            "You earn cash upfront. If the stock stays above ₹X, you keep the cash and do it again next month."
+        ),
         explanation=(
             "Sell an OTM put and set aside the capital to buy the shares if assigned. "
             "You earn the premium and may acquire the stock at a price you are happy to own it. "
@@ -570,6 +643,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Put spread width minus total credit (downside risk only)",
         ideal_iv="high",
         ideal_dte=(20, 40),
+        layman_explanation=(
+            "You collect rent from three bets at once and engineer it so there's no way to lose if the stock rises. "
+            "The only way you lose is if the stock falls hard — and even that loss is capped."
+        ),
         explanation=(
             "Sell an OTM call, sell an OTM put, and buy a further OTM put for protection. "
             "The total credit exceeds the call strike distance, eliminating upside risk. "
@@ -600,6 +677,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Total premium paid for both legs",
         ideal_iv="low",
         ideal_dte=(15, 60),
+        layman_explanation=(
+            "You don't know which way the stock will move, but you're sure it'll move a lot. "
+            "So you buy both a 'goes up' bet and a 'goes down' bet — "
+            "whichever direction it explodes in, you win."
+        ),
         explanation=(
             "Buy an ATM call and an ATM put at the same strike and expiry. "
             "Profits from a large move in either direction; the exact direction does not matter. "
@@ -629,6 +711,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Total premium paid (less than straddle)",
         ideal_iv="low",
         ideal_dte=(15, 60),
+        layman_explanation=(
+            "Same idea as a straddle — bet on a big move in either direction — "
+            "but cheaper because you buy slightly out-of-the-money bets. "
+            "The trade-off: the stock needs to move even more before you start making money."
+        ),
         explanation=(
             "Buy an OTM call and an OTM put at the same expiry. "
             "Cheaper than a straddle because both legs are OTM; "
@@ -659,6 +746,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Net debit paid (far premium minus near premium received)",
         ideal_iv="any",
         ideal_dte=(15, 45),
+        layman_explanation=(
+            "You rent out a short-term bet to someone while holding a longer-term one yourself. "
+            "The short-term rent expires and loses value faster — you pocket that difference. "
+            "Works best if the stock stays near its current price in the short run."
+        ),
         explanation=(
             "Sell a near-term ATM call and buy a longer-term ATM call at the same strike. "
             "The near-term leg decays faster; you profit from the difference in theta decay rates. "
@@ -689,6 +781,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Net debit paid (far premium minus near credit received)",
         ideal_iv="any",
         ideal_dte=(20, 60),
+        layman_explanation=(
+            "You buy a long-term bullish bet and partially fund it by selling a short-term, smaller bet. "
+            "You stay bullish overall while collecting near-term rent to reduce your cost."
+        ),
         explanation=(
             "Sell a near-term OTM call and buy a far-term ATM call — different strikes and expiries. "
             "Combines the theta benefit of the short near leg with the directional benefit of the long far leg. "
@@ -719,6 +815,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="(Stock price - put strike + put premium) per share × lot size",
         ideal_iv="any",
         ideal_dte=(30, 90),
+        layman_explanation=(
+            "You own a stock and buy insurance against it falling. "
+            "Like car insurance — you pay a premium, and if something bad happens (a big drop), the policy pays out. "
+            "Your upside is still unlimited; your downside is capped."
+        ),
         explanation=(
             "Own the stock and buy a slightly OTM put as insurance. "
             "If the stock falls, the put gains value and limits your downside. "
@@ -749,6 +850,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="(Stock price - long put strike + net option debit) — defined",
         ideal_iv="any",
         ideal_dte=(30, 90),
+        layman_explanation=(
+            "You put a safety floor under your stock and fund it by agreeing to sell at a ceiling price. "
+            "Your loss is limited and the hedge is often free — but you give up gains above the ceiling."
+        ),
         explanation=(
             "Own the stock, buy a downside put for protection, and sell an upside call to fund the put. "
             "The sold call partially or fully offsets the cost of the protective put. "
@@ -778,6 +883,11 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Put premium paid (stock is protected at ATM strike)",
         ideal_iv="any",
         ideal_dte=(30, 60),
+        layman_explanation=(
+            "You buy a stock and full insurance at the same time. "
+            "If the stock crashes to zero, your insurance policy pays out dollar-for-dollar — "
+            "the most you can ever lose is the insurance premium."
+        ),
         explanation=(
             "Buy the stock and simultaneously buy an ATM put. "
             "The put fully protects the position — if the stock falls, the put gains dollar-for-dollar. "
@@ -808,6 +918,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="Put spread width minus total net credit received — defined downside",
         ideal_iv="high",
         ideal_dte=(30, 90),
+        layman_explanation=(
+            "You build a cheap safety net under your portfolio by selling two different bets to fund it. "
+            "Often costs nothing or pays you a small credit — you're hedged below and capped above."
+        ),
         explanation=(
             "Buy an OTM put, sell a further OTM put, and sell an OTM call. "
             "The put spread provides cheap downside protection; the short call funds it. "
@@ -838,6 +952,10 @@ TEMPLATES: dict[str, StrategyTemplate] = {
         max_loss="(Stock price - put strike - net credit) if stock falls below put",
         ideal_iv="any",
         ideal_dte=(30, 60),
+        layman_explanation=(
+            "You buy cheap downside insurance and let someone else pay for it by giving up your upside. "
+            "It's like getting free flood insurance on your house by agreeing to sell it below market if prices rise."
+        ),
         explanation=(
             "Buy a slightly OTM put and sell a further OTM call (no stock position). "
             "The short call funds the put and provides a net credit or near-zero cost hedge. "
