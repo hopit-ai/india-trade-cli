@@ -82,6 +82,12 @@ def _require_localhost(request: _Request) -> None:
 app.include_router(_skills_router)
 
 
+@app.get("/health", tags=["System"])
+async def health():
+    """Health check for the Electron desktop app sidecar."""
+    return {"status": "ok"}
+
+
 @app.get("/.well-known/openclaw.json", tags=["OpenClaw"])
 async def openclaw_manifest(request: Request):
     """OpenClaw skill discovery manifest — lists all available skills and their input schemas."""

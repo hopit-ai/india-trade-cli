@@ -1,0 +1,42 @@
+{
+  "name": "india-trade",
+  "productName": "India Trade",
+  "version": "0.2.0",
+  "description": "India Trade — macOS desktop app",
+  "author": "Hopit AI",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build && electron-builder --mac",
+    "preview": "electron-vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^35.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.17"
+  },
+  "build": {
+    "appId": "ai.hopit.india-trade",
+    "productName": "India Trade",
+    "files": [
+      "out/**/*",
+      "build/icon.icns"
+    ],
+    "mac": {
+      "category": "public.app-category.finance",
+      "icon": "build/icon.icns",
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] }
+      ]
+    }
+  }
+}

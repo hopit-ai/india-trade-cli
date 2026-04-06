@@ -491,6 +491,34 @@ async def skill_alerts_remove(req: AlertRemoveRequest):
         raise _err(str(e))
 
 
+@router.post("/holdings")
+async def skill_holdings():
+    """Return current broker holdings as structured JSON."""
+    try:
+        from brokers.session import get_active_broker
+        broker = get_active_broker()
+        if broker is None:
+            return {"status": "ok", "data": {"holdings": [], "note": "No broker connected — running in demo mode."}}
+        holdings = broker.get_holdings()
+        return {"status": "ok", "data": {"holdings": _serialise(holdings)}}
+    except Exception as e:
+        raise _err(str(e))
+
+
+@router.post("/positions")
+async def skill_positions():
+    """Return current broker positions as structured JSON."""
+    try:
+        from brokers.session import get_active_broker
+        broker = get_active_broker()
+        if broker is None:
+            return {"status": "ok", "data": {"holdings": [], "note": "No broker connected — running in demo mode."}}
+        positions = broker.get_positions()
+        return {"status": "ok", "data": {"holdings": _serialise(positions)}}
+    except Exception as e:
+        raise _err(str(e))
+
+
 @router.post("/alerts/check")
 async def skill_alerts_check():
     """
