@@ -332,6 +332,8 @@ async def skill_analyze_stream(symbol: str, exchange: str = "NSE"):
             asyncio.run_coroutine_threadsafe(queue.put(None), loop)  # sentinel
 
     async def _generator():
+        # Immediately confirm the stream is open (before any LLM work begins)
+        yield f"data: {json.dumps({'type': 'started', 'symbol': symbol.upper(), 'exchange': exchange.upper()})}\n\n"
         # Fire off analysis in a background thread — does NOT block the event loop
         asyncio.ensure_future(loop.run_in_executor(None, _run))
         while True:

@@ -1435,6 +1435,9 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": bull_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback({"type": "debate_step", "step": "bull_r1",
+                                    "label": "Bull Researcher", "text": bull_argument})
 
         # Bear counter
         bear_prompt = BEAR_RESEARCHER_PROMPT.format(
@@ -1450,6 +1453,9 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": bear_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback({"type": "debate_step", "step": "bear_r1",
+                                    "label": "Bear Researcher", "text": bear_argument})
 
         # ── Round 2: Rebuttals ───────────────────────────────
         if self.verbose:
@@ -1469,6 +1475,9 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": bull_rebuttal_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback({"type": "debate_step", "step": "bull_r2",
+                                    "label": "Bull Rebuttal", "text": bull_rebuttal})
 
         # Bear rebuttal
         bear_rebuttal_prompt = BEAR_REBUTTAL_PROMPT.format(
@@ -1484,6 +1493,9 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": bear_rebuttal_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback({"type": "debate_step", "step": "bear_r2",
+                                    "label": "Bear Rebuttal", "text": bear_rebuttal})
 
         # ── Facilitator: Summarize & pick winner ─────────────
         facilitator_prompt = FACILITATOR_PROMPT.format(
@@ -1501,6 +1513,9 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": facilitator_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback({"type": "debate_step", "step": "facilitator",
+                                    "label": "Facilitator", "text": facilitator_summary})
 
         # Extract winner from facilitator
         winner = ""
@@ -1703,6 +1718,8 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": synthesis_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback({"type": "synthesis_text", "text": synthesis})
 
         return synthesis
 

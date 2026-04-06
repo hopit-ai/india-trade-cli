@@ -21,6 +21,15 @@ export default {
         mono: ['"JetBrains Mono"', '"Fira Code"', 'Menlo', 'monospace'],
         ui:   ['-apple-system', 'BlinkMacSystemFont', '"Helvetica Neue"', 'sans-serif'],
       },
+      keyframes: {
+        'fade-slide': {
+          '0%':   { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'fade-slide': 'fade-slide 0.35s ease-out',
+      },
     },
   },
   plugins: [],

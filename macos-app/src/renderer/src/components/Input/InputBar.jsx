@@ -56,6 +56,7 @@ export default function InputBar() {
   const {
     addUserMessage, addResponse, addError, isLoading,
     startStreamingMessage, updateStreamingMessage, finalizeStreamingMessage,
+    setStreamCancel,
   } = useChatStore()
   const inputRef = useRef(null)
 
@@ -66,32 +67,49 @@ export default function InputBar() {
     const url = `http://127.0.0.1:${port}/skills/analyze/stream?symbol=${symbol}&exchange=${exchange}`
     const es  = new EventSource(url)
 
-    es.onmessage = (e) => {
-      try {
-        const event = JSON.parse(e.data)
+    function applyEvent(event) {
+      if (event.type === 'started') {
+        updateStreamingMessage(msgId, (d) => ({ ...d, phase: 'started' }))
+      } else if (event.type === 'analyst') {
+        updateStreamingMessage(msgId, (d) => ({
+          ...d,
+          analysts: [...d.analysts, {
+            name: event.name, verdict: event.verdict,
+            confidence: event.confidence, error: event.error,
+          }],
+        }))
+      } else if (event.type === 'phase') {
+        updateStreamingMessage(msgId, (d) => ({ ...d, phase: event.phase }))
+      } else if (event.type === 'debate_step') {
+        updateStreamingMessage(msgId, (d) => ({
+          ...d,
+          debate_steps: [...(d.debate_steps ?? []), { step: event.step, label: event.label, text: event.text }],
+        }))
+      } else if (event.type === 'synthesis_text') {
+        updateStreamingMessage(msgId, (d) => ({ ...d, synthesis_text: event.text }))
+      } else if (event.type === 'done') {
+        updateStreamingMessage(msgId, (d) => ({
+          ...d, phase: 'done', report: event.report, trade_plans: event.trade_plans,
+        }))
+        es.close()
+        setStreamCancel(null)
+        finalizeStreamingMessage(msgId)
+      } else if (event.type === 'error') {
+        es.close()
+        setStreamCancel(null)
+        addError(event.message)
+        finalizeStreamingMessage(msgId)
+      }
+    }
 
-        if (event.type === 'analyst') {
-          updateStreamingMessage(msgId, (d) => ({
-            ...d,
-            analysts: [...d.analysts, { name: event.name, verdict: event.verdict, confidence: event.confidence, error: event.error }],
-          }))
-        } else if (event.type === 'phase') {
-          updateStreamingMessage(msgId, (d) => ({ ...d, phase: event.phase }))
-        } else if (event.type === 'done') {
-          updateStreamingMessage(msgId, (d) => ({
-            ...d,
-            phase: 'done',
-            report: event.report,
-            trade_plans: event.trade_plans,
-          }))
-          es.close()
-          finalizeStreamingMessage(msgId)
-        } else if (event.type === 'error') {
-          es.close()
-          addError(event.message)
-          finalizeStreamingMessage(msgId)
-        }
-      } catch (_) { /* ignore parse errors */ }
+    // Register cancel so the card's Stop button can close the stream
+    setStreamCancel(() => {
+      es.close()
+      finalizeStreamingMessage(msgId)
+    })
+
+    es.onmessage = (e) => {
+      try { applyEvent(JSON.parse(e.data)) } catch (err) { console.error('[SSE]', err) }
     }
 
     es.onerror = () => {

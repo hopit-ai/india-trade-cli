@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, ipcMain } from 'electron'
 import { join, resolve } from 'path'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
 import { homedir } from 'os'
@@ -99,7 +99,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
     startSidecar(
-      port => mainWindow?.webContents.send('sidecar-ready', { port }),
+      port => { _readyPort = port; mainWindow?.webContents.send('sidecar-ready', { port }) },
       err  => mainWindow?.webContents.send('sidecar-error', { message: err }),
     )
   })
@@ -107,6 +107,13 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
 }
+
+// ---------------------------------------------------------------------------
+// IPC — renderer can request the current port after HMR / reload
+// ---------------------------------------------------------------------------
+let _readyPort = null  // set once uvicorn is up
+
+ipcMain.handle('get-port', () => _readyPort)
 
 // ---------------------------------------------------------------------------
 // Lifecycle

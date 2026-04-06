@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 
 export const useChatStore = create((set, get) => ({
-  messages:     [],
-  isLoading:    false,
-  port:         null,
-  sidecarError: null,
-  brokerStatus: { connected: false, broker: null },
+  messages:      [],
+  isLoading:     false,
+  port:          null,
+  sidecarError:  null,
+  brokerStatus:  { connected: false, broker: null },
+  streamCancel:  null,   // () => void — closes the active EventSource
 
   setPort:         (port)   => set({ port, sidecarError: null }),
   setSidecarError: (msg)    => set({ sidecarError: msg }),
@@ -30,13 +31,20 @@ export const useChatStore = create((set, get) => ({
 
   setLoading: (v) => set({ isLoading: v }),
 
+  setStreamCancel: (fn) => set({ streamCancel: fn }),
+
+  cancelStream: () => {
+    const { streamCancel } = get()
+    if (streamCancel) { streamCancel(); set({ streamCancel: null, isLoading: false }) }
+  },
+
   // Streaming support — used by analyze SSE
   startStreamingMessage: (id, symbol, exchange) => set((s) => ({
     messages: [...s.messages, {
       id,
       role: 'assistant',
       cardType: 'streaming_analysis',
-      data: { symbol, exchange, analysts: [], phase: 'analysts', report: null, trade_plans: null },
+      data: { symbol, exchange, analysts: [], debate_steps: [], synthesis_text: null, phase: 'analysts', report: null, trade_plans: null },
     }],
     isLoading: true,
   })),

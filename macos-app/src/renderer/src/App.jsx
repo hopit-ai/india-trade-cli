@@ -8,8 +8,12 @@ export default function App() {
   const { setPort, setSidecarError } = useChatStore()
 
   useEffect(() => {
+    // Listen for future sidecar-ready events (first launch)
     window.electronAPI?.onSidecarReady(({ port }) => setPort(port))
     window.electronAPI?.onSidecarError(({ message }) => setSidecarError(message))
+
+    // After HMR or renderer reload, sidecar-ready already fired — ask main for the port
+    window.electronAPI?.getPort().then(port => { if (port) setPort(port) })
   }, [])
 
   return (
