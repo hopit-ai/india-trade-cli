@@ -1,0 +1,45 @@
+{
+  "name": "india-trade",
+  "productName": "India Trade",
+  "version": "0.1.0",
+  "description": "India Trade CLI — macOS desktop app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "build": "electron-builder --mac"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9"
+  },
+  "build": {
+    "appId": "ai.hopit.india-trade",
+    "productName": "India Trade",
+    "mac": {
+      "category": "public.app-category.finance",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "files": [
+      "main.js",
+      "renderer/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache/**/*"
+    ],
+    "nativeRebuilder": "legacy"
+  }
+}

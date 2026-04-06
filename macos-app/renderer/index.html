@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>India Trade</title>
+  <!-- xterm.js styles loaded from local node_modules (no CDN) -->
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Custom header bar — draggable to move the window -->
+  <div id="titlebar">
+    <!-- Left: spacer for traffic lights (close / minimise / maximise) -->
+    <div id="titlebar-traffic-light-spacer"></div>
+
+    <!-- Centre: app name -->
+    <div id="app-title">
+      <span id="app-icon">◆</span>
+      <span id="app-name">India Trade</span>
+    </div>
+
+    <!-- Right: connection status -->
+    <div id="app-status">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">starting…</span>
+    </div>
+  </div>
+
+  <!-- xterm.js mounts here -->
+  <div id="terminal-container"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
