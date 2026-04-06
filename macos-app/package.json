@@ -3,6 +3,7 @@
   "productName": "India Trade",
   "version": "0.1.0",
   "description": "India Trade CLI — macOS desktop app",
+  "author": "Hopit AI",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -24,6 +25,7 @@
     "productName": "India Trade",
     "mac": {
       "category": "public.app-category.finance",
+      "icon": "build/icon.icns",
       "target": [
         {
           "target": "dmg",
@@ -40,6 +42,6 @@
       "node_modules/**/*",
       "!node_modules/.cache/**/*"
     ],
-    "nativeRebuilder": "legacy"
+    "npmRebuild": true
   }
 }
