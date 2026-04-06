@@ -1046,12 +1046,14 @@ class MultiAgentAnalyzer:
         parallel: bool = True,
         verbose: bool = True,
         risk_debate: bool = False,
+        progress_callback=None,
     ) -> None:
         self.registry = registry
         self.llm = llm_provider
         self.parallel = parallel
         self.verbose = verbose
         self.risk_debate = risk_debate  # enable 3-way risk debate (aggressive/conservative/neutral)
+        self.progress_callback = progress_callback
 
         news_analyst = NewsMacroAnalyst(registry)
         news_analyst.set_llm(llm_provider)
@@ -1101,6 +1103,8 @@ class MultiAgentAnalyzer:
             console.print(f"\n[dim]{scorecard.summary()}[/dim]")
 
         # ── Phase 2: Bull/Bear Debate ────────────────────────
+        if self.progress_callback:
+            self.progress_callback({"type": "phase", "phase": "debate"})
         if self.verbose:
             console.print()
             console.rule(
@@ -1131,6 +1135,8 @@ class MultiAgentAnalyzer:
                 console.print(f"[dim]Risk debate completed in {risk_debate_time:.1f}s[/dim]")
 
         # ── Phase 3: Synthesis ───────────────────────────────
+        if self.progress_callback:
+            self.progress_callback({"type": "phase", "phase": "synthesis"})
         if self.verbose:
             console.print()
             console.rule("[bold green]Fund Manager — Final Synthesis[/bold green]", style="green")
@@ -1292,6 +1298,15 @@ class MultiAgentAnalyzer:
                             else f"[red]FAIL: {report.error[:50]}[/red]"
                         )
                         console.print(f"  [dim]{analyst.name:<15}[/dim] {status}")
+                    if self.progress_callback:
+                        self.progress_callback({
+                            "type": "analyst",
+                            "name": analyst.name,
+                            "verdict": report.verdict,
+                            "confidence": report.confidence,
+                            "score": getattr(report, "score", 0),
+                            "error": report.error,
+                        })
                 except Exception as e:
                     reports.append(
                         AnalystReport(
@@ -1304,6 +1319,15 @@ class MultiAgentAnalyzer:
                     )
                     if self.verbose:
                         console.print(f"  [dim]{analyst.name:<15}[/dim] [red]FAIL: {e}[/red]")
+                    if self.progress_callback:
+                        self.progress_callback({
+                            "type": "analyst",
+                            "name": analyst.name,
+                            "verdict": "UNKNOWN",
+                            "confidence": 0,
+                            "score": 0,
+                            "error": str(e),
+                        })
 
         return reports
 

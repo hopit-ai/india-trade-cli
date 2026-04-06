@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useChatStore } from '../../store/chatStore'
 import Message from './Message'
 
@@ -39,14 +39,34 @@ export default function ChatArea() {
       ))}
 
       {/* Loading indicator */}
-      {isLoading && (
-        <div className="flex items-center gap-2 text-muted text-sm font-mono">
-          <span className="animate-pulse">◆</span>
-          <span>Thinking…</span>
-        </div>
-      )}
+      {isLoading && <ThinkingIndicator />}
 
       <div ref={bottomRef} />
+    </div>
+  )
+}
+
+function ThinkingIndicator() {
+  const [secs, setSecs] = useState(0)
+
+  useEffect(() => {
+    const t = setInterval(() => setSecs(s => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const hint = secs > 15
+    ? 'Running multi-agent analysis — this takes 30–90s…'
+    : secs > 5
+    ? 'Calling AI agents…'
+    : 'Thinking…'
+
+  return (
+    <div className="flex items-center gap-3 bg-elevated border border-border rounded-xl px-4 py-3 max-w-sm">
+      <span className="text-amber animate-pulse text-lg">◆</span>
+      <div>
+        <p className="text-text text-sm font-ui">{hint}</p>
+        <p className="text-muted text-xs font-mono mt-0.5">{secs}s elapsed</p>
+      </div>
     </div>
   )
 }

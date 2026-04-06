@@ -13,29 +13,35 @@ function parseCommand(input) {
       if (!args[0]) return { error: 'Usage: quote SYMBOL' }
       return { endpoint: '/skills/quote', body: { symbol: args[0].toUpperCase() }, cardType: 'quote' }
 
-    case 'analyze': case 'analyse':
+    case 'analyze': case 'analyse': case 'a':
       if (!args[0]) return { error: 'Usage: analyze SYMBOL' }
-      return { endpoint: '/skills/analyze', body: { symbol: args[0].toUpperCase() }, cardType: 'markdown' }
+      return { stream: true, symbol: args[0].toUpperCase(), exchange: args[1]?.toUpperCase() ?? 'NSE' }
 
-    case 'morning-brief': case 'brief':
+    case 'morning-brief': case 'brief': case 'mb':
       return { endpoint: '/skills/morning_brief', body: {}, cardType: 'morning_brief' }
 
-    case 'flows':
-      return { endpoint: '/skills/flows', body: {}, cardType: 'markdown' }
+    case 'flows': case 'flow':
+      return { endpoint: '/skills/flows', body: {}, cardType: 'flows' }
 
-    case 'holdings':
+    case 'holdings': case 'h':
       return { endpoint: '/skills/holdings', body: {}, cardType: 'holdings' }
 
-    case 'positions':
+    case 'positions': case 'pos':
       return { endpoint: '/skills/positions', body: {}, cardType: 'holdings' }
 
-    case 'backtest':
-      if (args.length < 2) return { error: 'Usage: backtest SYMBOL STRATEGY' }
+    case 'backtest': case 'bt':
+      if (args.length < 2) return { error: 'Usage: backtest SYMBOL STRATEGY  (e.g. backtest RELIANCE rsi)' }
       return {
         endpoint: '/skills/backtest',
         body: { symbol: args[0].toUpperCase(), strategy: args[1] },
-        cardType: 'markdown',
+        cardType: 'backtest',
       }
+
+    case 'macro':
+      return { endpoint: '/skills/macro', body: {}, cardType: 'markdown' }
+
+    case 'earnings':
+      return { endpoint: '/skills/earnings', body: { symbols: args }, cardType: 'markdown' }
 
     default:
       // Fall through to AI chat
@@ -46,8 +52,54 @@ function parseCommand(input) {
 export default function InputBar() {
   const [value, setValue]   = useState('')
   const { call, ready }     = useAPI()
-  const { addUserMessage, addResponse, addError, isLoading } = useChatStore()
-  const inputRef            = useRef(null)
+  const port = useChatStore((s) => s.port)
+  const {
+    addUserMessage, addResponse, addError, isLoading,
+    startStreamingMessage, updateStreamingMessage, finalizeStreamingMessage,
+  } = useChatStore()
+  const inputRef = useRef(null)
+
+  function runStreaming(symbol, exchange) {
+    const msgId = Date.now() + 1
+    startStreamingMessage(msgId, symbol, exchange)
+
+    const url = `http://127.0.0.1:${port}/skills/analyze/stream?symbol=${symbol}&exchange=${exchange}`
+    const es  = new EventSource(url)
+
+    es.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data)
+
+        if (event.type === 'analyst') {
+          updateStreamingMessage(msgId, (d) => ({
+            ...d,
+            analysts: [...d.analysts, { name: event.name, verdict: event.verdict, confidence: event.confidence, error: event.error }],
+          }))
+        } else if (event.type === 'phase') {
+          updateStreamingMessage(msgId, (d) => ({ ...d, phase: event.phase }))
+        } else if (event.type === 'done') {
+          updateStreamingMessage(msgId, (d) => ({
+            ...d,
+            phase: 'done',
+            report: event.report,
+            trade_plans: event.trade_plans,
+          }))
+          es.close()
+          finalizeStreamingMessage(msgId)
+        } else if (event.type === 'error') {
+          es.close()
+          addError(event.message)
+          finalizeStreamingMessage(msgId)
+        }
+      } catch (_) { /* ignore parse errors */ }
+    }
+
+    es.onerror = () => {
+      es.close()
+      addError('Stream connection lost')
+      finalizeStreamingMessage(msgId)
+    }
+  }
 
   async function submit() {
     const text = value.trim()
@@ -60,6 +112,12 @@ export default function InputBar() {
 
     if (parsed.error) {
       addError(parsed.error)
+      return
+    }
+
+    // SSE streaming path for analyze
+    if (parsed.stream) {
+      runStreaming(parsed.symbol, parsed.exchange)
       return
     }
 

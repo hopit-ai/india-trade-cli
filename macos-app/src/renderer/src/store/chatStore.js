@@ -29,4 +29,21 @@ export const useChatStore = create((set, get) => ({
   })),
 
   setLoading: (v) => set({ isLoading: v }),
+
+  // Streaming support — used by analyze SSE
+  startStreamingMessage: (id, symbol, exchange) => set((s) => ({
+    messages: [...s.messages, {
+      id,
+      role: 'assistant',
+      cardType: 'streaming_analysis',
+      data: { symbol, exchange, analysts: [], phase: 'analysts', report: null, trade_plans: null },
+    }],
+    isLoading: true,
+  })),
+
+  updateStreamingMessage: (id, updater) => set((s) => ({
+    messages: s.messages.map((m) => m.id === id ? { ...m, data: updater(m.data) } : m),
+  })),
+
+  finalizeStreamingMessage: (_id) => set({ isLoading: false }),
 }))

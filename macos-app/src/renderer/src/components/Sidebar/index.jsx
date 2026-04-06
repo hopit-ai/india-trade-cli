@@ -78,8 +78,10 @@ async function routeCommand(call, command) {
       return { cardType: 'holdings', data: unwrap(await call('/skills/positions', {})) }
     case 'portfolio':
       return { cardType: 'markdown', data: { text: 'Portfolio view coming soon.' } }
-    case 'flows':
-      return { cardType: 'flows', data: unwrap(await call('/skills/flows', {})) }
+    case 'flows': {
+      const fd = unwrap(await call('/skills/flows', {}))
+      return { cardType: 'flows', data: fd?.flow_analysis ?? fd }
+    }
     default:
       throw new Error(`Unknown command: ${command}`)
   }

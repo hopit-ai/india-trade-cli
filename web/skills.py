@@ -34,9 +34,13 @@ Manifest:
 
 from __future__ import annotations
 
+import asyncio
+import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.tools import _serialise
@@ -266,6 +270,81 @@ async def skill_analyze(req: AnalyzeRequest):
         }
     except Exception as e:
         raise _err(str(e))
+
+
+@router.get("/analyze/ping")
+async def skill_analyze_ping():
+    """Quick SSE test — emits 3 events then closes."""
+    import time
+
+    async def _gen():
+        for i in range(3):
+            yield f"data: {json.dumps({'type': 'ping', 'i': i})}\n\n"
+            await asyncio.sleep(1)
+
+    return StreamingResponse(_gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@router.get("/analyze/stream")
+async def skill_analyze_stream(symbol: str, exchange: str = "NSE"):
+    """
+    SSE stream of multi-agent analysis progress.
+
+    Events (text/event-stream):
+      {"type":"analyst","name":"...","verdict":"...","confidence":70,"score":0.6,"error":null}
+      {"type":"phase","phase":"debate"}
+      {"type":"phase","phase":"synthesis"}
+      {"type":"done","symbol":"...","exchange":"...","report":"...","trade_plans":{...}}
+      {"type":"error","message":"..."}
+    """
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def _cb(event: dict):
+        asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+
+    def _run():
+        """Runs entirely in a background thread — no event loop blocking."""
+        try:
+            import os as _os
+            # Suppress interactive stdin prompts: if provider setup needs stdin, fail fast.
+            _os.environ.setdefault("_CLI_BATCH_MODE", "1")
+
+            from agent.tools import build_registry
+            from agent.core import get_provider
+            from agent.multi_agent import MultiAgentAnalyzer as _MAA
+
+            registry = build_registry()
+            provider = get_provider(registry=registry)
+            analyzer = _MAA(registry, provider, verbose=False, progress_callback=_cb)
+            report = analyzer.analyze(symbol.upper(), exchange.upper())
+            _cb({
+                "type": "done",
+                "symbol": symbol.upper(),
+                "exchange": exchange.upper(),
+                "report": report,
+                "trade_plans": _serialise(getattr(analyzer, "last_trade_plans", {})),
+            })
+        except Exception as exc:
+            _cb({"type": "error", "message": str(exc)})
+        finally:
+            asyncio.run_coroutine_threadsafe(queue.put(None), loop)  # sentinel
+
+    async def _generator():
+        # Fire off analysis in a background thread — does NOT block the event loop
+        asyncio.ensure_future(loop.run_in_executor(None, _run))
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/deep_analyze")
