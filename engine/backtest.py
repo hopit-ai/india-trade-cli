@@ -292,7 +292,316 @@ STRATEGIES = {
     "macd": lambda args: MACDStrategy(),
     "bollinger": lambda args: BollingerStrategy(),
     "bb": lambda args: BollingerStrategy(),
+    "supertrend": lambda args: SupertrendStrategy(
+        period=int(args[0]) if args else 10,
+        multiplier=float(args[1]) if len(args) > 1 else 3.0,
+    ),
+    "heikin_ashi": lambda args: HeikinAshiStrategy(
+        ema_period=int(args[0]) if args else 21,
+    ),
+    "donchian": lambda args: DonchianStrategy(
+        period=int(args[0]) if args else 20,
+    ),
+    "psar": lambda args: ParabolicSARStrategy(
+        step=float(args[0]) if args else 0.02,
+        max_step=float(args[1]) if len(args) > 1 else 0.20,
+    ),
+    "zscore": lambda args: ZScoreStrategy(
+        lookback=int(args[0]) if args else 20,
+        entry_z=float(args[1]) if len(args) > 1 else 2.0,
+    ),
+    "keltner": lambda args: KeltnerStrategy(
+        ema_period=int(args[0]) if args else 20,
+        atr_multiplier=float(args[1]) if len(args) > 1 else 2.0,
+    ),
+    "inside_bar": lambda args: InsideBarStrategy(),
+    "dual_momentum": lambda args: DualMomentumStrategy(
+        lookback=int(args[0]) if args else 90,
+    ),
 }
+
+
+# ── Extended Strategy Classes ─────────────────────────────────
+
+
+class SupertrendStrategy(Strategy):
+    """ATR-based trailing stop that flips direction on trend change."""
+
+    def __init__(self, period: int = 10, multiplier: float = 3.0):
+        self.period = period
+        self.multiplier = multiplier
+        self.name = f"Supertrend({period}, {multiplier})"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        high, low, close = df["high"], df["low"], df["close"]
+
+        # ATR
+        tr = pd.concat(
+            [high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1
+        ).max(axis=1)
+        atr = tr.rolling(self.period).mean()
+
+        hl2 = (high + low) / 2
+        upper_band = hl2 + self.multiplier * atr
+        lower_band = hl2 - self.multiplier * atr
+
+        # Iteratively compute Supertrend direction
+        trend_arr = [1] * len(df)  # 1 = bullish, -1 = bearish
+        fu = upper_band.to_numpy(dtype=float).copy()
+        fl = lower_band.to_numpy(dtype=float).copy()
+        cl = close.to_numpy(dtype=float)
+
+        import math
+
+        for i in range(1, len(df)):
+            curr_lb = lower_band.iloc[i]
+            curr_ub = upper_band.iloc[i]
+
+            if math.isnan(curr_lb):
+                # ATR not ready yet — hold previous values
+                fl[i] = fl[i - 1]
+                fu[i] = fu[i - 1]
+            elif math.isnan(fl[i - 1]):
+                # Bootstrap: first bar with valid ATR
+                fl[i] = curr_lb
+                fu[i] = curr_ub
+            else:
+                # Lower band (support): raise only, never lower below previous
+                fl[i] = curr_lb if curr_lb > fl[i - 1] or cl[i - 1] < fl[i - 1] else fl[i - 1]
+                # Upper band (resistance): lower only, never raise above previous
+                fu[i] = curr_ub if curr_ub < fu[i - 1] or cl[i - 1] > fu[i - 1] else fu[i - 1]
+
+            # Trend direction flip
+            if trend_arr[i - 1] == -1 and cl[i] > fu[i - 1]:
+                trend_arr[i] = 1
+            elif trend_arr[i - 1] == 1 and cl[i] < fl[i - 1]:
+                trend_arr[i] = -1
+            else:
+                trend_arr[i] = trend_arr[i - 1]
+
+        trend = pd.Series(trend_arr, index=df.index)
+
+        # Signal: 1 on flip to bullish, -1 on flip to bearish
+        signals = pd.Series(0, index=df.index)
+        prev_trend = trend.shift(1)
+        signals[(prev_trend == -1) & (trend == 1)] = 1
+        signals[(prev_trend == 1) & (trend == -1)] = -1
+        return signals
+
+
+class HeikinAshiStrategy(Strategy):
+    """Trade on full Heikin Ashi candles (no opposing wicks) with EMA filter."""
+
+    def __init__(self, ema_period: int = 21):
+        self.ema_period = ema_period
+        self.name = f"Heikin Ashi(EMA {ema_period})"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        # Compute Heikin Ashi candles
+        ha_close = (df["open"] + df["high"] + df["low"] + df["close"]) / 4
+        ha_open = ha_close.copy()
+        for i in range(1, len(df)):
+            ha_open.iloc[i] = (ha_open.iloc[i - 1] + ha_close.iloc[i - 1]) / 2
+        ha_high = pd.concat([df["high"], ha_open, ha_close], axis=1).max(axis=1)
+        ha_low = pd.concat([df["low"], ha_open, ha_close], axis=1).min(axis=1)
+
+        # Full bullish HA candle: no lower wick (ha_low == ha_open), green (close > open)
+        bull_no_lower = (ha_low == ha_open) & (ha_close > ha_open)
+        # Full bearish HA candle: no upper wick (ha_high == ha_open), red (close < open)
+        bear_no_upper = (ha_high == ha_open) & (ha_close < ha_open)
+
+        # EMA filter
+        from analysis.technical import ema as calc_ema
+
+        ema_vals = calc_ema(df["close"], self.ema_period)
+
+        signals = pd.Series(0, index=df.index)
+        signals[bull_no_lower & (df["close"] > ema_vals)] = 1
+        signals[bear_no_upper & (df["close"] < ema_vals)] = -1
+        return signals
+
+
+class DonchianStrategy(Strategy):
+    """Turtle Trading: buy 20-day high breakout, sell 20-day low breakdown."""
+
+    def __init__(self, period: int = 20, filter_period: int = 50):
+        self.period = period
+        self.filter_period = filter_period
+        self.name = f"Donchian({period})"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        high_break = df["high"].rolling(self.period).max().shift(1)
+        low_break = df["low"].rolling(self.period).min().shift(1)
+        filter_high = df["high"].rolling(self.filter_period).max().shift(1)
+        filter_low = df["low"].rolling(self.filter_period).min().shift(1)
+
+        signals = pd.Series(0, index=df.index)
+        # Buy on new N-day high only if price is above 50-day Donchian mid
+        mid_filter = (filter_high + filter_low) / 2
+        signals[(df["close"] > high_break) & (df["close"] > mid_filter)] = 1
+        signals[(df["close"] < low_break) & (df["close"] < mid_filter)] = -1
+        return signals
+
+
+class ParabolicSARStrategy(Strategy):
+    """Trailing stop that accelerates with the trend — flip on SAR touch."""
+
+    def __init__(self, step: float = 0.02, max_step: float = 0.20):
+        self.step = step
+        self.max_step = max_step
+        self.name = f"Parabolic SAR({step}, {max_step})"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        high, low = df["high"].values, df["low"].values
+        n = len(df)
+
+        sar = low[0]
+        ep = high[0]
+        af = self.step
+        bull = True  # current trend direction
+
+        sar_vals = [sar]
+        trend = [1]
+
+        for i in range(1, n):
+            prev_sar = sar
+            if bull:
+                sar = prev_sar + af * (ep - prev_sar)
+                sar = min(sar, low[i - 1], low[max(0, i - 2)])
+                if low[i] < sar:
+                    bull = False
+                    sar = ep
+                    ep = low[i]
+                    af = self.step
+                else:
+                    if high[i] > ep:
+                        ep = high[i]
+                        af = min(af + self.step, self.max_step)
+            else:
+                sar = prev_sar + af * (ep - prev_sar)
+                sar = max(sar, high[i - 1], high[max(0, i - 2)])
+                if high[i] > sar:
+                    bull = True
+                    sar = ep
+                    ep = high[i]
+                    af = self.step
+                else:
+                    if low[i] < ep:
+                        ep = low[i]
+                        af = min(af + self.step, self.max_step)
+
+            sar_vals.append(sar)
+            trend.append(1 if bull else -1)
+
+        trend_series = pd.Series(trend, index=df.index)
+        prev_trend = trend_series.shift(1)
+        signals = pd.Series(0, index=df.index)
+        signals[(prev_trend == -1) & (trend_series == 1)] = 1
+        signals[(prev_trend == 1) & (trend_series == -1)] = -1
+        return signals
+
+
+class ZScoreStrategy(Strategy):
+    """Rolling z-score mean reversion: fade extremes, exit at mean."""
+
+    def __init__(self, lookback: int = 20, entry_z: float = 2.0):
+        self.lookback = lookback
+        self.entry_z = entry_z
+        self.name = f"Z-Score({lookback}, ±{entry_z})"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        close = df["close"]
+        roll_mean = close.rolling(self.lookback).mean()
+        roll_std = close.rolling(self.lookback).std()
+        z = (close - roll_mean) / roll_std.replace(0, float("nan"))
+
+        signals = pd.Series(0, index=df.index)
+        signals[z < -self.entry_z] = 1  # oversold → buy
+        signals[z > self.entry_z] = -1  # overbought → sell
+        return signals.fillna(0).astype(int)
+
+
+class KeltnerStrategy(Strategy):
+    """ATR-based Keltner Channel: fade price at extreme bands."""
+
+    def __init__(self, ema_period: int = 20, atr_multiplier: float = 2.0, atr_period: int = 10):
+        self.ema_period = ema_period
+        self.atr_multiplier = atr_multiplier
+        self.atr_period = atr_period
+        self.name = f"Keltner({ema_period}, {atr_multiplier}×ATR)"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        from analysis.technical import ema as calc_ema
+
+        mid = calc_ema(df["close"], self.ema_period)
+        tr = pd.concat(
+            [
+                df["high"] - df["low"],
+                (df["high"] - df["close"].shift()).abs(),
+                (df["low"] - df["close"].shift()).abs(),
+            ],
+            axis=1,
+        ).max(axis=1)
+        atr = tr.rolling(self.atr_period).mean()
+
+        upper = mid + self.atr_multiplier * atr
+        lower = mid - self.atr_multiplier * atr
+
+        signals = pd.Series(0, index=df.index)
+        signals[df["close"] < lower] = 1
+        signals[df["close"] > upper] = -1
+        return signals
+
+
+class InsideBarStrategy(Strategy):
+    """Inside bar (range within prior candle) breakout on daily charts."""
+
+    def __init__(self):
+        self.name = "Inside Bar Breakout"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        prev_high = df["high"].shift(1)
+        prev_low = df["low"].shift(1)
+
+        # Inside bar: current high < prev high AND current low > prev low
+        is_inside = (df["high"] < prev_high) & (df["low"] > prev_low)
+
+        # Signal fires on the candle AFTER the inside bar
+        inside_shifted = is_inside.shift(1)
+        signals = pd.Series(0, index=df.index)
+        # Break above prior high after inside bar = bullish
+        signals[inside_shifted & (df["close"] > prev_high)] = 1
+        # Break below prior low after inside bar = bearish
+        signals[inside_shifted & (df["close"] < prev_low)] = -1
+        return signals
+
+
+class DualMomentumStrategy(Strategy):
+    """
+    Antonacci Dual Momentum: absolute + relative momentum with monthly rebalance.
+
+    Absolute: if N-day return > 0 → stay in equities.
+    Signal on rebalance days only (approx every 21 trading days).
+    """
+
+    def __init__(self, lookback: int = 90):
+        self.lookback = lookback
+        self.name = f"Dual Momentum({lookback}d)"
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        close = df["close"]
+        momentum = close / close.shift(self.lookback) - 1  # N-day return
+
+        signals = pd.Series(0, index=df.index)
+        # Rebalance approximately monthly (every 21 trading days)
+        rebalance_days = range(self.lookback, len(df), 21)
+        for i in rebalance_days:
+            if i < len(df):
+                if momentum.iloc[i] > 0:
+                    signals.iloc[i] = 1  # positive momentum → stay/go long
+                else:
+                    signals.iloc[i] = -1  # negative → exit / go to safety
+        return signals
 
 
 # ── Backtester Engine ────────────────────────────────────────

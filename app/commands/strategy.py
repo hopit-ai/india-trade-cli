@@ -4,15 +4,15 @@ app/commands/strategy.py
 Interactive strategy builder command.
 
 Subcommands:
-  strategy new [description] [--simple]             — AI-guided strategy creation
-  strategy list                                     — show saved strategies
-  strategy backtest <name> [--period 2y]            — re-backtest a saved strategy
-  strategy run <name> [symbol] [--paper]            — generate signal + paper trade
-  strategy show <name>                              — view code + metadata
-  strategy delete <name>                            — remove a saved strategy
-  strategy library [category]                       — browse the strategy template library
-  strategy learn <name>                             — detailed explanation of a template
-  strategy use <name> SYMBOL [--lots N] [--dte N]  — apply a template with live market data
+  strategy new [description] [--simple]                       — AI-guided strategy creation
+  strategy list                                               — show saved strategies
+  strategy backtest <name> [--period 2y]                      — re-backtest a saved strategy
+  strategy run <name> [symbol] [--paper]                      — generate signal + paper trade
+  strategy show <name>                                        — view code + metadata
+  strategy delete <name>                                      — remove a saved strategy
+  strategy library [category] [--type options|technical|all]  — browse strategy template library
+  strategy learn <name>                                       — detailed explanation of a template
+  strategy use <name> SYMBOL [--lots N] [--dte N]             — apply a template with live data
 """
 
 from __future__ import annotations
@@ -50,15 +50,15 @@ def run(args: list[str]) -> None:
     else:
         console.print(
             "[dim]Usage:\n"
-            "  strategy new [description] [--simple]             Create a new strategy\n"
-            "  strategy list                                     List saved strategies\n"
-            "  strategy backtest <name> [--period 2y]            Re-backtest\n"
-            "  strategy run <name> [symbol] [--paper]            Generate signal\n"
-            "  strategy show <name>                              View code\n"
-            "  strategy delete <name>                            Delete\n"
-            "  strategy library [category]                       Browse strategy templates\n"
-            "  strategy learn <name>                             Explain a template\n"
-            "  strategy use <name> SYMBOL [--lots N] [--dte N]  Apply template with live data[/dim]"
+            "  strategy new [description] [--simple]                       Create a new strategy\n"
+            "  strategy list                                                List saved strategies\n"
+            "  strategy backtest <name> [--period 2y]                       Re-backtest\n"
+            "  strategy run <name> [symbol] [--paper]                       Generate signal\n"
+            "  strategy show <name>                                         View code\n"
+            "  strategy delete <name>                                       Delete\n"
+            "  strategy library [category] [--type options|technical|all]  Browse templates\n"
+            "  strategy learn <name>                                        Explain a template\n"
+            "  strategy use <name> SYMBOL [--lots N] [--dte N]              Apply template[/dim]"
         )
 
 
@@ -500,36 +500,144 @@ def _cmd_delete(args: list[str]) -> None:
 
 
 def _cmd_library(args: list[str]) -> None:
-    """Browse the curated options strategy template library."""
+    """Browse the curated strategy template library (options and/or technical)."""
     from engine.strategy_library import strategy_library, CATEGORIES
+    from engine.technical_library import tech_library, TECH_CATEGORIES
 
-    category = args[0].lower() if args else ""
-
-    if category and category not in CATEGORIES:
-        # Try it as a search query
-        matches = strategy_library.search(category)
-        if matches:
-            console.print(
-                f"[yellow]Unknown category '{category}'. Showing search results instead:[/yellow]\n"
-            )
-            _print_library_table(matches)
+    # Parse --type flag
+    lib_type = "all"
+    clean: list[str] = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--type" and i + 1 < len(args):
+            lib_type = args[i + 1].lower()
+            i += 2
         else:
-            console.print(
-                f"[red]Unknown category '{category}'.[/red] Valid: {', '.join(CATEGORIES)}"
-            )
+            clean.append(args[i])
+            i += 1
+
+    if lib_type not in ("options", "technical", "all"):
+        console.print(f"[red]Unknown --type '{lib_type}'. Use: options, technical, or all[/red]")
         return
 
-    templates = (
-        strategy_library.list_by_category(category) if category else strategy_library.list_all()
-    )
+    category = clean[0].lower() if clean else ""
 
-    title = f"Strategy Library — {category.title()}" if category else "Strategy Library"
-    console.print(f"\n[bold cyan]{title}[/bold cyan] [dim]({len(templates)} strategies)[/dim]\n")
-    _print_library_table(templates)
+    all_cats = tuple(CATEGORIES) + tuple(TECH_CATEGORIES)
+    options_cats = tuple(CATEGORIES)
+    technical_cats = tuple(TECH_CATEGORIES)
+
+    if category:
+        # Route to correct library by category membership
+        if category in options_cats and lib_type != "technical":
+            templates = strategy_library.list_by_category(category)
+            console.print(
+                f"\n[bold cyan]Options Library — {category.title()}[/bold cyan] "
+                f"[dim]({len(templates)} strategies)[/dim]\n"
+            )
+            _print_library_table(templates)
+        elif category in technical_cats and lib_type != "options":
+            templates = tech_library.list_by_category(category)
+            console.print(
+                f"\n[bold cyan]Technical Library — {category.title()}[/bold cyan] "
+                f"[dim]({len(templates)} strategies)[/dim]\n"
+            )
+            _print_technical_table(templates)
+        elif category not in all_cats:
+            # Try search across both libraries
+            opt_matches = strategy_library.search(category)
+            tech_matches = tech_library.search(category)
+            if opt_matches or tech_matches:
+                console.print(
+                    f"[yellow]Unknown category '{category}'. Showing search results:[/yellow]\n"
+                )
+                if opt_matches:
+                    console.print("[bold]Options strategies:[/bold]")
+                    _print_library_table(opt_matches)
+                if tech_matches:
+                    console.print("\n[bold]Technical strategies:[/bold]")
+                    _print_technical_table(tech_matches)
+            else:
+                console.print(
+                    f"[red]Unknown category '{category}'.[/red] "
+                    f"Options: {', '.join(options_cats)} | "
+                    f"Technical: {', '.join(technical_cats)}"
+                )
+        return
+
+    # No category filter — show based on --type
+    if lib_type == "options":
+        templates = strategy_library.list_all()
+        console.print(
+            f"\n[bold cyan]Options Strategy Library[/bold cyan] "
+            f"[dim]({len(templates)} strategies)[/dim]\n"
+        )
+        _print_library_table(templates)
+
+    elif lib_type == "technical":
+        templates = tech_library.list_all()
+        console.print(
+            f"\n[bold cyan]Technical Strategy Library[/bold cyan] "
+            f"[dim]({len(templates)} strategies)[/dim]\n"
+        )
+        _print_technical_table(templates)
+
+    else:  # all
+        opt_templates = strategy_library.list_all()
+        tech_templates = tech_library.list_all()
+        console.print(
+            f"\n[bold cyan]Options Strategy Library[/bold cyan] "
+            f"[dim]({len(opt_templates)} strategies)[/dim]\n"
+        )
+        _print_library_table(opt_templates)
+        console.print(
+            f"\n[bold cyan]Technical Strategy Library[/bold cyan] "
+            f"[dim]({len(tech_templates)} strategies)[/dim]\n"
+        )
+        _print_technical_table(tech_templates)
+
     console.print("\n[dim]Run: [bold]strategy learn <id>[/bold]  to see full explanation[/dim]")
     console.print(
         "[dim]Run: [bold]strategy use <id> SYMBOL[/bold]  to apply with live data[/dim]\n"
     )
+
+
+def _print_technical_table(templates) -> None:
+    """Render a Rich table of technical strategy templates."""
+    from rich.table import Table
+
+    current_cat = None
+    table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
+    table.add_column("ID", style="cyan", width=28)
+    table.add_column("Name", width=26)
+    table.add_column("Category", width=14)
+    table.add_column("Timeframes", width=16)
+    table.add_column("Complexity", width=14)
+    table.add_column("Backtestable", width=12)
+
+    for t in templates:
+        if t.category != current_cat:
+            if current_cat is not None:
+                table.add_section()
+            current_cat = t.category
+
+        complexity_color = {
+            "beginner": "green",
+            "intermediate": "yellow",
+            "advanced": "red",
+        }.get(t.complexity, "white")
+        backtest_str = "[green]✓[/green]" if t.backtest_key else "[dim]—[/dim]"
+        tf_str = ", ".join(t.timeframes[:3])
+
+        table.add_row(
+            t.id,
+            t.name,
+            t.category,
+            tf_str,
+            f"[{complexity_color}]{t.complexity}[/{complexity_color}]",
+            backtest_str,
+        )
+
+    console.print(table)
 
 
 def _print_library_table(templates) -> None:
@@ -716,9 +824,9 @@ def _format_legs(legs) -> str:
 
 
 def _cmd_learn(args: list[str]) -> None:
-    """Show a detailed explanation panel for a strategy template."""
+    """Show a detailed explanation panel for a strategy template (options or technical)."""
     from engine.strategy_library import strategy_library
-    from rich.panel import Panel
+    from engine.technical_library import tech_library
 
     if not args:
         console.print("[red]Usage: strategy learn <strategy_id>[/red]")
@@ -726,13 +834,27 @@ def _cmd_learn(args: list[str]) -> None:
         return
 
     name = args[0].lower()
+
+    # Try options library first, then technical library
+    t = None
+    is_technical = False
     try:
         t = strategy_library.get(name)
     except KeyError:
-        matches = strategy_library.search(name)
-        if matches:
+        try:
+            t = tech_library.get(name)
+            is_technical = True
+        except KeyError:
+            pass
+
+    if t is None:
+        # Search both libraries for suggestions
+        opt_matches = strategy_library.search(name)
+        tech_matches = tech_library.search(name)
+        all_matches = opt_matches + tech_matches
+        if all_matches:
             console.print(f"[yellow]Strategy '{name}' not found. Did you mean:[/yellow]")
-            for m in matches[:3]:
+            for m in all_matches[:4]:
                 console.print(f"  [cyan]{m.id}[/cyan] — {m.name}")
         else:
             console.print(
@@ -740,6 +862,16 @@ def _cmd_learn(args: list[str]) -> None:
                 "Run [bold]strategy library[/bold] to see all."
             )
         return
+
+    if is_technical:
+        _learn_technical(t)
+    else:
+        _learn_options(t)
+
+
+def _learn_options(t) -> None:
+    """Render the learn panel for an options strategy template."""
+    from rich.panel import Panel
 
     complexity_colors = {"beginner": "green", "intermediate": "yellow", "advanced": "red"}
     comp_color = complexity_colors.get(t.complexity, "white")
@@ -772,12 +904,116 @@ def _cmd_learn(args: list[str]) -> None:
     console.print(f"\n[dim]Apply with live data: [bold]strategy use {t.id} SYMBOL[/bold][/dim]\n")
 
 
+def _learn_technical(t) -> None:
+    """Render the learn panel for a technical strategy template."""
+    from rich.panel import Panel
+
+    complexity_colors = {"beginner": "green", "intermediate": "yellow", "advanced": "red"}
+    comp_color = complexity_colors.get(t.complexity, "white")
+
+    # Format signal rules
+    signal_lines = []
+    for rule in t.signal_rules:
+        sig = rule.get("signal", "")
+        cond = rule.get("condition", "")
+        example = rule.get("example", "")
+        sig_color = "green" if sig == "BUY" else "red" if sig == "SELL" else "yellow"
+        signal_lines.append(
+            f"  [{sig_color}]{sig:<5}[/{sig_color}] [dim]{cond}[/dim]\n"
+            f"         [dim]e.g. {example}[/dim]"
+        )
+    signals_str = "\n\n".join(signal_lines)
+
+    # Format parameters
+    param_lines = []
+    for pname, pdef in t.parameters.items():
+        ptype = pdef.get("type", "")
+        default = pdef.get("default", "")
+        desc = pdef.get("description", "")
+        param_lines.append(
+            f"  [cyan]{pname}[/cyan] ({ptype}, default={default})  [dim]{desc}[/dim]"
+        )
+    params_str = "\n".join(param_lines) if param_lines else "  [dim]None[/dim]"
+
+    # Load cached backtest result if available
+    cached: dict | None = None
+    if t.backtest_key:
+        try:
+            from engine.backtest_cache import load_result as _cache_load
+
+            cached = _cache_load(t.backtest_key)
+        except Exception:
+            pass
+
+    if t.backtest_key:
+        if cached:
+            ret = cached["total_return"]
+            ret_color = "green" if ret >= 0 else "red"
+            sharpe = cached["sharpe"]
+            sharpe_color = "green" if sharpe >= 1 else "yellow" if sharpe >= 0 else "red"
+            dd = abs(cached["max_drawdown"])
+            backtest_str = (
+                f"[dim]Last run: {cached['symbol']} · {cached['period']} "
+                f"· {cached['run_date']}[/dim]\n"
+                f"  Return      [{ret_color}]{ret:+.1f}%[/{ret_color}]   "
+                f"Sharpe [{sharpe_color}]{sharpe:.2f}[/{sharpe_color}]   "
+                f"Max DD [red]-{dd:.1f}%[/red]\n"
+                f"  Win Rate    {cached['win_rate']:.0f}%   "
+                f"Trades {cached['total_trades']}   "
+                f"Avg Hold {cached['avg_hold']:.0f}d\n"
+                f"  [dim]Re-run: [bold]strategy use {t.id} SYMBOL[/bold][/dim]"
+            )
+        else:
+            backtest_str = (
+                f"[green]✓ Supported.[/green]  "
+                f"[dim]Run [bold]strategy use {t.id} SYMBOL[/bold] to see results.[/dim]"
+            )
+    else:
+        backtest_str = "[dim]Not yet available (requires intraday/multi-asset data)[/dim]"
+
+    tf_str = ", ".join(t.timeframes)
+    inst_str = ", ".join(t.instruments)
+
+    content = (
+        f"[dim]{t.category.upper()} · [{comp_color}]{t.complexity}[/{comp_color}] · "
+        f"Timeframes: {tf_str} · Instruments: {inst_str}[/dim]\n\n"
+        f"[bold yellow]IN PLAIN ENGLISH[/bold yellow]\n{t.layman_explanation}\n\n"
+        f"[bold]SIGNALS[/bold]  [dim](when this strategy says BUY or SELL)[/dim]\n"
+        + signals_str
+        + f"\n\n[bold]HOW IT WORKS[/bold]\n{t.explanation}\n\n"
+        f"[bold]WHEN TO USE[/bold]\n{t.when_to_use}\n\n"
+        f"[bold]WHEN NOT TO USE[/bold]\n{t.when_not_to_use}\n\n"
+        f"[bold]PARAMETERS[/bold]\n{params_str}\n\n"
+        f"[bold]RISKS[/bold]\n"
+        + "\n".join(f"  • {r}" for r in t.risks)
+        + f"\n\n[bold]BACKTEST[/bold]\n  {backtest_str}"
+        + f"\n\n[dim]Tags: {' '.join(t.tags)}[/dim]"
+    )
+
+    console.print(
+        Panel(
+            content,
+            title=f"[bold]{t.name}[/bold]",
+            border_style="green",
+            padding=(1, 2),
+        )
+    )
+    if t.backtest_key:
+        console.print(f"\n[dim]Run backtest: [bold]strategy use {t.id} SYMBOL[/bold][/dim]\n")
+    else:
+        console.print(
+            "\n[dim]This strategy is documented for learning. "
+            "Backtest support coming in a future release.[/dim]\n"
+        )
+
+
 # ── strategy use ──────────────────────────────────────────────
 
 
 def _cmd_use(args: list[str]) -> None:
-    """Apply a strategy template to a real symbol using live ATM data."""
+    """Apply a strategy template to a real symbol (options: live ATM data; technical: backtest)."""
     from engine.strategy_library import strategy_library, apply_template
+    from engine.technical_library import tech_library
     from engine.strategy import get_atm_data
     from rich.panel import Panel
     from rich.table import Table
@@ -793,19 +1029,35 @@ def _cmd_use(args: list[str]) -> None:
         console.print("[red]Usage: strategy use <strategy_id> SYMBOL [--lots N] [--dte N][/red]")
         return
 
+    # Look up in options library first, then technical library
+    template = None
+    is_technical = False
     try:
         template = strategy_library.get(strategy_id)
     except KeyError:
-        matches = strategy_library.search(strategy_id)
-        if matches:
+        try:
+            template = tech_library.get(strategy_id)
+            is_technical = True
+        except KeyError:
+            pass
+
+    if template is None:
+        opt_matches = strategy_library.search(strategy_id)
+        tech_matches = tech_library.search(strategy_id)
+        all_matches = opt_matches + tech_matches
+        if all_matches:
             console.print(f"[yellow]Strategy '{strategy_id}' not found. Did you mean:[/yellow]")
-            for m in matches[:3]:
+            for m in all_matches[:3]:
                 console.print(f"  [cyan]{m.id}[/cyan] — {m.name}")
         else:
             console.print(
                 f"[red]Strategy '{strategy_id}' not found.[/red] "
                 "Run [bold]strategy library[/bold] to see all."
             )
+        return
+
+    if is_technical:
+        _use_technical(template, symbol, args)
         return
 
     # Warn if stock-leg strategy applied to index
@@ -900,6 +1152,86 @@ def _cmd_use(args: list[str]) -> None:
     console.print(
         f"\n[dim]For placement: [bold]trade {symbol} {' / '.join(template.views)}[/bold][/dim]\n"
     )
+
+
+def _use_technical(template, symbol: str, raw_args: list[str]) -> None:
+    """Run a technical strategy template: backtest if available, else show info."""
+    from rich.panel import Panel
+
+    if not template.backtest_key:
+        console.print(
+            f"\n[bold cyan]{template.name}[/bold cyan]\n"
+            f"[yellow]This strategy cannot be backtested yet.[/yellow]\n"
+            f"[dim]It requires {', '.join(template.instruments)} data that is not yet wired up "
+            f"(intraday, multi-asset, or specialised feeds).[/dim]\n\n"
+            f"[dim]Run [bold]strategy learn {template.id}[/bold] to explore the strategy.[/dim]\n"
+        )
+        return
+
+    # Parse optional --period flag
+    period = "1y"
+    i = 0
+    while i < len(raw_args):
+        if raw_args[i] == "--period" and i + 1 < len(raw_args):
+            period = raw_args[i + 1]
+            i += 2
+        else:
+            i += 1
+
+    console.print(
+        f"\n[dim]Running backtest: [bold]{template.name}[/bold] on {symbol} ({period})...[/dim]"
+    )
+
+    try:
+        from engine.backtest import Backtester, STRATEGIES
+
+        from engine.backtest_cache import save_result as _cache_save
+
+        strategy_cls = STRATEGIES[template.backtest_key]
+        strategy = strategy_cls([])
+        bt = Backtester(symbol=symbol, period=period)
+        result = bt.run(strategy)
+        result.print_summary()
+
+        # Persist so 'strategy learn' can show it without re-running
+        try:
+            _cache_save(template.backtest_key, result, symbol, period)
+        except Exception:
+            pass
+
+        # Show last 10 signals in a mini timeline
+        try:
+            from market.history import get_ohlcv
+
+            df = get_ohlcv(symbol, days=90)
+            if not df.empty:
+                signals = strategy.generate_signals(df)
+                latest = int(signals.iloc[-1]) if len(signals) else 0
+                latest_price = float(df["close"].iloc[-1])
+                latest_date = (
+                    str(df.index[-1].date()) if hasattr(df.index[-1], "date") else str(df.index[-1])
+                )
+                signal_map = {1: "[green]BUY[/green]", -1: "[red]SELL[/red]", 0: "[dim]HOLD[/dim]"}
+                recent = signals.tail(10)
+                sig_str = " ".join(
+                    "[green]+[/green]" if s == 1 else "[red]-[/red]" if s == -1 else "[dim].[/dim]"
+                    for s in recent
+                )
+                console.print(
+                    Panel(
+                        f"  Symbol : [bold]{symbol}[/bold] @ ₹{latest_price:,.2f} ({latest_date})\n"
+                        f"  Signal : {signal_map.get(latest, '[dim]HOLD[/dim]')}\n"
+                        f"  Last 10: {sig_str}",
+                        title="Current Signal",
+                        border_style="green",
+                        padding=(0, 2),
+                    )
+                )
+        except Exception:
+            pass  # signal panel is best-effort
+
+    except Exception as e:
+        console.print(f"[red]Backtest failed: {e}[/red]")
 
 
 def _parse_use_args(args: list[str]) -> tuple[str, str, int, int]:
