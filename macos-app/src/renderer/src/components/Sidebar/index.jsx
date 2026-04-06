@@ -68,17 +68,18 @@ export default function Sidebar() {
 
 // Route sidebar quick commands to API endpoints
 async function routeCommand(call, command) {
+  const unwrap = (res) => res.data ?? res
   switch (command) {
     case 'morning-brief':
-      return { cardType: 'morning_brief', data: await call('/skills/morning_brief', {}) }
+      return { cardType: 'morning_brief', data: unwrap(await call('/skills/morning_brief', {})) }
     case 'holdings':
-      return { cardType: 'holdings', data: await call('/skills/holdings', {}) }
+      return { cardType: 'holdings', data: unwrap(await call('/skills/holdings', {})) }
     case 'positions':
-      return { cardType: 'holdings', data: await call('/skills/positions', {}) }
+      return { cardType: 'holdings', data: unwrap(await call('/skills/positions', {})) }
     case 'portfolio':
       return { cardType: 'markdown', data: { text: 'Portfolio view coming soon.' } }
     case 'flows':
-      return { cardType: 'flows', data: await call('/skills/flows', {}) }
+      return { cardType: 'flows', data: unwrap(await call('/skills/flows', {})) }
     default:
       throw new Error(`Unknown command: ${command}`)
   }

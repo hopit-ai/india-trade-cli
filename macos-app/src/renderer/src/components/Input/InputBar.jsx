@@ -64,8 +64,8 @@ export default function InputBar() {
     }
 
     try {
-      const data = await call(parsed.endpoint, parsed.body)
-      addResponse({ cardType: parsed.cardType, data })
+      const result = await call(parsed.endpoint, parsed.body)
+      addResponse({ cardType: parsed.cardType, data: result.data ?? result })
     } catch (e) {
       addError(e.message)
     }

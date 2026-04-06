@@ -60,6 +60,16 @@ _load_keychain()
 
 app = FastAPI(title="india-trade-cli", docs_url=None, redoc_url=None)
 
+# ── CORS — allow Electron renderer (Vite dev + packaged file://) ──────────
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "file://"],
+    allow_origin_regex=r"(http://localhost:\d+|file://.*)",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ── OpenClaw Skills ───────────────────────────────────────────
 
 from web.skills import router as _skills_router
