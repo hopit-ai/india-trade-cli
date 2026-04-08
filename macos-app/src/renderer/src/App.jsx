@@ -1,18 +1,55 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useChatStore } from './store/chatStore'
 import { useMarketClock } from './hooks/useMarketClock'
 import Sidebar from './components/Sidebar'
 import ChatArea from './components/Chat/ChatArea'
 import InputBar from './components/Input/InputBar'
+import SetupScreen from './components/SetupScreen'
 
 export default function App() {
   const { setPort, setSidecarError, setBrokerStatuses } = useChatStore()
   const port = useChatStore((s) => s.port)
 
+  // Setup phase state machine
+  const [setupPhase, setSetupPhase] = useState('initializing')
+  // 'initializing' | 'progress' | 'python_missing' | 'error' | 'ready'
+  const [setupData, setSetupData] = useState(null)
+
   useEffect(() => {
-    window.electronAPI?.onSidecarReady(({ port }) => setPort(port))
-    window.electronAPI?.onSidecarError(({ message }) => setSidecarError(message))
-    window.electronAPI?.getPort().then(port => { if (port) setPort(port) })
+    // Setup progress events
+    window.electronAPI?.onSetupProgress((data) => {
+      setSetupPhase('progress')
+      setSetupData(data)
+    })
+
+    // Python not found
+    window.electronAPI?.onSetupPythonMissing((data) => {
+      setSetupPhase('python_missing')
+      setSetupData(data)
+    })
+
+    // Sidecar ready — setup complete
+    window.electronAPI?.onSidecarReady(({ port }) => {
+      setPort(port)
+      setSetupPhase('ready')
+    })
+
+    // Sidecar error — could be during setup or runtime
+    window.electronAPI?.onSidecarError(({ message, details }) => {
+      setSidecarError(message)
+      if (setupPhase !== 'ready') {
+        setSetupPhase('error')
+        setSetupData({ message, details })
+      }
+    })
+
+    // Check if port already set (HMR / reload)
+    window.electronAPI?.getPort().then(port => {
+      if (port) {
+        setPort(port)
+        setSetupPhase('ready')
+      }
+    })
   }, [])
 
   // Poll /api/status every 8s once sidecar is up
@@ -28,30 +65,30 @@ export default function App() {
     return () => clearInterval(t)
   }, [port])
 
+  // Show setup screen until ready
+  if (setupPhase !== 'ready') {
+    return <SetupScreen phase={setupPhase} data={setupData} />
+  }
+
   return (
     <div className="flex flex-col h-full bg-surface">
 
-      {/* ── Title bar — 52px, draggable ── */}
+      {/* Title bar */}
       <div className="drag flex items-center h-[52px] bg-panel border-b border-border flex-shrink-0">
-        {/* Traffic light spacer */}
         <div className="w-[76px] flex-shrink-0" />
-
-        {/* App name — centred */}
         <div className="flex-1 flex items-center justify-center gap-2 pointer-events-none">
           <span className="text-amber text-[15px]">◆</span>
           <span className="text-text text-[13px] font-semibold tracking-wide font-ui">
             India Trade
           </span>
         </div>
-
-        {/* Market status + API dot */}
         <div className="no-drag flex items-center gap-3 pr-4">
           <MarketBadge />
           <StatusDot />
         </div>
       </div>
 
-      {/* ── Main layout ── */}
+      {/* Main layout */}
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
@@ -93,7 +130,7 @@ function StatusDot() {
         connected ? 'bg-green shadow-[0_0_6px_rgba(82,224,122,0.5)]' : 'bg-subtle'
       }`} />
       <span className="text-muted text-[11px] font-ui">
-        {sidecarError ? 'error' : connected ? 'connected' : 'starting…'}
+        {sidecarError ? 'error' : connected ? 'connected' : 'starting...'}
       </span>
     </div>
   )
