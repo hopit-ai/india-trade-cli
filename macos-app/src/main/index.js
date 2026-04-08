@@ -98,11 +98,18 @@ function createTray() {
 let mainWindow = null
 
 function createWindow() {
+  // Set dock icon explicitly for dev mode (packaged mode uses icon.icns from bundle)
+  const appIcon = nativeImage.createFromPath(join(__dirname, '../../build/icon.iconset/icon_512x512.png'))
+  if (process.platform === 'darwin' && appIcon && !appIcon.isEmpty()) {
+    app.dock.setIcon(appIcon)
+  }
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    icon: appIcon,
     backgroundColor: '#0d0d0d',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
