@@ -53,13 +53,13 @@ function parseCommand(input) {
       }
 
     case 'funds': case 'fund':
-      return { endpoint: '/skills/funds', body: {}, cardType: 'funds', method: 'GET' }
+      return { endpoint: '/skills/funds', body: {}, cardType: 'funds' }
 
     case 'profile':
-      return { endpoint: '/skills/profile', body: {}, cardType: 'profile', method: 'GET' }
+      return { endpoint: '/skills/profile', body: {}, cardType: 'profile' }
 
     case 'orders': case 'order':
-      return { endpoint: '/skills/orders', body: {}, cardType: 'orders', method: 'GET' }
+      return { endpoint: '/skills/orders', body: {}, cardType: 'orders' }
 
     case 'alerts': case 'al':
       return { endpoint: '/skills/alerts/list', body: {}, cardType: 'alerts' }
@@ -119,9 +119,9 @@ function parseCommand(input) {
       return { endpoint: '/skills/gex', body: { symbol: sym, expiry: args[1] ?? null }, cardType: 'gex' }
     }
     case 'delta-hedge': case 'dh': case 'deltahedge':
-      return { endpoint: '/skills/delta_hedge', body: null, cardType: 'delta_hedge', method: 'GET' }
+      return { endpoint: '/skills/delta_hedge', body: {}, cardType: 'delta_hedge' }
     case 'risk-report': case 'risk': case 'var':
-      return { endpoint: '/skills/risk_report', body: null, cardType: 'risk_report', method: 'GET' }
+      return { endpoint: '/skills/risk_report', body: {}, cardType: 'risk_report' }
     case 'walkforward': case 'wf': case 'walk-forward': {
       const sym = args[0]?.toUpperCase() ?? 'NIFTY'
       const strat = args[1] ?? 'rsi'
@@ -147,21 +147,21 @@ function parseCommand(input) {
       return { endpoint: '/skills/strategy', body: { symbol: sym, view, dte }, cardType: 'strategy' }
     }
     case 'drift':
-      return { endpoint: '/skills/drift', body: null, cardType: 'drift', method: 'GET' }
+      return { endpoint: '/skills/drift', body: {}, cardType: 'drift' }
     case 'memory': case 'mem':
-      return { endpoint: '/skills/memory', body: null, cardType: 'memory', method: 'GET' }
+      return { endpoint: '/skills/memory', body: {}, cardType: 'memory' }
     case 'audit': {
       const trade_id = args[0]
-      if (!trade_id) return { endpoint: '/skills/memory', body: null, cardType: 'memory', method: 'GET' }
+      if (!trade_id) return { endpoint: '/skills/memory', body: {}, cardType: 'memory' }
       return { endpoint: '/skills/audit', body: { trade_id }, cardType: 'audit' }
     }
     case 'telegram': case 'tg':
       return { endpoint: '/skills/telegram/status', body: null, cardType: 'telegram', method: 'GET' }
     case 'provider': {
       if (args[0]) {
-        return { endpoint: '/skills/provider', body: { provider: args[0], model: args[1] ?? null }, cardType: 'provider' }
+        return { endpoint: '/skills/provider/switch', body: { provider: args[0], model: args[1] ?? null }, cardType: 'provider' }
       }
-      return { endpoint: '/skills/provider', body: null, cardType: 'provider', method: 'GET' }
+      return { endpoint: '/skills/provider', body: {}, cardType: 'provider' }
     }
     case 'pairs': {
       const symA = args[0]?.toUpperCase() ?? 'RELIANCE'
@@ -238,25 +238,25 @@ describe('parseCommand', () => {
     expect(result.cardType).toBe('holdings')
   })
 
-  // ── funds / profile / orders (GET method) ─────────────────────────────────
-  it('funds uses GET method', () => {
+  // ── funds / profile / orders (POST) ────────────────────────────────────────
+  it('funds uses POST (no method override)', () => {
     const result = parseCommand('funds')
     expect(result.endpoint).toBe('/skills/funds')
-    expect(result.method).toBe('GET')
+    expect(result.method).toBeUndefined()
     expect(result.cardType).toBe('funds')
   })
 
-  it('profile uses GET method', () => {
+  it('profile uses POST (no method override)', () => {
     const result = parseCommand('profile')
     expect(result.endpoint).toBe('/skills/profile')
-    expect(result.method).toBe('GET')
+    expect(result.method).toBeUndefined()
     expect(result.cardType).toBe('profile')
   })
 
-  it('orders uses GET method', () => {
+  it('orders uses POST (no method override)', () => {
     const result = parseCommand('orders')
     expect(result.endpoint).toBe('/skills/orders')
-    expect(result.method).toBe('GET')
+    expect(result.method).toBeUndefined()
     expect(result.cardType).toBe('orders')
   })
 
@@ -288,25 +288,25 @@ describe('parseCommand', () => {
   })
 
   // ── delta-hedge ───────────────────────────────────────────────────────────
-  it('delta-hedge alias dh returns delta_hedge cardType GET', () => {
+  it('delta-hedge alias dh returns delta_hedge cardType POST', () => {
     const r1 = parseCommand('delta-hedge')
     const r2 = parseCommand('dh')
     expect(r1.endpoint).toBe('/skills/delta_hedge')
     expect(r1.cardType).toBe('delta_hedge')
-    expect(r1.method).toBe('GET')
+    expect(r1.method).toBeUndefined()
     expect(r2.endpoint).toBe('/skills/delta_hedge')
-    expect(r2.method).toBe('GET')
+    expect(r2.method).toBeUndefined()
   })
 
   // ── risk-report ───────────────────────────────────────────────────────────
-  it('risk-report alias risk returns risk_report cardType GET', () => {
+  it('risk-report alias risk returns risk_report cardType POST', () => {
     const r1 = parseCommand('risk-report')
     const r2 = parseCommand('risk')
     expect(r1.endpoint).toBe('/skills/risk_report')
     expect(r1.cardType).toBe('risk_report')
-    expect(r1.method).toBe('GET')
+    expect(r1.method).toBeUndefined()
     expect(r2.endpoint).toBe('/skills/risk_report')
-    expect(r2.method).toBe('GET')
+    expect(r2.method).toBeUndefined()
   })
 
   // ── walkforward ───────────────────────────────────────────────────────────
@@ -367,22 +367,22 @@ describe('parseCommand', () => {
   })
 
   // ── drift ─────────────────────────────────────────────────────────────────
-  it('drift is GET', () => {
+  it('drift is POST (no method override)', () => {
     const result = parseCommand('drift')
     expect(result.endpoint).toBe('/skills/drift')
-    expect(result.method).toBe('GET')
+    expect(result.method).toBeUndefined()
     expect(result.cardType).toBe('drift')
   })
 
   // ── memory ────────────────────────────────────────────────────────────────
-  it('memory alias mem is GET', () => {
+  it('memory alias mem is POST (no method override)', () => {
     const r1 = parseCommand('memory')
     const r2 = parseCommand('mem')
     expect(r1.endpoint).toBe('/skills/memory')
-    expect(r1.method).toBe('GET')
+    expect(r1.method).toBeUndefined()
     expect(r1.cardType).toBe('memory')
     expect(r2.endpoint).toBe('/skills/memory')
-    expect(r2.method).toBe('GET')
+    expect(r2.method).toBeUndefined()
   })
 
   // ── audit ─────────────────────────────────────────────────────────────────
@@ -397,7 +397,7 @@ describe('parseCommand', () => {
     const result = parseCommand('audit')
     expect(result.endpoint).toBe('/skills/memory')
     expect(result.cardType).toBe('memory')
-    expect(result.method).toBe('GET')
+    expect(result.method).toBeUndefined()
   })
 
   // ── telegram ──────────────────────────────────────────────────────────────
@@ -412,9 +412,9 @@ describe('parseCommand', () => {
   })
 
   // ── provider ──────────────────────────────────────────────────────────────
-  it('provider with arg sends POST body', () => {
+  it('provider with arg sends POST to /provider/switch', () => {
     const result = parseCommand('provider openai gpt-4o')
-    expect(result.endpoint).toBe('/skills/provider')
+    expect(result.endpoint).toBe('/skills/provider/switch')
     expect(result.cardType).toBe('provider')
     expect(result.body).toEqual({ provider: 'openai', model: 'gpt-4o' })
     expect(result.method).toBeUndefined()
@@ -422,15 +422,16 @@ describe('parseCommand', () => {
 
   it('provider with only provider name sets model to null', () => {
     const result = parseCommand('provider anthropic')
+    expect(result.endpoint).toBe('/skills/provider/switch')
     expect(result.body.provider).toBe('anthropic')
     expect(result.body.model).toBeNull()
   })
 
-  it('provider without arg is GET', () => {
+  it('provider without arg is POST (no method override)', () => {
     const result = parseCommand('provider')
     expect(result.endpoint).toBe('/skills/provider')
-    expect(result.method).toBe('GET')
-    expect(result.body).toBeNull()
+    expect(result.method).toBeUndefined()
+    expect(result.body).toEqual({})
   })
 
   // ── pairs ─────────────────────────────────────────────────────────────────

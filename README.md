@@ -219,7 +219,7 @@ Data broker:      Fyers (free, best options data)
 Execution broker: Zerodha (your existing demat account)
 ```
 
-Both stay authenticated. The platform routes quotes to Fyers and orders to Zerodha automatically.
+Both stay authenticated. Currently the last-connected broker becomes primary for all operations. Explicit data/execution routing is planned ([#129](https://github.com/hopit-ai/india-trade-cli/issues/129)).
 
 ---
 
