@@ -113,6 +113,20 @@ def register_broker(key: str, broker: BrokerAPI, *, primary: bool = True) -> Non
         _primary_key = key
 
 
+def unregister_broker(key: str) -> None:
+    """
+    Remove a broker from the in-memory session registry.
+
+    Called when a broker is disconnected via the web API (token file deleted).
+    If the disconnected broker was primary and others are connected, the first
+    remaining broker becomes the new primary.
+    """
+    global _brokers, _primary_key
+    _brokers.pop(key, None)
+    if _primary_key == key:
+        _primary_key = next(iter(_brokers), "")
+
+
 def get_broker() -> BrokerAPI:
     """Return the primary broker. Raises if login() has not been called."""
     if not _primary_key or _primary_key not in _brokers:

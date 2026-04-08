@@ -69,6 +69,10 @@ COMMANDS = [
     "trade",
     "portfolio",
     "paper",
+    "mode",
+    "buy",
+    "sell",
+    "cancel",
     "ai",
     "alert",
     "alerts",
@@ -163,25 +167,42 @@ def cmd_holdings(broker: BrokerAPI) -> None:
     table.add_column("Qty", justify="right")
     table.add_column("Avg", justify="right")
     table.add_column("LTP", justify="right")
-    table.add_column("P&L", justify="right")
-    table.add_column("P&L %", justify="right")
+    table.add_column("Today P&L", justify="right")
+    table.add_column("Today %", justify="right")
+    table.add_column("Overall P&L", justify="right")
+    table.add_column("Overall %", justify="right")
 
     for h in holdings:
         pnl_style = "green" if h.pnl >= 0 else "red"
+        day_chg = getattr(h, "day_change", 0) or 0
+        day_pct = getattr(h, "day_change_pct", 0) or 0
+        day_total = day_chg * h.quantity if day_chg else 0
+        day_style = "green" if day_total >= 0 else "red"
         table.add_row(
             h.symbol,
             str(h.quantity),
             f"₹{h.avg_price:,.2f}",
             f"₹{h.last_price:,.2f}",
+            f"[{day_style}]₹{day_total:,.0f}[/{day_style}]",
+            f"[{day_style}]{day_pct:+.2f}%[/{day_style}]",
             f"[{pnl_style}]₹{h.pnl:,.2f}[/{pnl_style}]",
             f"[{pnl_style}]{h.pnl_pct:+.2f}%[/{pnl_style}]",
         )
 
     console.print()
     console.print(table)
+
+    total_invested = sum(h.avg_price * h.quantity for h in holdings)
     total_pnl = sum(h.pnl for h in holdings)
+    total_day = sum((getattr(h, "day_change", 0) or 0) * h.quantity for h in holdings)
+    overall_pct = (total_pnl / total_invested * 100) if total_invested else 0
     pnl_style = "green" if total_pnl >= 0 else "red"
-    console.print(f"\n  Net P&L: [{pnl_style}]₹{total_pnl:,.2f}[/{pnl_style}]\n")
+    day_style = "green" if total_day >= 0 else "red"
+    console.print(
+        f"\n  Invested: ₹{total_invested:,.0f}"
+        f"  │  Today: [{day_style}]₹{total_day:,.0f}[/{day_style}]"
+        f"  │  Overall: [{pnl_style}]₹{total_pnl:,.0f} ({overall_pct:+.2f}%)[/{pnl_style}]\n"
+    )
 
 
 def cmd_positions(broker: BrokerAPI) -> None:
@@ -490,22 +511,55 @@ def _cmd_portfolio(summary) -> None:
     )
 
 
-def _cmd_toggle_paper() -> None:
-    """Show current paper / live trading mode."""
+def _cmd_toggle_paper(args: list[str] | None = None) -> None:
+    """Show or switch paper / live trading mode.
+
+    Usage:
+        mode           — show current mode
+        mode paper     — switch to paper trading
+        mode live      — switch to live trading (real money)
+    """
     import os
 
-    current = os.environ.get("TRADING_MODE", "PAPER")
-    if current == "PAPER":
+    current = os.environ.get("TRADING_MODE", "PAPER").upper()
+
+    if not args:
+        # Just show current mode
+        if current == "PAPER":
+            console.print(
+                "\n[bold green]✓  Currently in PAPER mode.[/bold green]\n"
+                "  All orders simulate fills without real money.\n"
+                "  Use [bold]mode live[/bold] to switch to live trading.\n"
+            )
+        else:
+            console.print(
+                "\n[bold yellow]⚠  Currently in LIVE mode.[/bold yellow]\n"
+                "  [red]Real money is at risk.[/red]\n"
+                "  Use [bold]mode paper[/bold] to switch to paper trading.\n"
+            )
+        return
+
+    target = args[0].upper()
+    if target not in ("PAPER", "LIVE"):
+        console.print("[red]Usage: mode paper | mode live[/red]")
+        return
+
+    if target == current:
+        console.print(f"[dim]Already in {current} mode.[/dim]")
+        return
+
+    os.environ["TRADING_MODE"] = target
+
+    if target == "LIVE":
         console.print(
-            "\n[bold green]✓  Currently in PAPER mode.[/bold green]\n"
-            "  All orders simulate fills without real money.\n"
-            "  To switch to LIVE, set [bold]TRADING_MODE=LIVE[/bold] in .env\n"
-            "  and restart. [red]Real money will be at risk.[/red]\n"
+            "\n[bold yellow]⚠  Switched to LIVE mode.[/bold yellow]\n"
+            "  [red]Orders will be placed with real money.[/red]\n"
+            "  Use [bold]mode paper[/bold] to switch back.\n"
         )
     else:
         console.print(
-            f"\n[bold yellow]⚠  Currently in {current} mode.[/bold yellow]\n"
-            "  To switch to PAPER mode, set [bold]TRADING_MODE=PAPER[/bold] in .env and restart.\n"
+            "\n[bold green]✓  Switched to PAPER mode.[/bold green]\n"
+            "  Orders will simulate fills without real money.\n"
         )
 
 
@@ -1737,6 +1791,139 @@ def run_repl(broker: BrokerAPI) -> None:
                     agent = get_agent()
                     agent.list_providers()
 
+            elif command == "cancel":
+                # cancel ORDER_ID  |  cancel all  |  cancel (shows open orders to pick)
+                if not broker:
+                    console.print("[red]No broker connected. Run: broker connect[/red]")
+                else:
+                    try:
+                        _orders = broker.get_orders()
+                        _open = [
+                            o
+                            for o in _orders
+                            if o.status.upper()
+                            in ("OPEN", "PENDING", "TRIGGER PENDING", "OPEN PENDING")
+                        ]
+                        if not _open:
+                            console.print("[dim]No open orders to cancel.[/dim]")
+                        elif args and args[0].lower() == "all":
+                            from rich.prompt import Confirm as _Confirm
+
+                            console.print(
+                                f"  [yellow]Cancel all {len(_open)} open orders?[/yellow]"
+                            )
+                            if _Confirm.ask("  Confirm?", default=False):
+                                for _o in _open:
+                                    try:
+                                        broker.cancel_order(_o.order_id)
+                                        console.print(
+                                            f"  [green]✓[/green] Cancelled {_o.symbol} {_o.order_id}"
+                                        )
+                                    except Exception as _e:
+                                        console.print(f"  [red]✗[/red] Failed {_o.order_id}: {_e}")
+                        elif args:
+                            _oid = args[0]
+                            try:
+                                broker.cancel_order(_oid)
+                                console.print(f"  [green]✓ Cancelled order {_oid}[/green]")
+                            except Exception as _e:
+                                console.print(f"  [red]Cancel failed:[/red] {_e}")
+                        else:
+                            # Show open orders and let user pick
+                            for _i, _o in enumerate(_open, 1):
+                                _side_color = "green" if _o.transaction_type == "BUY" else "red"
+                                console.print(
+                                    f"  {_i}. [{_side_color}]{_o.transaction_type}[/{_side_color}]"
+                                    f" {_o.quantity}× {_o.symbol} @ ₹{_o.price or 'MKT'}"
+                                    f"  [dim]{_o.order_id}[/dim]"
+                                )
+                            from rich.prompt import Prompt as _Prompt
+
+                            _pick = _Prompt.ask("  Cancel which? [number/all/0]", default="0")
+                            if _pick == "0":
+                                console.print("  [dim]Cancelled.[/dim]")
+                            elif _pick.lower() == "all":
+                                for _o in _open:
+                                    try:
+                                        broker.cancel_order(_o.order_id)
+                                        console.print(f"  [green]✓[/green] Cancelled {_o.symbol}")
+                                    except Exception as _e:
+                                        console.print(f"  [red]✗[/red] {_e}")
+                            else:
+                                try:
+                                    _idx = int(_pick) - 1
+                                    _o = _open[_idx]
+                                    broker.cancel_order(_o.order_id)
+                                    console.print(
+                                        f"  [green]✓ Cancelled {_o.symbol} {_o.order_id}[/green]"
+                                    )
+                                except (ValueError, IndexError):
+                                    console.print("[red]Invalid selection.[/red]")
+                                except Exception as _e:
+                                    console.print(f"  [red]Cancel failed:[/red] {_e}")
+                    except Exception as e:
+                        console.print(f"[red]Error:[/red] {e}")
+
+            elif command in ("buy", "sell"):
+                # Quick order: buy YESBANK 1 15 | sell RELIANCE 5
+                # Format: buy SYMBOL QTY [LIMIT_PRICE]
+                import os as _os
+
+                if not args:
+                    console.print(f"[dim]Usage: {command} SYMBOL QTY [LIMIT_PRICE][/dim]")
+                    console.print(f"[dim]  {command} YESBANK 1 15   → limit order at ₹15[/dim]")
+                    console.print(f"[dim]  {command} YESBANK 1      → market order[/dim]")
+                elif not broker:
+                    console.print("[red]No broker connected. Run: broker connect[/red]")
+                else:
+                    _sym = args[0].upper()
+                    _qty = int(args[1]) if len(args) > 1 else 1
+                    _limit = float(args[2]) if len(args) > 2 else None
+                    _mode = _os.environ.get("TRADING_MODE", "PAPER")
+                    _side = "BUY" if command == "buy" else "SELL"
+                    _otype = "LIMIT" if _limit else "MARKET"
+                    _price_str = f"₹{_limit}" if _limit else "MARKET"
+
+                    console.print(
+                        f"\n  [bold]{_side} {_qty} × {_sym}[/bold] @ {_price_str}"
+                        f"  [{'bold red' if _mode == 'LIVE' else 'green'}]({_mode})[/{'bold red' if _mode == 'LIVE' else 'green'}]"
+                    )
+
+                    from rich.prompt import Confirm as _Confirm
+
+                    if _mode == "LIVE":
+                        console.print(
+                            "  [red]⚠  This will place a REAL order with real money.[/red]"
+                        )
+                    if _Confirm.ask("  Confirm?", default=False):
+                        try:
+                            from brokers.base import OrderRequest as _OR
+
+                            _req = _OR(
+                                symbol=_sym,
+                                exchange="NSE",
+                                transaction_type=_side,
+                                quantity=_qty,
+                                order_type=_otype,
+                                price=_limit,
+                                product="CNC",
+                            )
+                            _resp = broker.place_order(_req)
+                            if _resp.status in ("OPEN", "COMPLETE", "PUT ORDER REQ RECEIVED"):
+                                console.print(
+                                    f"  [green]✓ Order placed![/green]  ID: {_resp.order_id}  Status: {_resp.status}"
+                                )
+                                if _resp.message:
+                                    console.print(f"    {_resp.message}")
+                            else:
+                                console.print(
+                                    f"  [red]✗ Order {_resp.status}:[/red] {_resp.message}"
+                                )
+                        except Exception as e:
+                            console.print(f"  [red]Order error:[/red] {e}")
+                    else:
+                        console.print("  [dim]Cancelled.[/dim]")
+
             elif command == "trade":
                 sym = args[0].upper() if args else None
                 view = args[1].upper() if len(args) > 1 else None
@@ -1752,8 +1939,8 @@ def run_repl(broker: BrokerAPI) -> None:
                         "[dim]Make sure you're logged in to a broker. Try: logout → login[/dim]"
                     )
 
-            elif command == "paper":
-                _cmd_toggle_paper()
+            elif command in ("paper", "mode"):
+                _cmd_toggle_paper(args)
 
             elif command == "tui":
                 console.print("[dim]Launching TUI...[/dim]")

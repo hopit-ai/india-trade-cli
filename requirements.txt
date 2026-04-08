@@ -44,3 +44,4 @@ pytz>=2024.1                # Timezone handling (IST)
 # ── Testing ─────────────────────────────────────────────────
 pytest>=7.0.0               # Test framework
 pytest-mock>=3.10.0         # Mocking helpers
+scipy>=1.11

@@ -1046,12 +1046,14 @@ class MultiAgentAnalyzer:
         parallel: bool = True,
         verbose: bool = True,
         risk_debate: bool = False,
+        progress_callback=None,
     ) -> None:
         self.registry = registry
         self.llm = llm_provider
         self.parallel = parallel
         self.verbose = verbose
         self.risk_debate = risk_debate  # enable 3-way risk debate (aggressive/conservative/neutral)
+        self.progress_callback = progress_callback
 
         news_analyst = NewsMacroAnalyst(registry)
         news_analyst.set_llm(llm_provider)
@@ -1101,6 +1103,8 @@ class MultiAgentAnalyzer:
             console.print(f"\n[dim]{scorecard.summary()}[/dim]")
 
         # ── Phase 2: Bull/Bear Debate ────────────────────────
+        if self.progress_callback:
+            self.progress_callback({"type": "phase", "phase": "debate"})
         if self.verbose:
             console.print()
             console.rule(
@@ -1131,6 +1135,8 @@ class MultiAgentAnalyzer:
                 console.print(f"[dim]Risk debate completed in {risk_debate_time:.1f}s[/dim]")
 
         # ── Phase 3: Synthesis ───────────────────────────────
+        if self.progress_callback:
+            self.progress_callback({"type": "phase", "phase": "synthesis"})
         if self.verbose:
             console.print()
             console.rule("[bold green]Fund Manager — Final Synthesis[/bold green]", style="green")
@@ -1292,6 +1298,18 @@ class MultiAgentAnalyzer:
                             else f"[red]FAIL: {report.error[:50]}[/red]"
                         )
                         console.print(f"  [dim]{analyst.name:<15}[/dim] {status}")
+                    if self.progress_callback:
+                        self.progress_callback(
+                            {
+                                "type": "analyst",
+                                "name": analyst.name,
+                                "verdict": report.verdict,
+                                "confidence": report.confidence,
+                                "score": getattr(report, "score", 0),
+                                "key_points": getattr(report, "key_points", []),
+                                "error": report.error,
+                            }
+                        )
                 except Exception as e:
                     reports.append(
                         AnalystReport(
@@ -1304,6 +1322,17 @@ class MultiAgentAnalyzer:
                     )
                     if self.verbose:
                         console.print(f"  [dim]{analyst.name:<15}[/dim] [red]FAIL: {e}[/red]")
+                    if self.progress_callback:
+                        self.progress_callback(
+                            {
+                                "type": "analyst",
+                                "name": analyst.name,
+                                "verdict": "UNKNOWN",
+                                "confidence": 0,
+                                "score": 0,
+                                "error": str(e),
+                            }
+                        )
 
         return reports
 
@@ -1411,6 +1440,15 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": bull_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "bull_r1",
+                    "label": "Bull Researcher",
+                    "text": bull_argument,
+                }
+            )
 
         # Bear counter
         bear_prompt = BEAR_RESEARCHER_PROMPT.format(
@@ -1426,6 +1464,15 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": bear_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "bear_r1",
+                    "label": "Bear Researcher",
+                    "text": bear_argument,
+                }
+            )
 
         # ── Round 2: Rebuttals ───────────────────────────────
         if self.verbose:
@@ -1445,6 +1492,15 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": bull_rebuttal_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "bull_r2",
+                    "label": "Bull Rebuttal",
+                    "text": bull_rebuttal,
+                }
+            )
 
         # Bear rebuttal
         bear_rebuttal_prompt = BEAR_REBUTTAL_PROMPT.format(
@@ -1460,6 +1516,15 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": bear_rebuttal_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "bear_r2",
+                    "label": "Bear Rebuttal",
+                    "text": bear_rebuttal,
+                }
+            )
 
         # ── Facilitator: Summarize & pick winner ─────────────
         facilitator_prompt = FACILITATOR_PROMPT.format(
@@ -1477,6 +1542,15 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": facilitator_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "facilitator",
+                    "label": "Facilitator",
+                    "text": facilitator_summary,
+                }
+            )
 
         # Extract winner from facilitator
         winner = ""
@@ -1679,6 +1753,8 @@ class MultiAgentAnalyzer:
             messages=[{"role": "user", "content": synthesis_prompt}],
             stream=self.verbose,
         )
+        if self.progress_callback:
+            self.progress_callback({"type": "synthesis_text", "text": synthesis})
 
         return synthesis
 
