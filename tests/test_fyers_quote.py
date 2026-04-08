@@ -9,7 +9,7 @@ ch ≈ 0.  The broker should detect this and fall back to open-based change.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

@@ -104,7 +104,8 @@ def _parse_expiry_from_fyers_symbol(symbol: str, option_type: str) -> str:
     Fyers monthly format: NSE:NIFTY26APR22100CE  → YY=26, MMM=APR, last Thursday
     Returns YYYY-MM-DD string or empty string on failure.
     """
-    import re, datetime as dt
+    import re
+    import datetime as dt
     from calendar import monthrange
     try:
         sym = re.sub(r"^[A-Z]+:", "", symbol)   # strip "NSE:"

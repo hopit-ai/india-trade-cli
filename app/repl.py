@@ -533,7 +533,7 @@ def _cmd_toggle_paper(args: list[str] | None = None) -> None:
             )
         else:
             console.print(
-                f"\n[bold yellow]⚠  Currently in LIVE mode.[/bold yellow]\n"
+                "\n[bold yellow]⚠  Currently in LIVE mode.[/bold yellow]\n"
                 "  [red]Real money is at risk.[/red]\n"
                 "  Use [bold]mode paper[/bold] to switch to paper trading.\n"
             )
