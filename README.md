@@ -34,14 +34,54 @@ Standard `analyze`: 8 LLM calls. `deep-analyze`: 11 calls, every analyst fully A
 
 ---
 
-## Quick start
+## Installation
+
+### Prerequisites
+
+- **Python 3.11+** ([download](https://www.python.org/downloads/))
+- **Node.js 18+** ([download](https://nodejs.org/)) — only needed for the macOS app
+- **Git** ([download](https://git-scm.com/))
+
+### Step 1: Clone and install
 
 ```bash
 git clone https://github.com/hopit-ai/india-trade-cli.git
 cd india-trade-cli
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
-trade --no-broker   # yfinance data, no broker account needed
+```
+
+### Step 2: Configure AI provider
+
+Copy the example env file and add your API key:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set your AI provider (pick one):
+
+```bash
+# Free option — Google Gemini
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_key_from_aistudio.google.com
+
+# Or — Claude (with Pro/Max subscription, no API key needed)
+AI_PROVIDER=claude_subscription
+
+# Or — OpenAI
+AI_PROVIDER=openai
+OPENAI_API_KEY=your_key
+
+# Or — Ollama (free, local, no key needed)
+AI_PROVIDER=ollama
+```
+
+### Step 3: Run
+
+**Terminal CLI** (works immediately, no broker needed):
+```bash
+trade --no-broker
 ```
 
 Inside the REPL:
@@ -51,8 +91,7 @@ Inside the REPL:
 > strategy library
 ```
 
-### macOS app
-
+**macOS app** (requires Node.js):
 ```bash
 cd macos-app
 npm install
@@ -60,6 +99,12 @@ npm run dev
 ```
 
 The Electron app auto-starts a FastAPI sidecar on port 8765. Includes streaming analysis, 25+ card types, broker panel, and sidebar quick commands.
+
+### Step 4: Connect a broker (optional)
+
+For live market data and trading, connect a broker. See [Broker setup](#broker-setup) below.
+
+Without a broker, the platform uses yfinance (15-min delayed data, no options chain).
 
 ### AI provider
 
