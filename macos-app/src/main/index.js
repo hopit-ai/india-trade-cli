@@ -157,6 +157,11 @@ ipcMain.on('update-tray', (_, { label }) => {
 // Lifecycle
 // ---------------------------------------------------------------------------
 app.whenReady().then(() => {
+  // Set app name for dev mode (packaged mode reads from Info.plist)
+  if (!app.isPackaged) {
+    app.setName('India Trade')
+  }
+
   createTray()
   createWindow()
 
