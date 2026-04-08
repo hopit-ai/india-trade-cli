@@ -8,6 +8,28 @@ Open-source terminal + macOS app for trading Indian stocks and derivatives (NSE 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+<p align="center">
+  <img src="docs/images/app-analysis.png" alt="India Trade — streaming multi-agent analysis" width="800" />
+</p>
+
+<p align="center">
+  <em>7 AI analysts run in parallel, debate bull vs bear, and deliver a trade plan with entry, stop, and targets.</em>
+</p>
+
+<details>
+<summary><strong>More screenshots</strong></summary>
+
+| | |
+|---|---|
+| ![Debate](docs/images/app-debate.png) | ![GEX](docs/images/app-gex.png) |
+| *Bull/Bear debate with facilitator* | *Gamma Exposure with flip point and action chips* |
+| ![Quotes](docs/images/app-quotes.png) | ![Patterns](docs/images/app-patterns.png) |
+| *Live quotes from Zerodha/Fyers* | *India-specific market patterns* |
+| ![Scan](docs/images/app-scan.png) | |
+| *Options scanner with OI analysis* | |
+
+</details>
+
 ---
 
 ## How it works
