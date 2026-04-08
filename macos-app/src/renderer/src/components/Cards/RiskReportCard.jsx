@@ -16,6 +16,7 @@ function concColor(risk) {
 export default function RiskReportCard({ data }) {
   const d = data?.data ?? data ?? {}
   const demo = d.demo ?? false
+  const portfolioValue = Number(d.portfolio_value ?? 0)
   const holdings = (d.holding_vars ?? []).slice().sort((a, b) => Math.abs(Number(b.var_95 ?? 0)) - Math.abs(Number(a.var_95 ?? 0)))
   const highCorr = d.high_correlations ?? []
   const concRisk = d.concentration_risk ?? 'MEDIUM'
@@ -24,7 +25,7 @@ export default function RiskReportCard({ data }) {
     { label: 'Portfolio Value', value: `₹${fmt(d.portfolio_value)}` },
     { label: '1-day VaR 95%', value: `₹${fmt(d.portfolio_var_95)}`, sub: 'at 95% confidence' },
     { label: 'VaR 99%', value: `₹${fmt(d.portfolio_var_99)}`, sub: 'at 99% confidence' },
-    { label: 'Volatility', value: pct(d.portfolio_volatility), sub: 'annualised' },
+    { label: 'Volatility', value: `${Number(d.portfolio_volatility ?? 0).toFixed(1)}%`, sub: 'annualised' },
   ]
 
   return (
@@ -75,7 +76,7 @@ export default function RiskReportCard({ data }) {
                 <tr key={i} className="border-b border-border/40 last:border-0">
                   <td className="py-1.5 text-text">{h.symbol ?? '—'}</td>
                   <td className="py-1.5 text-right text-muted">
-                    {(Number(h.weight ?? 0) * 100).toFixed(1)}%
+                    {portfolioValue > 0 ? (Number(h.position_value ?? 0) / portfolioValue * 100).toFixed(1) : '0.0'}%
                   </td>
                   <td className="py-1.5 text-right text-red">₹{fmt(h.var_95)}</td>
                 </tr>
