@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -282,7 +281,6 @@ async def skill_analyze(req: AnalyzeRequest):
 @router.get("/analyze/ping")
 async def skill_analyze_ping():
     """Quick SSE test — emits 3 events then closes."""
-    import time
 
     async def _gen():
         for i in range(3):
@@ -1167,7 +1165,7 @@ class ProviderSwitchRequest(BaseModel):
     model: Optional[str] = None
 
 
-@router.post("/provider")
+@router.post("/provider/switch")
 async def skill_provider_switch(req: ProviderSwitchRequest):
     """Switch the active AI provider (takes effect for next request)."""
     try:

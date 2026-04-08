@@ -11,7 +11,7 @@ No real broker, LLM, or network calls.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -208,7 +208,7 @@ class TestGEX:
 class TestDeltaHedge:
     def test_returns_demo_when_no_broker(self, client):
         with patch("brokers.session.get_broker", side_effect=RuntimeError("no broker")):
-            r = client.get("/skills/delta_hedge")
+            r = client.post("/skills/delta_hedge")
         assert r.status_code == 200
         d = r.json()["data"]
         assert d["demo"] is True
@@ -223,7 +223,7 @@ class TestDeltaHedge:
             patch("engine.portfolio.get_position_greeks", return_value=fake_pg),
             patch("engine.greeks_manager.compute_delta_hedge", return_value=FakeDeltaHedge()),
         ):
-            r = client.get("/skills/delta_hedge")
+            r = client.post("/skills/delta_hedge")
         assert r.status_code == 200
         d = r.json()["data"]
         assert d["current_delta"] == 50.0
@@ -242,7 +242,7 @@ class TestDeltaHedge:
                 side_effect=RuntimeError("greeks computation failed"),
             ),
         ):
-            r = client.get("/skills/delta_hedge")
+            r = client.post("/skills/delta_hedge")
         assert r.status_code == 500
 
 
@@ -252,7 +252,7 @@ class TestDeltaHedge:
 class TestRiskReport:
     def test_returns_demo_when_no_broker(self, client):
         with patch("brokers.session.get_broker", side_effect=RuntimeError("no broker")):
-            r = client.get("/skills/risk_report")
+            r = client.post("/skills/risk_report")
         assert r.status_code == 200
         d = r.json()["data"]
         assert d["demo"] is True
@@ -262,7 +262,7 @@ class TestRiskReport:
             patch("brokers.session.get_broker", return_value=MagicMock()),
             patch("engine.risk_metrics.compute_portfolio_risk", return_value=FakeRiskReport()),
         ):
-            r = client.get("/skills/risk_report")
+            r = client.post("/skills/risk_report")
         assert r.status_code == 200
         d = r.json()["data"]
         assert d["portfolio_value"] == 500000.0
@@ -414,7 +414,7 @@ class TestStrategy:
 class TestDrift:
     def test_returns_report(self, client):
         with patch("engine.drift.detect_drift", return_value=FakeDriftReport()):
-            r = client.get("/skills/drift")
+            r = client.post("/skills/drift")
         assert r.status_code == 200
         d = r.json()["data"]
         assert d["total_trades"] == 50
@@ -423,7 +423,7 @@ class TestDrift:
 
     def test_500_on_exception(self, client):
         with patch("engine.drift.detect_drift", side_effect=RuntimeError("memory read failed")):
-            r = client.get("/skills/drift")
+            r = client.post("/skills/drift")
         assert r.status_code == 500
 
 
@@ -440,7 +440,7 @@ class TestMemory:
         mock_tm.query.return_value = fake_records
 
         with patch("engine.memory.trade_memory", mock_tm):
-            r = client.get("/skills/memory")
+            r = client.post("/skills/memory")
         assert r.status_code == 200
         d = r.json()["data"]
         assert "stats" in d
@@ -523,7 +523,7 @@ class TestProvider:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-        r = client.get("/skills/provider")
+        r = client.post("/skills/provider")
         assert r.status_code == 200
         d = r.json()["data"]
         assert d["current"] == "anthropic"
@@ -532,13 +532,13 @@ class TestProvider:
 
     def test_post_switches_provider(self, client, monkeypatch):
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-        r = client.post("/skills/provider", json={"provider": "openai"})
+        r = client.post("/skills/provider/switch", json={"provider": "openai"})
         assert r.status_code == 200
         d = r.json()["data"]
         assert d["current"] == "openai"
 
     def test_post_rejects_invalid_provider(self, client):
-        r = client.post("/skills/provider", json={"provider": "badprovider"})
+        r = client.post("/skills/provider/switch", json={"provider": "badprovider"})
         assert r.status_code == 400
 
 
