@@ -343,13 +343,112 @@ function TradePlans({ plans }) {
     <div className="border-t border-border pt-3 space-y-3">
       <p className="text-amber text-[10px] uppercase tracking-widest font-ui">Trade Plans</p>
       {entries.map(([name, plan]) => (
-        <div key={name} className="bg-panel rounded-lg p-3 border border-border">
-          <p className="text-amber text-xs font-ui uppercase tracking-wider mb-2">{name}</p>
-          <pre className="text-text text-xs font-mono whitespace-pre-wrap leading-relaxed">
-            {typeof plan === 'string' ? plan : JSON.stringify(plan, null, 2)}
-          </pre>
-        </div>
+        <TradePlanCard key={name} name={name} plan={plan} />
       ))}
+    </div>
+  )
+}
+
+function TradePlanCard({ name, plan }) {
+  if (typeof plan === 'string') {
+    return (
+      <div className="bg-panel rounded-lg p-3 border border-border">
+        <p className="text-amber text-xs font-ui uppercase tracking-wider mb-2">{name}</p>
+        <pre className="text-text text-xs font-mono whitespace-pre-wrap">{plan}</pre>
+      </div>
+    )
+  }
+
+  const p = plan ?? {}
+  const exit = p.exit_plan ?? {}
+  const entries = p.entry_orders ?? []
+  const verdictColor = (p.verdict ?? '').includes('BUY') ? 'text-green' : (p.verdict ?? '').includes('SELL') ? 'text-red' : 'text-amber'
+
+  return (
+    <div className="bg-panel rounded-lg p-3 border border-border space-y-2">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-amber text-xs font-ui uppercase tracking-wider">{name}</p>
+        <span className={`text-xs font-mono font-semibold ${verdictColor}`}>
+          {p.verdict} {p.confidence ? `${p.confidence}%` : ''}
+        </span>
+      </div>
+
+      {/* Strategy */}
+      <p className="text-text text-sm font-semibold">{p.strategy_name ?? '—'}</p>
+
+      {/* Entry */}
+      {entries.length > 0 && (
+        <div className="text-xs font-mono text-muted">
+          {entries.map((e, i) => (
+            <span key={i} className={`inline-block mr-2 px-1.5 py-0.5 rounded border ${e.action === 'BUY' ? 'text-green border-green/30' : 'text-red border-red/30'}`}>
+              {e.action} {e.quantity}× {e.instrument} @ {e.price ? `₹${Number(e.price).toLocaleString('en-IN')}` : 'MKT'}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Key metrics */}
+      <div className="grid grid-cols-4 gap-2 text-[10px] font-mono">
+        <div className="bg-elevated rounded px-2 py-1">
+          <span className="text-muted">Capital</span>
+          <p className="text-text">₹{Number(p.capital_deployed ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} ({Number(p.capital_pct ?? 0).toFixed(1)}%)</p>
+        </div>
+        <div className="bg-elevated rounded px-2 py-1">
+          <span className="text-muted">Max Risk</span>
+          <p className="text-red">₹{Number(p.max_risk ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} ({Number(p.risk_pct ?? 0).toFixed(1)}%)</p>
+        </div>
+        <div className="bg-elevated rounded px-2 py-1">
+          <span className="text-muted">R:R</span>
+          <p className="text-text">{Number(p.reward_risk ?? 0).toFixed(1)}×</p>
+        </div>
+        <div className="bg-elevated rounded px-2 py-1">
+          <span className="text-muted">Hold</span>
+          <p className="text-text">{exit.max_hold_days ?? '—'}d</p>
+        </div>
+      </div>
+
+      {/* Exit plan */}
+      {(exit.stop_loss || exit.target_1) && (
+        <div className="flex gap-3 text-[10px] font-mono">
+          {exit.stop_loss && (
+            <span className="text-red">SL: ₹{Number(exit.stop_loss).toLocaleString('en-IN')} ({Number(exit.stop_loss_pct ?? 0).toFixed(1)}%)</span>
+          )}
+          {exit.target_1 && (
+            <span className="text-green">T1: ₹{Number(exit.target_1).toLocaleString('en-IN')} ({Number(exit.target_1_pct ?? 0).toFixed(1)}%)</span>
+          )}
+          {exit.target_2 && (
+            <span className="text-green">T2: ₹{Number(exit.target_2).toLocaleString('en-IN')} ({Number(exit.target_2_pct ?? 0).toFixed(1)}%)</span>
+          )}
+        </div>
+      )}
+
+      {/* Rationale */}
+      {p.rationale?.length > 0 && (
+        <div className="text-[11px] font-ui text-muted space-y-1">
+          {p.rationale.map((r, i) => (
+            <p key={i} className="flex gap-1.5 leading-snug"><span className="text-green flex-shrink-0">+</span><span>{r}</span></p>
+          ))}
+        </div>
+      )}
+
+      {/* Risks */}
+      {p.risks?.length > 0 && (
+        <div className="text-[11px] font-ui text-muted space-y-1">
+          {p.risks.map((r, i) => (
+            <p key={i} className="flex gap-1.5 leading-snug"><span className="text-red flex-shrink-0">−</span><span>{r}</span></p>
+          ))}
+        </div>
+      )}
+
+      {/* Pre-conditions */}
+      {p.pre_conditions?.length > 0 && (
+        <div className="text-[10px] font-ui text-amber space-y-0.5 border-t border-border/50 pt-1.5">
+          {p.pre_conditions.map((c, i) => (
+            <p key={i}>⚠ {c}</p>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
