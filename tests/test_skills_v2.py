@@ -28,6 +28,7 @@ def client():
         patch("dotenv.load_dotenv", return_value=None),
     ):
         from web.api import app
+
         yield TestClient(app)
 
 
@@ -287,7 +288,9 @@ class TestWalkForward:
         assert d["consistency"] == "MODERATE"
 
     def test_default_strategy_is_rsi(self, client):
-        with patch("engine.backtest.walk_forward_test", return_value=FakeWalkForwardResult()) as mock:
+        with patch(
+            "engine.backtest.walk_forward_test", return_value=FakeWalkForwardResult()
+        ) as mock:
             client.post("/skills/walkforward", json={"symbol": "NIFTY"})
         _, kwargs = mock.call_args
         assert kwargs["strategy_name"] == "rsi"

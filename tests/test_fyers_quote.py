@@ -18,6 +18,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_fyers(token_valid: bool = True):
     """Return a FyersAPI instance with __init__ bypassed."""
     from brokers.fyers import FyersAPI
@@ -68,6 +69,7 @@ def _fyers_tick_response(
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestFyersQuoteChange:
     """Tests for the after-close change fallback in FyersAPI.get_quote."""
 
@@ -83,9 +85,13 @@ class TestFyersQuoteChange:
         # ch=-1.40 → abs(-1.40) / 17.3 = 0.081 > 0.05 → NOT a rollover
         resp = _fyers_tick_response(
             "NSE:RELIANCE-EQ",
-            lp=1304.6, open_price=1295.0, high_price=1308.3, low_price=1291.0,
+            lp=1304.6,
+            open_price=1295.0,
+            high_price=1308.3,
+            low_price=1291.0,
             prev_close_price=1306.0,
-            ch=-1.40, chp=-0.11,
+            ch=-1.40,
+            chp=-0.11,
         )
         quotes = self._get_quote(f, "NSE:RELIANCE-EQ", resp)
         q = quotes["NSE:RELIANCE-EQ"]
@@ -99,9 +105,13 @@ class TestFyersQuoteChange:
         # ch = -0.10 (lp - new_prev_close), very small vs range of 17.3
         resp = _fyers_tick_response(
             "NSE:RELIANCE-EQ",
-            lp=1304.6, open_price=1295.0, high_price=1308.3, low_price=1291.0,
+            lp=1304.6,
+            open_price=1295.0,
+            high_price=1308.3,
+            low_price=1291.0,
             prev_close_price=1304.7,
-            ch=-0.10, chp=-0.01,
+            ch=-0.10,
+            chp=-0.01,
         )
         quotes = self._get_quote(f, "NSE:RELIANCE-EQ", resp)
         q = quotes["NSE:RELIANCE-EQ"]
@@ -115,9 +125,13 @@ class TestFyersQuoteChange:
         # Flat day: range = 0.4 (<0.5 threshold) → skip fallback
         resp = _fyers_tick_response(
             "NSE:SOMESTOCK-EQ",
-            lp=100.0, open_price=100.1, high_price=100.3, low_price=99.9,
+            lp=100.0,
+            open_price=100.1,
+            high_price=100.3,
+            low_price=99.9,
             prev_close_price=100.1,
-            ch=-0.10, chp=-0.10,
+            ch=-0.10,
+            chp=-0.10,
         )
         quotes = self._get_quote(f, "NSE:SOMESTOCK-EQ", resp)
         q = quotes["NSE:SOMESTOCK-EQ"]
@@ -130,9 +144,13 @@ class TestFyersQuoteChange:
         f = _make_fyers()
         resp = _fyers_tick_response(
             "NSE:BAD-EQ",
-            lp=100.0, open_price=0.0, high_price=105.0, low_price=95.0,
+            lp=100.0,
+            open_price=0.0,
+            high_price=105.0,
+            low_price=95.0,
             prev_close_price=100.05,
-            ch=-0.05, chp=-0.05,
+            ch=-0.05,
+            chp=-0.05,
         )
         quotes = self._get_quote(f, "NSE:BAD-EQ", resp)
         q = quotes["NSE:BAD-EQ"]
@@ -145,9 +163,13 @@ class TestFyersQuoteChange:
         f = _make_fyers()
         resp = _fyers_tick_response(
             "NSE:RELIANCE-EQ",
-            lp=1304.6, open_price=1295.0, high_price=1308.3, low_price=1291.0,
+            lp=1304.6,
+            open_price=1295.0,
+            high_price=1308.3,
+            low_price=1291.0,
             prev_close_price=1304.7,
-            ch=-0.10, chp=-0.01,
+            ch=-0.10,
+            chp=-0.01,
             volume=28_382_724,
         )
         quotes = self._get_quote(f, "NSE:RELIANCE-EQ", resp)

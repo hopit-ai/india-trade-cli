@@ -62,6 +62,7 @@ app = FastAPI(title="india-trade-cli", docs_url=None, redoc_url=None)
 
 # ── CORS — allow Electron renderer (Vite dev + packaged file://) ──────────
 from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "file://"],
@@ -94,6 +95,7 @@ app.include_router(_skills_router)
 
 # ── Startup: auto-restore broker sessions from disk ───────────
 
+
 @app.on_event("startup")
 async def _auto_restore_brokers() -> None:
     """
@@ -109,6 +111,7 @@ async def _auto_restore_brokers() -> None:
     if _has_fyers():
         try:
             from brokers.fyers import FyersAPI, TOKEN_FILE as _FT
+
             if _FT.exists():
                 b = FyersAPI(_env("FYERS_APP_ID"), _env("FYERS_SECRET_KEY"))
                 if b.is_authenticated():
@@ -121,6 +124,7 @@ async def _auto_restore_brokers() -> None:
     if _has_zerodha():
         try:
             from brokers.zerodha import ZerodhaAPI, TOKEN_FILE as _ZT
+
             if _ZT.exists():
                 b = ZerodhaAPI(_env("KITE_API_KEY"), _env("KITE_API_SECRET"))
                 if b.is_authenticated():
@@ -133,6 +137,7 @@ async def _auto_restore_brokers() -> None:
     if _has_groww():
         try:
             from brokers.groww import GrowwAPI, TOKEN_FILE as _GT
+
             if _GT.exists():
                 b = GrowwAPI(_env("GROWW_CLIENT_ID"), _env("GROWW_CLIENT_SECRET"))
                 if b.is_authenticated():
@@ -145,6 +150,7 @@ async def _auto_restore_brokers() -> None:
     if _has_angelone():
         try:
             from brokers.angelone import AngelOneAPI, TOKEN_FILE as _AT
+
             if _AT.exists():
                 b = AngelOneAPI(
                     api_key=_env("ANGEL_API_KEY"),
@@ -162,6 +168,7 @@ async def _auto_restore_brokers() -> None:
     if _has_upstox():
         try:
             from brokers.upstox import UpstoxAPI, TOKEN_FILE as _UT
+
             if _UT.exists():
                 b = UpstoxAPI(_env("UPSTOX_API_KEY"), _env("UPSTOX_API_SECRET"))
                 if b.is_authenticated():
@@ -898,12 +905,13 @@ async def api_status(request: Request):
 
 
 _BROKER_SESSION_FILES = {
-    "zerodha":   Path.home() / ".trading_platform" / "zerodha.json",
-    "groww":     Path.home() / ".trading_platform" / "groww.json",
+    "zerodha": Path.home() / ".trading_platform" / "zerodha.json",
+    "groww": Path.home() / ".trading_platform" / "groww.json",
     "angel_one": Path.home() / ".trading_platform" / "angelone.json",
-    "upstox":    Path.home() / ".trading_platform" / "upstox.json",
-    "fyers":     Path.home() / ".trading_platform" / "fyers.json",
+    "upstox": Path.home() / ".trading_platform" / "upstox.json",
+    "fyers": Path.home() / ".trading_platform" / "fyers.json",
 }
+
 
 @app.delete("/api/broker/{broker_key}")
 async def broker_disconnect(broker_key: str, request: Request):
@@ -912,11 +920,13 @@ async def broker_disconnect(broker_key: str, request: Request):
     path = _BROKER_SESSION_FILES.get(broker_key)
     if path is None:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail=f"Unknown broker: {broker_key}")
     if path.exists():
         path.unlink()
     # Also remove from in-memory broker registry
     from brokers.session import unregister_broker
+
     # Map API key names to session key names (angel_one → angelone)
     _SESSION_KEY_MAP = {
         "zerodha": "zerodha",

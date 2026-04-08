@@ -290,10 +290,10 @@ class UpstoxAPI(BrokerAPI):
             result = {}
             for sym, q in data.get("data", {}).items():
                 tradingsym = sym.split("|")[-1] if "|" in sym else sym
-                ohlc       = q.get("ohlc", {})
-                ltp        = float(q.get("last_price", 0))
+                ohlc = q.get("ohlc", {})
+                ltp = float(q.get("last_price", 0))
                 prev_close = float(ohlc.get("close", ltp) or ltp)
-                change     = round(ltp - prev_close, 2)
+                change = round(ltp - prev_close, 2)
                 change_pct = round((change / prev_close * 100), 2) if prev_close else 0.0
                 result[tradingsym] = Quote(
                     symbol=tradingsym,

@@ -1299,15 +1299,17 @@ class MultiAgentAnalyzer:
                         )
                         console.print(f"  [dim]{analyst.name:<15}[/dim] {status}")
                     if self.progress_callback:
-                        self.progress_callback({
-                            "type": "analyst",
-                            "name": analyst.name,
-                            "verdict": report.verdict,
-                            "confidence": report.confidence,
-                            "score": getattr(report, "score", 0),
-                            "key_points": getattr(report, "key_points", []),
-                            "error": report.error,
-                        })
+                        self.progress_callback(
+                            {
+                                "type": "analyst",
+                                "name": analyst.name,
+                                "verdict": report.verdict,
+                                "confidence": report.confidence,
+                                "score": getattr(report, "score", 0),
+                                "key_points": getattr(report, "key_points", []),
+                                "error": report.error,
+                            }
+                        )
                 except Exception as e:
                     reports.append(
                         AnalystReport(
@@ -1321,14 +1323,16 @@ class MultiAgentAnalyzer:
                     if self.verbose:
                         console.print(f"  [dim]{analyst.name:<15}[/dim] [red]FAIL: {e}[/red]")
                     if self.progress_callback:
-                        self.progress_callback({
-                            "type": "analyst",
-                            "name": analyst.name,
-                            "verdict": "UNKNOWN",
-                            "confidence": 0,
-                            "score": 0,
-                            "error": str(e),
-                        })
+                        self.progress_callback(
+                            {
+                                "type": "analyst",
+                                "name": analyst.name,
+                                "verdict": "UNKNOWN",
+                                "confidence": 0,
+                                "score": 0,
+                                "error": str(e),
+                            }
+                        )
 
         return reports
 
@@ -1437,8 +1441,14 @@ class MultiAgentAnalyzer:
             stream=self.verbose,
         )
         if self.progress_callback:
-            self.progress_callback({"type": "debate_step", "step": "bull_r1",
-                                    "label": "Bull Researcher", "text": bull_argument})
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "bull_r1",
+                    "label": "Bull Researcher",
+                    "text": bull_argument,
+                }
+            )
 
         # Bear counter
         bear_prompt = BEAR_RESEARCHER_PROMPT.format(
@@ -1455,8 +1465,14 @@ class MultiAgentAnalyzer:
             stream=self.verbose,
         )
         if self.progress_callback:
-            self.progress_callback({"type": "debate_step", "step": "bear_r1",
-                                    "label": "Bear Researcher", "text": bear_argument})
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "bear_r1",
+                    "label": "Bear Researcher",
+                    "text": bear_argument,
+                }
+            )
 
         # ── Round 2: Rebuttals ───────────────────────────────
         if self.verbose:
@@ -1477,8 +1493,14 @@ class MultiAgentAnalyzer:
             stream=self.verbose,
         )
         if self.progress_callback:
-            self.progress_callback({"type": "debate_step", "step": "bull_r2",
-                                    "label": "Bull Rebuttal", "text": bull_rebuttal})
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "bull_r2",
+                    "label": "Bull Rebuttal",
+                    "text": bull_rebuttal,
+                }
+            )
 
         # Bear rebuttal
         bear_rebuttal_prompt = BEAR_REBUTTAL_PROMPT.format(
@@ -1495,8 +1517,14 @@ class MultiAgentAnalyzer:
             stream=self.verbose,
         )
         if self.progress_callback:
-            self.progress_callback({"type": "debate_step", "step": "bear_r2",
-                                    "label": "Bear Rebuttal", "text": bear_rebuttal})
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "bear_r2",
+                    "label": "Bear Rebuttal",
+                    "text": bear_rebuttal,
+                }
+            )
 
         # ── Facilitator: Summarize & pick winner ─────────────
         facilitator_prompt = FACILITATOR_PROMPT.format(
@@ -1515,8 +1543,14 @@ class MultiAgentAnalyzer:
             stream=self.verbose,
         )
         if self.progress_callback:
-            self.progress_callback({"type": "debate_step", "step": "facilitator",
-                                    "label": "Facilitator", "text": facilitator_summary})
+            self.progress_callback(
+                {
+                    "type": "debate_step",
+                    "step": "facilitator",
+                    "label": "Facilitator",
+                    "text": facilitator_summary,
+                }
+            )
 
         # Extract winner from facilitator
         winner = ""

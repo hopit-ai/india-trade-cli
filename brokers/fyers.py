@@ -88,13 +88,32 @@ _INDEX_KEYWORDS = {
 
 
 _MONTH_MAP = {
-    "jan": "01", "feb": "02", "mar": "03", "apr": "04",
-    "may": "05", "jun": "06", "jul": "07", "aug": "08",
-    "sep": "09", "oct": "10", "nov": "11", "dec": "12",
-    "1": "01", "2": "02", "3": "03", "4": "04",
-    "5": "05", "6": "06", "7": "07", "8": "08",
-    "9": "09", "10": "10", "11": "11", "12": "12",
+    "jan": "01",
+    "feb": "02",
+    "mar": "03",
+    "apr": "04",
+    "may": "05",
+    "jun": "06",
+    "jul": "07",
+    "aug": "08",
+    "sep": "09",
+    "oct": "10",
+    "nov": "11",
+    "dec": "12",
+    "1": "01",
+    "2": "02",
+    "3": "03",
+    "4": "04",
+    "5": "05",
+    "6": "06",
+    "7": "07",
+    "8": "08",
+    "9": "09",
+    "10": "10",
+    "11": "11",
+    "12": "12",
 }
+
 
 def _parse_expiry_from_fyers_symbol(symbol: str, option_type: str) -> str:
     """
@@ -107,9 +126,10 @@ def _parse_expiry_from_fyers_symbol(symbol: str, option_type: str) -> str:
     import re
     import datetime as dt
     from calendar import monthrange
+
     try:
-        sym = re.sub(r"^[A-Z]+:", "", symbol)   # strip "NSE:"
-        sym = re.sub(r"(CE|PE)$", "", sym)       # strip option type
+        sym = re.sub(r"^[A-Z]+:", "", symbol)  # strip "NSE:"
+        sym = re.sub(r"(CE|PE)$", "", sym)  # strip option type
 
         # Match: underlying(letters) + YY(2 digits) + date_part + strike(digits)
         # Monthly: 3 uppercase letters; Weekly: 3 or 4 digits
@@ -126,7 +146,7 @@ def _parse_expiry_from_fyers_symbol(symbol: str, option_type: str) -> str:
                 return ""
             days = monthrange(year, month)[1]
             d = dt.date(year, month, days)
-            while d.weekday() != 3:   # last Thursday
+            while d.weekday() != 3:  # last Thursday
                 d -= dt.timedelta(days=1)
             return d.strftime("%Y-%m-%d")
 
@@ -443,24 +463,20 @@ class FyersAPI(BrokerAPI):
                 v = item.get("v", {})
                 # Find the original key
                 orig_key = key_map.get(raw, raw)
-                last_price  = float(v.get("lp", 0))
-                open_price  = float(v.get("open_price", 0))
-                high_price  = float(v.get("high_price", 0))
-                low_price   = float(v.get("low_price", 0))
-                prev_close  = float(v.get("prev_close_price", 0))
-                ch          = float(v.get("ch", 0))
-                chp         = float(v.get("chp", 0))
+                last_price = float(v.get("lp", 0))
+                open_price = float(v.get("open_price", 0))
+                high_price = float(v.get("high_price", 0))
+                low_price = float(v.get("low_price", 0))
+                prev_close = float(v.get("prev_close_price", 0))
+                ch = float(v.get("ch", 0))
+                chp = float(v.get("chp", 0))
 
                 # After NSE close Fyers rolls prev_close_price to today's official
                 # close, making ch ≈ 0.  Detect this: if |ch| < 5% of the intraday
                 # range (and the range is meaningful), fall back to open-based change.
                 intraday_range = high_price - low_price
-                if (
-                    intraday_range > 0.5
-                    and open_price > 0
-                    and abs(ch) < intraday_range * 0.05
-                ):
-                    ch  = round(last_price - open_price, 2)
+                if intraday_range > 0.5 and open_price > 0 and abs(ch) < intraday_range * 0.05:
+                    ch = round(last_price - open_price, 2)
                     chp = round((ch / open_price * 100), 2) if open_price else 0.0
 
                 result[orig_key] = Quote(

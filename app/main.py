@@ -20,8 +20,12 @@ from pathlib import Path
 # Many ISPs assign both IPv4 and IPv6; Python may pick IPv6 by default,
 # which won't match the registered IP on broker developer consoles.
 _orig_getaddrinfo = socket.getaddrinfo
+
+
 def _ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
     return _orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+
+
 socket.getaddrinfo = _ipv4_getaddrinfo
 
 # ── Load .env before anything else ───────────────────────────

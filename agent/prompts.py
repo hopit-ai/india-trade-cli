@@ -15,9 +15,9 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 
 def _market_status() -> str:
     """Return current NSE market status based on IST wall clock."""
-    now   = datetime.now(_IST)
-    hhmm  = now.hour * 100 + now.minute
-    wday  = now.weekday()   # 0=Mon … 6=Sun
+    now = datetime.now(_IST)
+    hhmm = now.hour * 100 + now.minute
+    wday = now.weekday()  # 0=Mon … 6=Sun
     if wday >= 5:
         return "CLOSED (weekend)"
     if hhmm < 900:
@@ -37,9 +37,9 @@ def build_system_prompt() -> str:
     Defines the agent's role, philosophy, and guardrails.
     """
     now_ist = datetime.now(_IST)
-    today   = now_ist.strftime("%d %B %Y")
+    today = now_ist.strftime("%d %B %Y")
     now_str = now_ist.strftime("%H:%M IST")
-    status  = _market_status()
+    status = _market_status()
     capital = os.environ.get("TOTAL_CAPITAL", "200000")
     risk_pct = os.environ.get("DEFAULT_RISK_PCT", "2")
     mode = os.environ.get("TRADING_MODE", "PAPER")

@@ -1798,17 +1798,27 @@ def run_repl(broker: BrokerAPI) -> None:
                 else:
                     try:
                         _orders = broker.get_orders()
-                        _open = [o for o in _orders if o.status.upper() in ("OPEN", "PENDING", "TRIGGER PENDING", "OPEN PENDING")]
+                        _open = [
+                            o
+                            for o in _orders
+                            if o.status.upper()
+                            in ("OPEN", "PENDING", "TRIGGER PENDING", "OPEN PENDING")
+                        ]
                         if not _open:
                             console.print("[dim]No open orders to cancel.[/dim]")
                         elif args and args[0].lower() == "all":
                             from rich.prompt import Confirm as _Confirm
-                            console.print(f"  [yellow]Cancel all {len(_open)} open orders?[/yellow]")
+
+                            console.print(
+                                f"  [yellow]Cancel all {len(_open)} open orders?[/yellow]"
+                            )
                             if _Confirm.ask("  Confirm?", default=False):
                                 for _o in _open:
                                     try:
                                         broker.cancel_order(_o.order_id)
-                                        console.print(f"  [green]✓[/green] Cancelled {_o.symbol} {_o.order_id}")
+                                        console.print(
+                                            f"  [green]✓[/green] Cancelled {_o.symbol} {_o.order_id}"
+                                        )
                                     except Exception as _e:
                                         console.print(f"  [red]✗[/red] Failed {_o.order_id}: {_e}")
                         elif args:
@@ -1828,6 +1838,7 @@ def run_repl(broker: BrokerAPI) -> None:
                                     f"  [dim]{_o.order_id}[/dim]"
                                 )
                             from rich.prompt import Prompt as _Prompt
+
                             _pick = _Prompt.ask("  Cancel which? [number/all/0]", default="0")
                             if _pick == "0":
                                 console.print("  [dim]Cancelled.[/dim]")
@@ -1843,7 +1854,9 @@ def run_repl(broker: BrokerAPI) -> None:
                                     _idx = int(_pick) - 1
                                     _o = _open[_idx]
                                     broker.cancel_order(_o.order_id)
-                                    console.print(f"  [green]✓ Cancelled {_o.symbol} {_o.order_id}[/green]")
+                                    console.print(
+                                        f"  [green]✓ Cancelled {_o.symbol} {_o.order_id}[/green]"
+                                    )
                                 except (ValueError, IndexError):
                                     console.print("[red]Invalid selection.[/red]")
                                 except Exception as _e:
@@ -1855,6 +1868,7 @@ def run_repl(broker: BrokerAPI) -> None:
                 # Quick order: buy YESBANK 1 15 | sell RELIANCE 5
                 # Format: buy SYMBOL QTY [LIMIT_PRICE]
                 import os as _os
+
                 if not args:
                     console.print(f"[dim]Usage: {command} SYMBOL QTY [LIMIT_PRICE][/dim]")
                     console.print(f"[dim]  {command} YESBANK 1 15   → limit order at ₹15[/dim]")
@@ -1876,11 +1890,15 @@ def run_repl(broker: BrokerAPI) -> None:
                     )
 
                     from rich.prompt import Confirm as _Confirm
+
                     if _mode == "LIVE":
-                        console.print("  [red]⚠  This will place a REAL order with real money.[/red]")
+                        console.print(
+                            "  [red]⚠  This will place a REAL order with real money.[/red]"
+                        )
                     if _Confirm.ask("  Confirm?", default=False):
                         try:
                             from brokers.base import OrderRequest as _OR
+
                             _req = _OR(
                                 symbol=_sym,
                                 exchange="NSE",
@@ -1892,11 +1910,15 @@ def run_repl(broker: BrokerAPI) -> None:
                             )
                             _resp = broker.place_order(_req)
                             if _resp.status in ("OPEN", "COMPLETE", "PUT ORDER REQ RECEIVED"):
-                                console.print(f"  [green]✓ Order placed![/green]  ID: {_resp.order_id}  Status: {_resp.status}")
+                                console.print(
+                                    f"  [green]✓ Order placed![/green]  ID: {_resp.order_id}  Status: {_resp.status}"
+                                )
                                 if _resp.message:
                                     console.print(f"    {_resp.message}")
                             else:
-                                console.print(f"  [red]✗ Order {_resp.status}:[/red] {_resp.message}")
+                                console.print(
+                                    f"  [red]✗ Order {_resp.status}:[/red] {_resp.message}"
+                                )
                         except Exception as e:
                             console.print(f"  [red]Order error:[/red] {e}")
                     else:

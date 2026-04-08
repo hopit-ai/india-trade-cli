@@ -74,9 +74,12 @@ class TestBrokerDisconnect:
         """DELETE should call unregister_broker() with the correct session key."""
         with (
             patch("web.api._require_localhost"),
-            patch("web.api._BROKER_SESSION_FILES", {
-                "fyers": Path("/nonexistent/fyers.json"),
-            }),
+            patch(
+                "web.api._BROKER_SESSION_FILES",
+                {
+                    "fyers": Path("/nonexistent/fyers.json"),
+                },
+            ),
             patch("brokers.session.unregister_broker") as mock_unregister,
         ):
             client.delete("/api/broker/fyers")
@@ -86,9 +89,12 @@ class TestBrokerDisconnect:
         """DELETE returns 200 {"ok": True} even when the token file does not exist."""
         with (
             patch("web.api._require_localhost"),
-            patch("web.api._BROKER_SESSION_FILES", {
-                "fyers": Path("/this/path/does/not/exist/fyers.json"),
-            }),
+            patch(
+                "web.api._BROKER_SESSION_FILES",
+                {
+                    "fyers": Path("/this/path/does/not/exist/fyers.json"),
+                },
+            ),
             patch("brokers.session.unregister_broker"),
         ):
             resp = client.delete("/api/broker/fyers")
@@ -99,9 +105,12 @@ class TestBrokerDisconnect:
         """DELETE /api/broker/angel_one should call unregister_broker('angelone')."""
         with (
             patch("web.api._require_localhost"),
-            patch("web.api._BROKER_SESSION_FILES", {
-                "angel_one": Path("/nonexistent/angelone.json"),
-            }),
+            patch(
+                "web.api._BROKER_SESSION_FILES",
+                {
+                    "angel_one": Path("/nonexistent/angelone.json"),
+                },
+            ),
             patch("brokers.session.unregister_broker") as mock_unregister,
         ):
             resp = client.delete("/api/broker/angel_one")
@@ -200,9 +209,7 @@ class TestStartupAutoRestore:
             patch("brokers.session.register_broker") as mock_register,
             patch.dict(
                 "sys.modules",
-                {
-                    "brokers.fyers": MagicMock(FyersAPI=mock_fyers_cls)
-                },
+                {"brokers.fyers": MagicMock(FyersAPI=mock_fyers_cls)},
             ),
         ):
             from web.api import _auto_restore_brokers

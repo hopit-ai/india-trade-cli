@@ -287,8 +287,11 @@ async def skill_analyze_ping():
             yield f"data: {json.dumps({'type': 'ping', 'i': i})}\n\n"
             await asyncio.sleep(1)
 
-    return StreamingResponse(_gen(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/analyze/stream")
@@ -313,6 +316,7 @@ async def skill_analyze_stream(symbol: str, exchange: str = "NSE"):
         """Runs entirely in a background thread — no event loop blocking."""
         try:
             import os as _os
+
             # Suppress interactive stdin prompts: if provider setup needs stdin, fail fast.
             _os.environ.setdefault("_CLI_BATCH_MODE", "1")
 
@@ -324,13 +328,15 @@ async def skill_analyze_stream(symbol: str, exchange: str = "NSE"):
             provider = get_provider(registry=registry)
             analyzer = _MAA(registry, provider, verbose=False, progress_callback=_cb)
             report = analyzer.analyze(symbol.upper(), exchange.upper())
-            _cb({
-                "type": "done",
-                "symbol": symbol.upper(),
-                "exchange": exchange.upper(),
-                "report": report,
-                "trade_plans": _serialise(getattr(analyzer, "last_trade_plans", {})),
-            })
+            _cb(
+                {
+                    "type": "done",
+                    "symbol": symbol.upper(),
+                    "exchange": exchange.upper(),
+                    "report": report,
+                    "trade_plans": _serialise(getattr(analyzer, "last_trade_plans", {})),
+                }
+            )
         except Exception as exc:
             _cb({"type": "error", "message": str(exc)})
         finally:
@@ -582,6 +588,7 @@ async def skill_holdings():
     """Return current broker holdings as structured JSON."""
     try:
         from brokers.session import get_broker
+
         try:
             broker = get_broker()
         except RuntimeError:
@@ -597,6 +604,7 @@ async def skill_positions():
     """Return current broker positions as structured JSON."""
     try:
         from brokers.session import get_broker
+
         try:
             broker = get_broker()
         except RuntimeError:
@@ -611,13 +619,19 @@ async def skill_positions():
 
 
 _DEMO_PROFILE = {
-    "name": "Demo User", "user_id": "DEMO", "email": "",
-    "broker": "demo", "demo": True,
+    "name": "Demo User",
+    "user_id": "DEMO",
+    "email": "",
+    "broker": "demo",
+    "demo": True,
     "note": "No broker connected — connect one via the Broker panel.",
 }
 _DEMO_FUNDS = {
-    "available_cash": 0.0, "used_margin": 0.0, "total_balance": 0.0,
-    "demo": True, "note": "No broker connected.",
+    "available_cash": 0.0,
+    "used_margin": 0.0,
+    "total_balance": 0.0,
+    "demo": True,
+    "note": "No broker connected.",
 }
 
 
@@ -626,6 +640,7 @@ async def skill_profile():
     """Return the connected broker's user profile (name, client_id, email, broker)."""
     try:
         from brokers.session import get_broker
+
         try:
             broker = get_broker()
         except RuntimeError:
@@ -640,6 +655,7 @@ async def skill_funds():
     """Return available cash, used margin, and total balance from the connected broker."""
     try:
         from brokers.session import get_broker
+
         try:
             broker = get_broker()
         except RuntimeError:
@@ -654,11 +670,14 @@ async def skill_orders():
     """Return today's orders from the connected broker."""
     try:
         from brokers.session import get_broker
+
         try:
             broker = get_broker()
         except RuntimeError:
-            return {"status": "ok", "data": {"orders": [], "demo": True,
-                                              "note": "No broker connected."}}
+            return {
+                "status": "ok",
+                "data": {"orders": [], "demo": True, "note": "No broker connected."},
+            }
         return {"status": "ok", "data": {"orders": _serialise(broker.get_orders())}}
     except Exception as e:
         raise _err(str(e))
@@ -727,13 +746,19 @@ async def skill_greeks(req: GreeksRequest):
     """
     try:
         from brokers.session import get_broker
+
         try:
             get_broker()  # just validate connection; greeks uses positions internally
         except RuntimeError:
-            return {"status": "ok", "data": {
-                "net": {"delta": 0.0, "theta": 0.0, "vega": 0.0, "gamma": 0.0},
-                "positions": [], "warnings": [], "demo": True,
-            }}
+            return {
+                "status": "ok",
+                "data": {
+                    "net": {"delta": 0.0, "theta": 0.0, "vega": 0.0, "gamma": 0.0},
+                    "positions": [],
+                    "warnings": [],
+                    "demo": True,
+                },
+            }
         from engine.portfolio import get_position_greeks
         from engine.greeks_manager import build_dashboard
 
@@ -757,7 +782,7 @@ async def skill_greeks(req: GreeksRequest):
 
 class ScanRequest(BaseModel):
     scan_type: str = "options"  # "options" is currently the supported type
-    filters: dict = {}          # reserved for future filter expressions
+    filters: dict = {}  # reserved for future filter expressions
 
 
 @router.post("/scan")
@@ -954,7 +979,7 @@ class WhatIfRequest(BaseModel):
     symbol: Optional[str] = None
     nifty_change: Optional[float] = None  # % change (e.g. -5.0)
     stock_change: Optional[float] = None  # % change for symbol
-    custom_moves: Optional[dict] = None   # {SYMBOL: change_pct}
+    custom_moves: Optional[dict] = None  # {SYMBOL: change_pct}
 
 
 @router.post("/whatif")
@@ -1171,7 +1196,14 @@ async def skill_provider_switch(req: ProviderSwitchRequest):
     try:
         import os
 
-        valid = {"anthropic", "openai", "gemini", "ollama", "claude_subscription", "openai_subscription"}
+        valid = {
+            "anthropic",
+            "openai",
+            "gemini",
+            "ollama",
+            "claude_subscription",
+            "openai_subscription",
+        }
         if req.provider not in valid:
             raise _err(f"Unknown provider '{req.provider}'. Valid: {', '.join(sorted(valid))}", 400)
         os.environ["LLM_PROVIDER"] = req.provider
@@ -1179,7 +1211,10 @@ async def skill_provider_switch(req: ProviderSwitchRequest):
             os.environ["LLM_MODEL"] = req.model
         return {
             "status": "ok",
-            "data": {"current": req.provider, "model": req.model or os.environ.get("LLM_MODEL", "")},
+            "data": {
+                "current": req.provider,
+                "model": req.model or os.environ.get("LLM_MODEL", ""),
+            },
         }
     except HTTPException:
         raise
@@ -1195,7 +1230,7 @@ class AnalyzeFollowupRequest(BaseModel):
     exchange: str = "NSE"
     question: str
     session_id: str = "default"
-    context: dict = {}   # analysts, synthesis_text, report from the completed analysis
+    context: dict = {}  # analysts, synthesis_text, report from the completed analysis
 
 
 @router.post("/analyze/followup")
@@ -1221,25 +1256,29 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
             _chat_sessions[session_key] = agent
 
             # Seed the session with analysis context as the first exchange
-            analysts       = req.context.get("analysts", [])
+            analysts = req.context.get("analysts", [])
             synthesis_text = req.context.get("synthesis_text") or ""
-            report         = req.context.get("report") or ""
+            report = req.context.get("report") or ""
 
             if analysts or synthesis_text or report:
-                ctx_lines = [f"The following multi-agent analysis was just completed for {req.symbol} ({req.exchange}):\n"]
+                ctx_lines = [
+                    f"The following multi-agent analysis was just completed for {req.symbol} ({req.exchange}):\n"
+                ]
                 if analysts:
                     ctx_lines.append("Analyst verdicts:")
                     for a in analysts:
                         verdict = a.get("verdict", "")
-                        conf    = a.get("confidence", "")
-                        name    = a.get("name", "")
+                        conf = a.get("confidence", "")
+                        name = a.get("name", "")
                         ctx_lines.append(f"  • {name}: {verdict} ({conf}%)")
-                        for pt in (a.get("key_points") or []):
+                        for pt in a.get("key_points") or []:
                             ctx_lines.append(f"    – {pt}")
                 if synthesis_text:
                     ctx_lines.append(f"\nFund Manager Synthesis:\n{synthesis_text}")
                 if report:
-                    ctx_lines.append(f"\nFull Report:\n{report[:3000]}")  # cap to avoid token overflow
+                    ctx_lines.append(
+                        f"\nFull Report:\n{report[:3000]}"
+                    )  # cap to avoid token overflow
                 ctx_lines.append(
                     f"\nYou are now in follow-up mode for {req.symbol} ({req.exchange}).\n"
                     f"All follow-up questions are about {req.symbol} unless the user explicitly names another stock.\n"
@@ -1259,9 +1298,9 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
         return {
             "status": "ok",
             "data": {
-                "response":       response,
-                "symbol":         req.symbol,
-                "session_id":     session_key,
+                "response": response,
+                "symbol": req.symbol,
+                "session_id": session_key,
                 "history_length": len(agent._history),
             },
         }
