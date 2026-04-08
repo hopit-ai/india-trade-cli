@@ -7,7 +7,28 @@ System prompt and command prompt templates for the trading agent.
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import datetime, timezone, timedelta
+
+
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _market_status() -> str:
+    """Return current NSE market status based on IST wall clock."""
+    now   = datetime.now(_IST)
+    hhmm  = now.hour * 100 + now.minute
+    wday  = now.weekday()   # 0=Mon … 6=Sun
+    if wday >= 5:
+        return "CLOSED (weekend)"
+    if hhmm < 900:
+        return "CLOSED (pre-market, not yet open)"
+    if hhmm < 915:
+        return "PRE-OPEN session (9:00–9:15 IST)"
+    if hhmm < 1530:
+        return "OPEN"
+    if hhmm < 1600:
+        return "POST-CLOSE / after-market session"
+    return "CLOSED (market has closed for the day)"
 
 
 def build_system_prompt() -> str:
@@ -15,13 +36,22 @@ def build_system_prompt() -> str:
     Core system prompt. Injected once at conversation start.
     Defines the agent's role, philosophy, and guardrails.
     """
-    today = date.today().strftime("%d %B %Y")
+    now_ist = datetime.now(_IST)
+    today   = now_ist.strftime("%d %B %Y")
+    now_str = now_ist.strftime("%H:%M IST")
+    status  = _market_status()
     capital = os.environ.get("TOTAL_CAPITAL", "200000")
     risk_pct = os.environ.get("DEFAULT_RISK_PCT", "2")
     mode = os.environ.get("TRADING_MODE", "PAPER")
 
     return f"""You are a guided trading advisor for Indian financial markets (NSE/BSE/NFO).
-Today is {today}. Trading mode: {mode}. User capital: ₹{int(capital):,}. Default risk per trade: {risk_pct}%.
+Today is {today}, current time is {now_str}. NSE market status: **{status}**.
+Trading mode: {mode}. User capital: ₹{int(capital):,}. Default risk per trade: {risk_pct}%.
+
+IMPORTANT: Never describe the market as "open" or give intraday data if market status is CLOSED or PRE-OPEN. \
+If the market is closed, say so clearly and offer yesterday's closing data or pre-market context instead.
+If you do not have a tool or data source for what the user asked (e.g. GIFT NIFTY, SGX NIFTY, F&O OI for a specific strike), \
+say so explicitly before offering any fallback. Never present unrelated data as if it answers the original question.
 
 ## Your Role
 You help users make well-reasoned trading decisions by guiding them through a structured process:

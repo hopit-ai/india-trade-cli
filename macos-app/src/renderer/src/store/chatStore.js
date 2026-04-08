@@ -5,12 +5,20 @@ export const useChatStore = create((set, get) => ({
   isLoading:     false,
   port:          null,
   sidecarError:  null,
-  brokerStatus:  { connected: false, broker: null },
+  brokerStatus:   { connected: false, broker: null },
+  brokerStatuses: {},   // full /api/status response
   streamCancel:  null,   // () => void — closes the active EventSource
 
   setPort:         (port)   => set({ port, sidecarError: null }),
   setSidecarError: (msg)    => set({ sidecarError: msg }),
-  setBrokerStatus: (status) => set({ brokerStatus: status }),
+  setBrokerStatus:   (status)   => set({ brokerStatus: status }),
+  setBrokerStatuses: (statuses) => {
+    // also derive the simple brokerStatus from the full response
+    const connected = Object.values(statuses).some(b => b.authenticated)
+    const broker    = Object.entries(statuses).find(([, b]) => b.authenticated)?.[0] ?? null
+    const name      = broker ? ({ zerodha: 'Zerodha', groww: 'Groww', angel_one: 'Angel One', upstox: 'Upstox', fyers: 'Fyers' }[broker] ?? broker) : null
+    set({ brokerStatuses: statuses, brokerStatus: { connected, broker: name } })
+  },
 
   addUserMessage: (text) => set((s) => ({
     messages: [...s.messages, {
@@ -54,4 +62,15 @@ export const useChatStore = create((set, get) => ({
   })),
 
   finalizeStreamingMessage: (_id) => set({ isLoading: false }),
-}))
+
+  // Draft message — lets cards pre-fill the input bar
+  draft: '',
+  setDraft: (text) => set({ draft: text }),
+
+  // Context queued while a streaming analysis is running (#102)
+  // Shown as a user bubble and auto-injected into the first follow-up
+  pendingContext: '',
+  setPendingContext: (text) => set({ pendingContext: text }),
+  clearPendingContext: () => set({ pendingContext: '' }),
+})
+)

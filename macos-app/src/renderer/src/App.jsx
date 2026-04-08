@@ -1,20 +1,32 @@
 import { useEffect } from 'react'
 import { useChatStore } from './store/chatStore'
+import { useMarketClock } from './hooks/useMarketClock'
 import Sidebar from './components/Sidebar'
 import ChatArea from './components/Chat/ChatArea'
 import InputBar from './components/Input/InputBar'
 
 export default function App() {
-  const { setPort, setSidecarError } = useChatStore()
+  const { setPort, setSidecarError, setBrokerStatuses } = useChatStore()
+  const port = useChatStore((s) => s.port)
 
   useEffect(() => {
-    // Listen for future sidecar-ready events (first launch)
     window.electronAPI?.onSidecarReady(({ port }) => setPort(port))
     window.electronAPI?.onSidecarError(({ message }) => setSidecarError(message))
-
-    // After HMR or renderer reload, sidecar-ready already fired — ask main for the port
     window.electronAPI?.getPort().then(port => { if (port) setPort(port) })
   }, [])
+
+  // Poll /api/status every 8s once sidecar is up
+  useEffect(() => {
+    if (!port) return
+    const fetchStatus = () =>
+      fetch(`http://127.0.0.1:${port}/api/status`)
+        .then(r => r.json())
+        .then(setBrokerStatuses)
+        .catch(() => {})
+    fetchStatus()
+    const t = setInterval(fetchStatus, 8000)
+    return () => clearInterval(t)
+  }, [port])
 
   return (
     <div className="flex flex-col h-full bg-surface">
@@ -32,8 +44,11 @@ export default function App() {
           </span>
         </div>
 
-        {/* Status dot right */}
-        <StatusDot />
+        {/* Market status + API dot */}
+        <div className="no-drag flex items-center gap-3 pr-4">
+          <MarketBadge />
+          <StatusDot />
+        </div>
       </div>
 
       {/* ── Main layout ── */}
@@ -48,12 +63,32 @@ export default function App() {
   )
 }
 
+function MarketBadge() {
+  const { status, nifty } = useMarketClock()
+
+  const cfg = {
+    'open':       { dot: 'bg-green animate-pulse', label: 'Open',      text: 'text-green' },
+    'pre-open':   { dot: 'bg-amber animate-pulse', label: 'Pre-open',  text: 'text-amber' },
+    'post-close': { dot: 'bg-amber',               label: 'Post-close',text: 'text-amber' },
+    'closed':     { dot: 'bg-subtle',              label: 'Closed',    text: 'text-subtle' },
+  }[status] ?? { dot: 'bg-subtle', label: '', text: 'text-subtle' }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+      <span className={`text-[11px] font-ui ${cfg.text}`}>
+        {nifty ? `N ${nifty}` : cfg.label}
+      </span>
+    </div>
+  )
+}
+
 function StatusDot() {
   const { port, sidecarError } = useChatStore()
   const connected = !!port && !sidecarError
 
   return (
-    <div className="no-drag flex items-center gap-2 pr-4">
+    <div className="flex items-center gap-2">
       <span className={`w-2 h-2 rounded-full transition-all ${
         connected ? 'bg-green shadow-[0_0_6px_rgba(82,224,122,0.5)]' : 'bg-subtle'
       }`} />

@@ -169,6 +169,7 @@ class TestRunRiskDebate:
         analyzer.registry = mock_registry
         analyzer.llm = mock_llm
         analyzer.verbose = False
+        analyzer.progress_callback = None
         return analyzer, mock_llm
 
     def test_returns_risk_debate_result(self):
@@ -269,6 +270,7 @@ class TestRiskDebateSkippedOnHold:
         analyzer.risk_debate = risk_debate_flag
         analyzer.analysts = []
         analyzer.last_trade_plans = {}
+        analyzer.progress_callback = None
         return analyzer
 
     def test_risk_debate_not_called_when_hold(self):
@@ -351,6 +353,7 @@ class TestSynthesisReceivesRiskDebate:
         analyzer.registry = mock_registry
         analyzer.llm = mock_llm
         analyzer.verbose = False
+        analyzer.progress_callback = None
         return analyzer
 
     def test_synthesis_prompt_includes_risk_views_when_debate_ran(self):

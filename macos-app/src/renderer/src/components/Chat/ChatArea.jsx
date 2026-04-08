@@ -38,8 +38,10 @@ export default function ChatArea() {
         <Message key={msg.id} message={msg} />
       ))}
 
-      {/* Loading indicator */}
-      {isLoading && <ThinkingIndicator />}
+      {/* Loading indicator — hide when a streaming card is already showing live progress */}
+      {isLoading && !messages.some(m => m.cardType === 'streaming_analysis') && (
+        <ThinkingIndicator />
+      )}
 
       <div ref={bottomRef} />
     </div>

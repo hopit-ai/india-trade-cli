@@ -1305,6 +1305,7 @@ class MultiAgentAnalyzer:
                             "verdict": report.verdict,
                             "confidence": report.confidence,
                             "score": getattr(report, "score", 0),
+                            "key_points": getattr(report, "key_points", []),
                             "error": report.error,
                         })
                 except Exception as e:

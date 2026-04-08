@@ -92,6 +92,85 @@ def _require_localhost(request: _Request) -> None:
 app.include_router(_skills_router)
 
 
+# ── Startup: auto-restore broker sessions from disk ───────────
+
+@app.on_event("startup")
+async def _auto_restore_brokers() -> None:
+    """
+    On every sidecar start, check each broker's token file.
+    If credentials are configured AND a valid token exists on disk,
+    instantiate the broker (which auto-loads the token in __init__)
+    and register it so skills can call get_broker() immediately.
+    """
+    import logging
+    from brokers.session import register_broker
+
+    # Fyers
+    if _has_fyers():
+        try:
+            from brokers.fyers import FyersAPI, TOKEN_FILE as _FT
+            if _FT.exists():
+                b = FyersAPI(_env("FYERS_APP_ID"), _env("FYERS_SECRET_KEY"))
+                if b.is_authenticated():
+                    register_broker("fyers", b)
+                    logging.info("[startup] Fyers session restored")
+        except Exception as exc:
+            logging.warning("[startup] Could not restore Fyers: %s", exc)
+
+    # Zerodha
+    if _has_zerodha():
+        try:
+            from brokers.zerodha import ZerodhaAPI, TOKEN_FILE as _ZT
+            if _ZT.exists():
+                b = ZerodhaAPI(_env("KITE_API_KEY"), _env("KITE_API_SECRET"))
+                if b.is_authenticated():
+                    register_broker("zerodha", b)
+                    logging.info("[startup] Zerodha session restored")
+        except Exception as exc:
+            logging.warning("[startup] Could not restore Zerodha: %s", exc)
+
+    # Groww
+    if _has_groww():
+        try:
+            from brokers.groww import GrowwAPI, TOKEN_FILE as _GT
+            if _GT.exists():
+                b = GrowwAPI(_env("GROWW_CLIENT_ID"), _env("GROWW_CLIENT_SECRET"))
+                if b.is_authenticated():
+                    register_broker("groww", b)
+                    logging.info("[startup] Groww session restored")
+        except Exception as exc:
+            logging.warning("[startup] Could not restore Groww: %s", exc)
+
+    # Angel One
+    if _has_angelone():
+        try:
+            from brokers.angelone import AngelOneAPI, TOKEN_FILE as _AT
+            if _AT.exists():
+                b = AngelOneAPI(
+                    api_key=_env("ANGEL_API_KEY"),
+                    client_code=_env("ANGEL_CLIENT_CODE"),
+                    password=_env("ANGEL_PASSWORD"),
+                    totp_secret=_env("ANGEL_TOTP_SECRET"),
+                )
+                if b.is_authenticated():
+                    register_broker("angelone", b)
+                    logging.info("[startup] Angel One session restored")
+        except Exception as exc:
+            logging.warning("[startup] Could not restore Angel One: %s", exc)
+
+    # Upstox
+    if _has_upstox():
+        try:
+            from brokers.upstox import UpstoxAPI, TOKEN_FILE as _UT
+            if _UT.exists():
+                b = UpstoxAPI(_env("UPSTOX_API_KEY"), _env("UPSTOX_API_SECRET"))
+                if b.is_authenticated():
+                    register_broker("upstox", b)
+                    logging.info("[startup] Upstox session restored")
+        except Exception as exc:
+            logging.warning("[startup] Could not restore Upstox: %s", exc)
+
+
 @app.get("/health", tags=["System"])
 async def health():
     """Health check for the Electron desktop app sidecar."""
@@ -452,10 +531,12 @@ async def zerodha_callback(request_token: str = "", status: str = ""):
         return HTMLResponse(_page("Failed", body), status_code=400)
     try:
         from brokers.zerodha import ZerodhaAPI
+        from brokers.session import register_broker
 
         b = ZerodhaAPI(api_key=_env("KITE_API_KEY"), api_secret=_env("KITE_API_SECRET"))
         profile = b.complete_login(request_token=request_token)
         funds = b.get_funds()
+        register_broker("zerodha", b)
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -504,6 +585,7 @@ async def groww_callback(code: str = "", error: str = ""):
         return HTMLResponse(_page("Failed", body), status_code=400)
     try:
         from brokers.groww import GrowwAPI
+        from brokers.session import register_broker
 
         redirect = _env("GROWW_REDIRECT_URL") or "http://localhost:8765/groww/callback"
         b = GrowwAPI(
@@ -513,6 +595,7 @@ async def groww_callback(code: str = "", error: str = ""):
         )
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
+        register_broker("groww", b)
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -554,6 +637,7 @@ async def angelone_login():
         return HTMLResponse(_page("Angel One Setup", body), status_code=400)
     try:
         from brokers.angelone import AngelOneAPI
+        from brokers.session import register_broker
 
         b = AngelOneAPI(
             api_key=_env("ANGEL_API_KEY"),
@@ -563,6 +647,7 @@ async def angelone_login():
         )
         profile = b.complete_login()
         funds = b.get_funds()
+        register_broker("angelone", b)
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">
           ❌ Angel One login failed: {e}<br><br>
@@ -613,6 +698,7 @@ async def upstox_callback(code: str = "", error: str = ""):
         return HTMLResponse(_page("Failed", body), status_code=400)
     try:
         from brokers.upstox import UpstoxAPI
+        from brokers.session import register_broker
 
         redirect = _env("UPSTOX_REDIRECT_URL") or "http://localhost:8765/upstox/callback"
         b = UpstoxAPI(
@@ -622,6 +708,7 @@ async def upstox_callback(code: str = "", error: str = ""):
         )
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
+        register_broker("upstox", b)
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -679,6 +766,7 @@ async def fyers_callback(auth_code: str = "", state: str = "", s: str = ""):
         return HTMLResponse(_page("Failed", body), status_code=400)
     try:
         from brokers.fyers import FyersAPI
+        from brokers.session import register_broker
 
         redirect = _env("FYERS_REDIRECT_URL") or "http://localhost:8765/fyers/callback"
         b = FyersAPI(
@@ -686,6 +774,7 @@ async def fyers_callback(auth_code: str = "", state: str = "", s: str = ""):
         )
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
+        register_broker("fyers", b)
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -806,6 +895,39 @@ async def api_status(request: Request):
         "upstox": {"configured": _has_upstox(), "authenticated": _upstox_auth()},
         "fyers": {"configured": _has_fyers(), "authenticated": _fyers_auth()},
     }
+
+
+_BROKER_SESSION_FILES = {
+    "zerodha":   Path.home() / ".trading_platform" / "zerodha.json",
+    "groww":     Path.home() / ".trading_platform" / "groww.json",
+    "angel_one": Path.home() / ".trading_platform" / "angelone.json",
+    "upstox":    Path.home() / ".trading_platform" / "upstox.json",
+    "fyers":     Path.home() / ".trading_platform" / "fyers.json",
+}
+
+@app.delete("/api/broker/{broker_key}")
+async def broker_disconnect(broker_key: str, request: Request):
+    """Delete the saved session token for a broker (disconnect) and remove from in-memory session."""
+    _require_localhost(request)
+    path = _BROKER_SESSION_FILES.get(broker_key)
+    if path is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Unknown broker: {broker_key}")
+    if path.exists():
+        path.unlink()
+    # Also remove from in-memory broker registry
+    from brokers.session import unregister_broker
+    # Map API key names to session key names (angel_one → angelone)
+    _SESSION_KEY_MAP = {
+        "zerodha": "zerodha",
+        "groww": "groww",
+        "angel_one": "angelone",
+        "upstox": "upstox",
+        "fyers": "fyers",
+    }
+    session_key = _SESSION_KEY_MAP.get(broker_key, broker_key)
+    unregister_broker(session_key)
+    return {"ok": True, "broker": broker_key}
 
 
 @app.get("/api/portfolio")

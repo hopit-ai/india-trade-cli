@@ -23,6 +23,13 @@ Skill endpoints:
     POST /skills/morning_brief  → Daily market brief (structured JSON, no AI narrative)
     POST /skills/chat           → Multi-turn AI chat with trading agent (session-aware)
     POST /skills/chat/reset     → Clear chat history for a session
+    GET  /skills/profile        → Broker account profile (name, client_id, email)
+    GET  /skills/funds          → Available cash, used margin, total balance
+    GET  /skills/orders         → Today's orders list
+    POST /skills/oi_profile     → OI profile by strike (PCR, max pain, support/resistance)
+    POST /skills/patterns       → Active India-specific market patterns
+    POST /skills/greeks         → Portfolio Greeks (delta, theta, vega, gamma)
+    POST /skills/scan           → Options market scan (high IV, unusual OI, put writing)
     POST /skills/alerts/add     → Create a price, technical, or conditional alert
     POST /skills/alerts/list    → List all active (untriggered) alerts
     POST /skills/alerts/remove  → Remove an alert by ID
@@ -576,10 +583,11 @@ async def skill_alerts_remove(req: AlertRemoveRequest):
 async def skill_holdings():
     """Return current broker holdings as structured JSON."""
     try:
-        from brokers.session import get_active_broker
-        broker = get_active_broker()
-        if broker is None:
-            return {"status": "ok", "data": {"holdings": [], "note": "No broker connected — running in demo mode."}}
+        from brokers.session import get_broker
+        try:
+            broker = get_broker()
+        except RuntimeError:
+            return {"status": "ok", "data": {"holdings": [], "demo": True}}
         holdings = broker.get_holdings()
         return {"status": "ok", "data": {"holdings": _serialise(holdings)}}
     except Exception as e:
@@ -590,12 +598,194 @@ async def skill_holdings():
 async def skill_positions():
     """Return current broker positions as structured JSON."""
     try:
-        from brokers.session import get_active_broker
-        broker = get_active_broker()
-        if broker is None:
-            return {"status": "ok", "data": {"holdings": [], "note": "No broker connected — running in demo mode."}}
+        from brokers.session import get_broker
+        try:
+            broker = get_broker()
+        except RuntimeError:
+            return {"status": "ok", "data": {"holdings": [], "demo": True}}
         positions = broker.get_positions()
         return {"status": "ok", "data": {"holdings": _serialise(positions)}}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Broker account skills ─────────────────────────────────────
+
+
+_DEMO_PROFILE = {
+    "name": "Demo User", "user_id": "DEMO", "email": "",
+    "broker": "demo", "demo": True,
+    "note": "No broker connected — connect one via the Broker panel.",
+}
+_DEMO_FUNDS = {
+    "available_cash": 0.0, "used_margin": 0.0, "total_balance": 0.0,
+    "demo": True, "note": "No broker connected.",
+}
+
+
+@router.post("/profile")
+async def skill_profile():
+    """Return the connected broker's user profile (name, client_id, email, broker)."""
+    try:
+        from brokers.session import get_broker
+        try:
+            broker = get_broker()
+        except RuntimeError:
+            return {"status": "ok", "data": _DEMO_PROFILE}
+        return {"status": "ok", "data": _serialise(broker.get_profile())}
+    except Exception as e:
+        raise _err(str(e))
+
+
+@router.post("/funds")
+async def skill_funds():
+    """Return available cash, used margin, and total balance from the connected broker."""
+    try:
+        from brokers.session import get_broker
+        try:
+            broker = get_broker()
+        except RuntimeError:
+            return {"status": "ok", "data": _DEMO_FUNDS}
+        return {"status": "ok", "data": _serialise(broker.get_funds())}
+    except Exception as e:
+        raise _err(str(e))
+
+
+@router.post("/orders")
+async def skill_orders():
+    """Return today's orders from the connected broker."""
+    try:
+        from brokers.session import get_broker
+        try:
+            broker = get_broker()
+        except RuntimeError:
+            return {"status": "ok", "data": {"orders": [], "demo": True,
+                                              "note": "No broker connected."}}
+        return {"status": "ok", "data": {"orders": _serialise(broker.get_orders())}}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Market data skills ────────────────────────────────────────
+
+
+class OIProfileRequest(BaseModel):
+    symbol: str
+    exchange: str = "NSE"
+
+
+@router.post("/oi_profile")
+async def skill_oi_profile(req: OIProfileRequest):
+    """
+    OI profile for an underlying: per-strike call/put OI, PCR, max pain,
+    resistance (max call OI strike) and support (max put OI strike).
+    """
+    try:
+        from market.oi_profile import get_oi_profile
+
+        data = get_oi_profile(req.symbol.upper())
+        if "error" in data:
+            raise _err(data["error"], 502)
+        return _ok(data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _err(str(e))
+
+
+class PatternsRequest(BaseModel):
+    symbol: Optional[str] = None  # reserved for future per-symbol filtering
+
+
+@router.post("/patterns")
+async def skill_patterns(req: PatternsRequest):
+    """
+    Active India-specific market patterns (seasonal, calendar, event-driven).
+    Each pattern includes name, impact (BULLISH/BEARISH/VOLATILE/NEUTRAL),
+    confidence %, description, and suggested action.
+    """
+    try:
+        from engine.patterns import get_active_patterns
+
+        patterns = get_active_patterns()
+        return _ok([_serialise(p) for p in patterns])
+    except Exception as e:
+        raise _err(str(e))
+
+
+class GreeksRequest(BaseModel):
+    symbol: str
+    exchange: str = "NSE"
+
+
+@router.post("/greeks")
+async def skill_greeks(req: GreeksRequest):
+    """
+    Portfolio Greeks aggregated from all open options positions
+    (net delta, theta, vega, gamma) plus per-position breakdown.
+
+    Note: Greeks are computed from the live positions of the connected broker.
+    Returns demo zeros when no broker is connected.
+    """
+    try:
+        from brokers.session import get_broker
+        try:
+            get_broker()  # just validate connection; greeks uses positions internally
+        except RuntimeError:
+            return {"status": "ok", "data": {
+                "net": {"delta": 0.0, "theta": 0.0, "vega": 0.0, "gamma": 0.0},
+                "positions": [], "warnings": [], "demo": True,
+            }}
+        from engine.portfolio import get_position_greeks
+        from engine.greeks_manager import build_dashboard
+
+        pg = get_position_greeks()
+        dash = build_dashboard(pg.net_delta, pg.net_theta, pg.net_vega, pg.net_gamma)
+        return {
+            "status": "ok",
+            "data": {
+                "net_delta": pg.net_delta,
+                "net_theta": pg.net_theta,
+                "net_vega": pg.net_vega,
+                "net_gamma": pg.net_gamma,
+                "positions_with_greeks": _serialise(pg.positions_with_greeks),
+                "by_underlying": _serialise(pg.by_underlying),
+                "warnings": _serialise(dash.warnings),
+            },
+        }
+    except Exception as e:
+        raise _err(str(e))
+
+
+class ScanRequest(BaseModel):
+    scan_type: str = "options"  # "options" is currently the supported type
+    filters: dict = {}          # reserved for future filter expressions
+
+
+@router.post("/scan")
+async def skill_scan(req: ScanRequest):
+    """
+    Options market scan across the F&O universe.
+
+    Returns:
+      high_iv      — stocks with IV rank > 60
+      unusual_oi   — strikes with OI change > 100%
+      high_put_writing — stocks with PCR > 1.0
+      summary      — plain-text summary line
+
+    Pass filters.symbols (list[str]) to narrow the scan to specific tickers.
+    Pass filters.quick = true for a faster scan over a smaller universe.
+    """
+    try:
+        from market.options_scanner import scan_options
+
+        symbols = req.filters.get("symbols") or None
+        if isinstance(symbols, list):
+            symbols = [s.upper() for s in symbols]
+        quick = bool(req.filters.get("quick", False))
+
+        results = scan_options(symbols=symbols, quick=quick)
+        return _ok(results)
     except Exception as e:
         raise _err(str(e))
 
@@ -616,6 +806,465 @@ async def skill_alerts_check():
             "data": {
                 "triggered": _serialise(triggered),
                 "active_remaining": alert_manager.active_count(),
+            },
+        }
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── IV Smile ──────────────────────────────────────────────────
+
+
+class IVSmileRequest(BaseModel):
+    symbol: str
+    expiry: Optional[str] = None
+
+
+@router.post("/iv_smile")
+async def skill_iv_smile(req: IVSmileRequest):
+    """IV smile across strikes for a given expiry."""
+    try:
+        from analysis.volatility_surface import compute_iv_smile
+
+        df = compute_iv_smile(req.symbol.upper(), req.expiry)
+        if df is None:
+            return {
+                "status": "ok",
+                "data": {"rows": [], "symbol": req.symbol, "error": "No data available"},
+            }
+        rows = df.to_dict(orient="records")
+        return {
+            "status": "ok",
+            "data": {"rows": rows, "symbol": req.symbol.upper(), "expiry": req.expiry},
+        }
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── GEX ───────────────────────────────────────────────────────
+
+
+class GEXRequest(BaseModel):
+    symbol: str
+    expiry: Optional[str] = None
+
+
+@router.post("/gex")
+async def skill_gex(req: GEXRequest):
+    """Gamma Exposure analysis for an underlying."""
+    try:
+        from analysis.gex import get_gex_analysis
+
+        result = get_gex_analysis(req.symbol.upper(), req.expiry)
+        return {"status": "ok", "data": result}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Delta Hedge ───────────────────────────────────────────────
+
+
+@router.post("/delta_hedge")
+async def skill_delta_hedge():
+    """Delta hedging suggestions based on current portfolio."""
+    try:
+        from brokers.session import get_broker
+
+        try:
+            get_broker()
+        except RuntimeError:
+            return {
+                "status": "ok",
+                "data": {
+                    "demo": True,
+                    "message": "Connect a broker to compute delta hedge",
+                    "current_delta": 0.0,
+                    "target_delta": 0.0,
+                    "gap": 0.0,
+                    "suggestions": [],
+                },
+            }
+        from engine.portfolio import get_position_greeks
+        from engine.greeks_manager import compute_delta_hedge
+
+        pg = get_position_greeks()
+        hedge = compute_delta_hedge(
+            net_delta=pg.net_delta,
+            target_delta=0.0,
+        )
+        return {"status": "ok", "data": _serialise(hedge)}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Risk Report ───────────────────────────────────────────────
+
+
+@router.post("/risk_report")
+async def skill_risk_report():
+    """Portfolio VaR, volatility, and concentration risk metrics."""
+    try:
+        from brokers.session import get_broker
+
+        try:
+            get_broker()
+        except RuntimeError:
+            return {
+                "status": "ok",
+                "data": {"demo": True, "message": "Connect a broker to see risk metrics"},
+            }
+        from engine.risk_metrics import compute_portfolio_risk
+
+        report = compute_portfolio_risk()
+        return {"status": "ok", "data": _serialise(report)}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Walk Forward ──────────────────────────────────────────────
+
+
+class WalkForwardRequest(BaseModel):
+    symbol: str
+    strategy: str = "rsi"
+    window_months: int = 6
+    total_period: str = "3y"
+
+
+@router.post("/walkforward")
+async def skill_walkforward(req: WalkForwardRequest):
+    """Walk-forward backtest across rolling windows to test strategy consistency."""
+    try:
+        from engine.backtest import walk_forward_test
+
+        result = walk_forward_test(
+            symbol=req.symbol.upper(),
+            strategy_name=req.strategy,
+            total_period=req.total_period,
+            window_months=req.window_months,
+        )
+        return {"status": "ok", "data": _serialise(result)}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── What-If ───────────────────────────────────────────────────
+
+
+class WhatIfRequest(BaseModel):
+    scenario: str = "market"  # "market", "stock", or "custom"
+    symbol: Optional[str] = None
+    nifty_change: Optional[float] = None  # % change (e.g. -5.0)
+    stock_change: Optional[float] = None  # % change for symbol
+    custom_moves: Optional[dict] = None   # {SYMBOL: change_pct}
+
+
+@router.post("/whatif")
+async def skill_whatif(req: WhatIfRequest):
+    """What-if scenario analysis on your portfolio."""
+    try:
+        from brokers.session import get_broker
+
+        try:
+            get_broker()
+        except RuntimeError:
+            return {
+                "status": "ok",
+                "data": {
+                    "demo": True,
+                    "message": "Connect a broker to run what-if scenarios",
+                },
+            }
+        from engine.simulator import Simulator
+
+        sim = Simulator()
+        if req.scenario == "market" and req.nifty_change is not None:
+            result = sim.scenario_market_move(req.nifty_change)
+        elif req.scenario == "stock" and req.symbol and req.stock_change is not None:
+            result = sim.scenario_stock_move(req.symbol.upper(), req.stock_change)
+        elif req.scenario == "custom" and req.custom_moves:
+            result = sim.scenario_custom(req.custom_moves)
+        else:
+            # Run three standard scenarios: -5%, flat, +5%
+            results = [
+                sim.scenario_market_move(-5.0),
+                sim.scenario_market_move(0.0),
+                sim.scenario_market_move(5.0),
+            ]
+            return {"status": "ok", "data": {"scenarios": _serialise(results), "multi": True}}
+        return {"status": "ok", "data": _serialise(result)}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Strategy ──────────────────────────────────────────────────
+
+
+class StrategyRequest(BaseModel):
+    symbol: str
+    view: str  # BULLISH / BEARISH / NEUTRAL
+    dte: int = 30
+    capital: Optional[float] = None
+
+
+@router.post("/strategy")
+async def skill_strategy(req: StrategyRequest):
+    """Recommend ranked options strategies for a symbol and market view."""
+    try:
+        from market.quotes import get_ltp
+        from engine.strategy import recommend
+
+        spot = get_ltp(f"NSE:{req.symbol.upper()}")
+        if spot <= 0:
+            raise _err(f"Could not get spot price for {req.symbol}")
+        report = recommend(
+            symbol=req.symbol.upper(),
+            view=req.view.upper(),
+            spot=spot,
+            dte=req.dte,
+            capital=req.capital,
+        )
+        return {"status": "ok", "data": _serialise(report)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Drift ─────────────────────────────────────────────────────
+
+
+@router.post("/drift")
+async def skill_drift():
+    """Detect model/analyst accuracy drift over time from trade memory."""
+    try:
+        from engine.drift import detect_drift
+
+        report = detect_drift()
+        return {"status": "ok", "data": _serialise(report)}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Memory ────────────────────────────────────────────────────
+
+
+class MemoryQueryRequest(BaseModel):
+    symbol: Optional[str] = None
+    verdict: Optional[str] = None
+    limit: int = 20
+    days_back: Optional[int] = None
+
+
+@router.post("/memory")
+async def skill_memory():
+    """Trade memory stats and recent analyses."""
+    try:
+        from engine.memory import trade_memory
+
+        stats = trade_memory.get_stats()
+        records = trade_memory.query(limit=20)
+        return {"status": "ok", "data": {"stats": stats, "records": _serialise(records)}}
+    except Exception as e:
+        raise _err(str(e))
+
+
+@router.post("/memory/query")
+async def skill_memory_query(req: MemoryQueryRequest):
+    """Query trade memory with filters."""
+    try:
+        from engine.memory import trade_memory
+
+        records = trade_memory.query(
+            symbol=req.symbol.upper() if req.symbol else None,
+            verdict=req.verdict,
+            limit=req.limit,
+            days_back=req.days_back,
+        )
+        return {"status": "ok", "data": {"records": _serialise(records)}}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Audit ─────────────────────────────────────────────────────
+
+
+class AuditRequest(BaseModel):
+    trade_id: str
+
+
+@router.post("/audit")
+async def skill_audit(req: AuditRequest):
+    """Post-mortem audit of a specific trade from memory."""
+    try:
+        from engine.audit import audit_trade
+
+        report = audit_trade(req.trade_id)
+        return {"status": "ok", "data": _serialise(report)}
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Telegram ──────────────────────────────────────────────────
+
+
+@router.get("/telegram/status")
+async def skill_telegram_status():
+    """Get Telegram bot connection status."""
+    try:
+        import os
+
+        token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        configured = bool(token)
+        running = False
+        try:
+            from bot.telegram_bot import _bot_running
+
+            running = _bot_running
+        except Exception:
+            pass
+        return {
+            "status": "ok",
+            "data": {
+                "configured": configured,
+                "running": running,
+                "token_hint": f"...{token[-6:]}" if token else None,
+            },
+        }
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Provider ──────────────────────────────────────────────────
+
+
+@router.post("/provider")
+async def skill_provider():
+    """Get current AI provider information."""
+    try:
+        import os
+
+        provider = os.environ.get("LLM_PROVIDER", "anthropic")
+        model = os.environ.get("LLM_MODEL", "")
+        available = []
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            available.append("anthropic")
+        if os.environ.get("OPENAI_API_KEY"):
+            available.append("openai")
+        if os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"):
+            available.append("gemini")
+        available.append("ollama")  # always available if installed
+        return {
+            "status": "ok",
+            "data": {"current": provider, "model": model, "available": available},
+        }
+    except Exception as e:
+        raise _err(str(e))
+
+
+class ProviderSwitchRequest(BaseModel):
+    provider: str
+    model: Optional[str] = None
+
+
+@router.post("/provider")
+async def skill_provider_switch(req: ProviderSwitchRequest):
+    """Switch the active AI provider (takes effect for next request)."""
+    try:
+        import os
+
+        valid = {"anthropic", "openai", "gemini", "ollama", "claude_subscription", "openai_subscription"}
+        if req.provider not in valid:
+            raise _err(f"Unknown provider '{req.provider}'. Valid: {', '.join(sorted(valid))}", 400)
+        os.environ["LLM_PROVIDER"] = req.provider
+        if req.model:
+            os.environ["LLM_MODEL"] = req.model
+        return {
+            "status": "ok",
+            "data": {"current": req.provider, "model": req.model or os.environ.get("LLM_MODEL", "")},
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Post-analysis follow-up chat (#103) ───────────────────────
+
+
+class AnalyzeFollowupRequest(BaseModel):
+    symbol: str
+    exchange: str = "NSE"
+    question: str
+    session_id: str = "default"
+    context: dict = {}   # analysts, synthesis_text, report from the completed analysis
+
+
+@router.post("/analyze/followup")
+async def analyze_followup(req: AnalyzeFollowupRequest):
+    """
+    Answer a follow-up question about a completed analysis.
+
+    Primes a TradingAgent session with the analyst verdicts and synthesis,
+    then asks the user's question. The same session_id maintains conversation
+    history so follow-up turns stay in context.
+
+    Send the full analysis context on the first question; for follow-ups in
+    the same session you can omit it (the agent remembers).
+    """
+    try:
+        from agent.core import TradingAgent
+
+        # Unique session per symbol so the agent remembers the analysis context
+        session_key = f"followup_{req.symbol}_{req.exchange}_{req.session_id}"
+
+        if session_key not in _chat_sessions:
+            agent = TradingAgent(stream=False)
+            _chat_sessions[session_key] = agent
+
+            # Seed the session with analysis context as the first exchange
+            analysts       = req.context.get("analysts", [])
+            synthesis_text = req.context.get("synthesis_text") or ""
+            report         = req.context.get("report") or ""
+
+            if analysts or synthesis_text or report:
+                ctx_lines = [f"The following multi-agent analysis was just completed for {req.symbol} ({req.exchange}):\n"]
+                if analysts:
+                    ctx_lines.append("Analyst verdicts:")
+                    for a in analysts:
+                        verdict = a.get("verdict", "")
+                        conf    = a.get("confidence", "")
+                        name    = a.get("name", "")
+                        ctx_lines.append(f"  • {name}: {verdict} ({conf}%)")
+                        for pt in (a.get("key_points") or []):
+                            ctx_lines.append(f"    – {pt}")
+                if synthesis_text:
+                    ctx_lines.append(f"\nFund Manager Synthesis:\n{synthesis_text}")
+                if report:
+                    ctx_lines.append(f"\nFull Report:\n{report[:3000]}")  # cap to avoid token overflow
+                ctx_lines.append(
+                    f"\nYou are now in follow-up mode for {req.symbol} ({req.exchange}).\n"
+                    f"All follow-up questions are about {req.symbol} unless the user explicitly names another stock.\n"
+                    f"Interpret all industry terms, product names, and business concepts in the context of {req.symbol}'s business — "
+                    f"for example, 'AI deals' means {req.symbol}'s AI contracts and partnerships, not a stock ticker called AI.\n"
+                    f"Use the analysis above as your primary source of truth. Supplement with market tools only when you need "
+                    f"live data not covered by the analysis (e.g. current options premiums, fresh price data).\n"
+                    f"Be concise, direct, and always ground your answer in {req.symbol}'s specific situation."
+                )
+                # Prime the agent — this becomes the first user message + assistant ack
+                agent.chat("\n".join(ctx_lines))
+        else:
+            agent = _chat_sessions[session_key]
+
+        response = agent.chat(req.question)
+
+        return {
+            "status": "ok",
+            "data": {
+                "response":       response,
+                "symbol":         req.symbol,
+                "session_id":     session_key,
+                "history_length": len(agent._history),
             },
         }
     except Exception as e:

@@ -1,17 +1,34 @@
+import { useState } from 'react'
 import { useChatStore } from '../../store/chatStore'
 import { useAPI } from '../../hooks/useAPI'
+import BrokerPanel from './BrokerPanel'
 
 const QUICK_COMMANDS = [
   { label: 'Morning Brief',  icon: '☀️',  command: 'morning-brief' },
   { label: 'Holdings',       icon: '📊',  command: 'holdings' },
   { label: 'Positions',      icon: '📈',  command: 'positions' },
-  { label: 'Portfolio',      icon: '💼',  command: 'portfolio' },
+  { label: 'Orders',         icon: '📋',  command: 'orders' },
+  { label: 'Funds',          icon: '💰',  command: 'funds' },
+  { label: 'Alerts',         icon: '🔔',  command: 'alerts' },
   { label: 'FII/DII Flows',  icon: '🌊',  command: 'flows' },
+  { label: 'Patterns',       icon: '🔍',  command: 'patterns' },
+  { label: 'Scan',           icon: '📡',  command: 'scan' },
+  // ── Analysis ──────────────────────────────────────────────
+  { label: 'GEX',            icon: '⚡',  command: 'gex NIFTY' },
+  { label: 'IV Smile',       icon: '📉',  command: 'iv-smile NIFTY' },
+  { label: 'Risk Report',    icon: '🛡',  command: 'risk-report' },
+  { label: 'Strategy',       icon: '🎯',  command: 'strategy NIFTY bullish' },
+  // ── Portfolio ─────────────────────────────────────────────
+  { label: 'Delta Hedge',    icon: '⚖️',  command: 'delta-hedge' },
+  { label: 'What-If',        icon: '🔮',  command: 'whatif' },
+  { label: 'Drift',          icon: '📐',  command: 'drift' },
+  { label: 'Memory',         icon: '🧠',  command: 'memory' },
 ]
 
 export default function Sidebar() {
   const { addUserMessage, addResponse, addError, isLoading, brokerStatus, port } = useChatStore()
   const { call, ready } = useAPI()
+  const [showBrokerPanel, setShowBrokerPanel] = useState(false)
 
   async function runCommand(command) {
     if (!ready || isLoading) return
@@ -25,15 +42,32 @@ export default function Sidebar() {
   }
 
   return (
-    <div className="w-56 flex-shrink-0 bg-panel border-r border-border flex flex-col">
+    <div className="w-56 flex-shrink-0 bg-panel border-r border-border flex flex-col relative">
 
-      {/* Broker status */}
-      <div className="px-4 py-3 border-b border-border">
+      {/* Broker panel overlay */}
+      {showBrokerPanel && <BrokerPanel onClose={() => setShowBrokerPanel(false)} />}
+
+      {/* Broker status — click to open broker panel */}
+      <div
+        className="px-4 py-3 border-b border-border cursor-pointer hover:bg-elevated transition-colors group"
+        onClick={() => setShowBrokerPanel(true)}
+      >
         <p className="text-muted text-[10px] uppercase tracking-widest mb-2 font-ui">Broker</p>
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${brokerStatus.connected ? 'bg-green' : 'bg-subtle'}`} />
-          <span className="text-text text-[12px] font-ui">
-            {brokerStatus.broker || (port ? 'Demo mode' : 'Starting…')}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 transition-all ${
+              brokerStatus.connected
+                ? 'bg-green shadow-[0_0_6px_rgba(82,224,122,0.4)]'
+                : 'bg-subtle'
+            }`} />
+            <span className="text-text text-[12px] font-ui truncate">
+              {brokerStatus.connected
+                ? brokerStatus.broker
+                : port ? 'Not connected' : 'Starting…'}
+            </span>
+          </div>
+          <span className="text-subtle text-[10px] font-ui opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1">
+            {brokerStatus.connected ? 'manage' : 'connect'}
           </span>
         </div>
       </div>
@@ -76,12 +110,38 @@ async function routeCommand(call, command) {
       return { cardType: 'holdings', data: unwrap(await call('/skills/holdings', {})) }
     case 'positions':
       return { cardType: 'holdings', data: unwrap(await call('/skills/positions', {})) }
-    case 'portfolio':
-      return { cardType: 'markdown', data: { text: 'Portfolio view coming soon.' } }
     case 'flows': {
       const fd = unwrap(await call('/skills/flows', {}))
       return { cardType: 'flows', data: fd?.flow_analysis ?? fd }
     }
+    case 'orders':
+      return { cardType: 'orders', data: unwrap(await call('/skills/orders', {})) }
+    case 'funds':
+      return { cardType: 'funds',    data: unwrap(await call('/skills/funds',    {})) }
+    case 'alerts':
+      return { cardType: 'alerts',   data: unwrap(await call('/skills/alerts/list', {})) }
+    case 'patterns':
+      return { cardType: 'patterns', data: unwrap(await call('/skills/patterns', {})) }
+    case 'scan':
+      return { cardType: 'scan',     data: unwrap(await call('/skills/scan',     { scan_type: 'options', filters: {} })) }
+    // ── Analysis ──────────────────────────────────────────────
+    case 'gex NIFTY':
+      return { cardType: 'gex',         data: unwrap(await call('/skills/gex',         { symbol: 'NIFTY', expiry: null })) }
+    case 'iv-smile NIFTY':
+      return { cardType: 'iv_smile',    data: unwrap(await call('/skills/iv_smile',    { symbol: 'NIFTY', expiry: null })) }
+    case 'risk-report':
+      return { cardType: 'risk_report', data: unwrap(await call('/skills/risk_report', {})) }
+    case 'strategy NIFTY bullish':
+      return { cardType: 'strategy',    data: unwrap(await call('/skills/strategy',    { symbol: 'NIFTY', view: 'BULLISH', dte: 30 })) }
+    // ── Portfolio ─────────────────────────────────────────────
+    case 'delta-hedge':
+      return { cardType: 'delta_hedge', data: unwrap(await call('/skills/delta_hedge', {})) }
+    case 'whatif':
+      return { cardType: 'whatif',      data: unwrap(await call('/skills/whatif',      { scenario: 'market' })) }
+    case 'drift':
+      return { cardType: 'drift',       data: unwrap(await call('/skills/drift',       {})) }
+    case 'memory':
+      return { cardType: 'memory',      data: unwrap(await call('/skills/memory',      {})) }
     default:
       throw new Error(`Unknown command: ${command}`)
   }

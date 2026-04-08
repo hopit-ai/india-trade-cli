@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, Tray, nativeImage, globalShortcut } from 'electron'
 import { join, resolve } from 'path'
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs'
 import { homedir } from 'os'
@@ -68,6 +68,31 @@ function stopSidecar() {
 }
 
 // ---------------------------------------------------------------------------
+// Tray
+// ---------------------------------------------------------------------------
+let tray = null
+
+function createTray() {
+  const iconPath = join(__dirname, '../../build/icon.iconset/icon_16x16.png')
+  const icon     = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
+  icon.setTemplateImage(true)   // adapts to macOS dark/light menu bar
+
+  tray = new Tray(icon)
+  tray.setToolTip('India Trade')
+  tray.setTitle('◆')           // replaced with NIFTY level once market opens
+
+  tray.on('click', () => {
+    if (!mainWindow) return
+    if (mainWindow.isVisible() && mainWindow.isFocused()) {
+      mainWindow.hide()
+    } else {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 let mainWindow = null
@@ -114,10 +139,37 @@ function createWindow() {
 let _readyPort = null  // set once uvicorn is up
 
 ipcMain.handle('get-port', () => _readyPort)
+ipcMain.handle('open-external', (_, url) => shell.openExternal(url))
+
+// Renderer sends live NIFTY/market data to update the tray title
+ipcMain.on('update-tray', (_, { label }) => {
+  if (tray) tray.setTitle(label ? ` ${label}` : '◆')
+})
 
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
-app.whenReady().then(createWindow)
-app.on('before-quit', stopSidecar)
-app.on('window-all-closed', () => { stopSidecar(); app.quit() })
+app.whenReady().then(() => {
+  createTray()
+  createWindow()
+
+  // Global shortcut: Cmd+Shift+Space → show/focus the app from anywhere
+  globalShortcut.register('CommandOrControl+Shift+Space', () => {
+    if (!mainWindow) return
+    if (mainWindow.isVisible() && mainWindow.isFocused()) {
+      mainWindow.hide()
+    } else {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+})
+
+app.on('before-quit', () => {
+  globalShortcut.unregisterAll()
+  stopSidecar()
+})
+app.on('window-all-closed', () => {
+  // On macOS keep the app alive in the tray even when window is closed
+  if (process.platform !== 'darwin') { stopSidecar(); app.quit() }
+})

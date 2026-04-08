@@ -267,8 +267,8 @@ class AngelOneAPI(BrokerAPI):
                         last_price=ltp,
                         pnl=pnl,
                         pnl_pct=pnl_pct,
-                        day_change=float(h.get("close", 0) or 0) - ltp,
-                        day_change_pct=0.0,
+                        day_change=round(ltp - float(h.get("close", 0) or 0), 2),
+                        day_change_pct=round((ltp - float(h.get("close", 0) or 0)) / float(h.get("close", 0) or 1) * 100, 2),
                     )
                 )
             except Exception:
@@ -331,7 +331,10 @@ class AngelOneAPI(BrokerAPI):
                 # Angel One LTP API
                 data = self._obj.ltpData(exch, syms[0], "")
                 d = data.get("data", {}) if data else {}
-                ltp = float(d.get("ltp", 0) or 0)
+                ltp        = float(d.get("ltp", 0) or 0)
+                prev_close = float(d.get("close", ltp) or ltp)
+                change     = round(ltp - prev_close, 2)
+                change_pct = round((change / prev_close * 100), 2) if prev_close else 0.0
                 key = f"{exch}:{syms[0]}"
                 result[key] = Quote(
                     symbol=syms[0],
@@ -339,8 +342,10 @@ class AngelOneAPI(BrokerAPI):
                     open=float(d.get("open", ltp) or ltp),
                     high=float(d.get("high", ltp) or ltp),
                     low=float(d.get("low", ltp) or ltp),
-                    close=float(d.get("close", ltp) or ltp),
+                    close=prev_close,
                     volume=int(d.get("tradedVolume", 0) or 0),
+                    change=change,
+                    change_pct=change_pct,
                 )
             except Exception:
                 pass

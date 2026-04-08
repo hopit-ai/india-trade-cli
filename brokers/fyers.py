@@ -87,6 +87,67 @@ _INDEX_KEYWORDS = {
 }
 
 
+_MONTH_MAP = {
+    "jan": "01", "feb": "02", "mar": "03", "apr": "04",
+    "may": "05", "jun": "06", "jul": "07", "aug": "08",
+    "sep": "09", "oct": "10", "nov": "11", "dec": "12",
+    "1": "01", "2": "02", "3": "03", "4": "04",
+    "5": "05", "6": "06", "7": "07", "8": "08",
+    "9": "09", "10": "10", "11": "11", "12": "12",
+}
+
+def _parse_expiry_from_fyers_symbol(symbol: str, option_type: str) -> str:
+    """
+    Parse expiry date from a Fyers option symbol string.
+
+    Fyers weekly format : NSE:NIFTY2640722100CE  → YY=26, M=4, DD=07 → 2026-04-07
+    Fyers monthly format: NSE:NIFTY26APR22100CE  → YY=26, MMM=APR, last Thursday
+    Returns YYYY-MM-DD string or empty string on failure.
+    """
+    import re, datetime as dt
+    from calendar import monthrange
+    try:
+        sym = re.sub(r"^[A-Z]+:", "", symbol)   # strip "NSE:"
+        sym = re.sub(r"(CE|PE)$", "", sym)       # strip option type
+
+        # Match: underlying(letters) + YY(2 digits) + date_part + strike(digits)
+        # Monthly: 3 uppercase letters; Weekly: 3 or 4 digits
+        m = re.match(r"^[A-Z]+(\d{2})([A-Z]{3}|\d{3,4})(\d+)$", sym)
+        if not m:
+            return ""
+        yy, date_part, _ = m.groups()
+        year = int("20" + yy)
+
+        # Monthly: 3-letter month e.g. APR
+        if re.match(r"^[A-Z]{3}$", date_part):
+            month = int(_MONTH_MAP.get(date_part.lower(), "0"))
+            if not month:
+                return ""
+            days = monthrange(year, month)[1]
+            d = dt.date(year, month, days)
+            while d.weekday() != 3:   # last Thursday
+                d -= dt.timedelta(days=1)
+            return d.strftime("%Y-%m-%d")
+
+        # Weekly digits — try 3-digit first (single-digit month + 2-digit day),
+        # fall back to 4-digit (2-digit month + 2-digit day)
+        # 3-digit e.g. "407" = month=4, day=07
+        if len(date_part) >= 3:
+            m3 = int(date_part[0])
+            d3 = int(date_part[1:3])
+            if 1 <= m3 <= 9 and 1 <= d3 <= 31:
+                return dt.date(year, m3, d3).strftime("%Y-%m-%d")
+        # 4-digit e.g. "1024" = month=10, day=24
+        if len(date_part) == 4:
+            m4 = int(date_part[:2])
+            d4 = int(date_part[2:])
+            if 1 <= m4 <= 12 and 1 <= d4 <= 31:
+                return dt.date(year, m4, d4).strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    return ""
+
+
 def _to_fyers_symbol(instrument: str) -> str:
     """Convert 'NSE:RELIANCE' or 'NSE:NIFTY 50' to Fyers API format."""
     if ":" in instrument:
@@ -381,16 +442,36 @@ class FyersAPI(BrokerAPI):
                 v = item.get("v", {})
                 # Find the original key
                 orig_key = key_map.get(raw, raw)
+                last_price  = float(v.get("lp", 0))
+                open_price  = float(v.get("open_price", 0))
+                high_price  = float(v.get("high_price", 0))
+                low_price   = float(v.get("low_price", 0))
+                prev_close  = float(v.get("prev_close_price", 0))
+                ch          = float(v.get("ch", 0))
+                chp         = float(v.get("chp", 0))
+
+                # After NSE close Fyers rolls prev_close_price to today's official
+                # close, making ch ≈ 0.  Detect this: if |ch| < 5% of the intraday
+                # range (and the range is meaningful), fall back to open-based change.
+                intraday_range = high_price - low_price
+                if (
+                    intraday_range > 0.5
+                    and open_price > 0
+                    and abs(ch) < intraday_range * 0.05
+                ):
+                    ch  = round(last_price - open_price, 2)
+                    chp = round((ch / open_price * 100), 2) if open_price else 0.0
+
                 result[orig_key] = Quote(
                     symbol=orig_key.split(":")[-1] if ":" in orig_key else orig_key,
-                    last_price=float(v.get("lp", 0)),
-                    open=float(v.get("open_price", 0)),
-                    high=float(v.get("high_price", 0)),
-                    low=float(v.get("low_price", 0)),
-                    close=float(v.get("prev_close_price", 0)),
+                    last_price=last_price,
+                    open=open_price,
+                    high=high_price,
+                    low=low_price,
+                    close=prev_close,
                     volume=int(v.get("volume", 0)),
-                    change=float(v.get("ch", 0)),
-                    change_pct=float(v.get("chp", 0)),
+                    change=ch,
+                    change_pct=chp,
                 )
             return result
         except Exception:
@@ -434,11 +515,19 @@ class FyersAPI(BrokerAPI):
                         opt = item
                     if not opt:
                         continue
+
+                    # Parse expiry from symbol if not provided by API.
+                    # Fyers symbol format: NIFTY26407STRIKECE → YY=26, MMM-day=407 (Apr 7)
+                    raw_expiry = opt.get("expiry", expiry or "")
+                    if not raw_expiry:
+                        sym_str = opt.get("symbol", "")
+                        raw_expiry = _parse_expiry_from_fyers_symbol(sym_str, opt_type) or ""
+
                     chain.append(
                         OptionsContract(
                             symbol=opt.get("symbol", ""),
                             underlying=underlying,
-                            expiry=opt.get("expiry", expiry or ""),
+                            expiry=raw_expiry,
                             strike=float(opt.get("strike_price", item.get("strikePrice", 0))),
                             option_type=opt_type,
                             last_price=float(opt.get("ltp", 0)),

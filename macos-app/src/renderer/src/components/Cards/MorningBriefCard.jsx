@@ -1,6 +1,46 @@
+import { useChatStore } from '../../store/chatStore'
+
 export default function MorningBriefCard({ data }) {
   if (!data) return null
   const { market_snapshot, institutional_flows, top_news, market_breadth } = data
+  const setDraft = useChatStore((s) => s.setDraft)
+
+  // Build contextual chips from actual brief data
+  const posture    = market_snapshot?.posture ?? null
+  const niftyLtp   = market_snapshot?.nifty?.ltp ?? null
+  const niftyChg   = market_snapshot?.nifty?.change_pct ?? null
+  const vix        = market_snapshot?.vix?.ltp ?? null
+  const fiiNet     = institutional_flows?.fii_net_today ?? null
+  const fiiStreak  = institutional_flows?.fii_streak ?? null
+  const advances   = market_breadth?.advances ?? null
+  const declines   = market_breadth?.declines ?? null
+
+  const ctx = [
+    posture   && `Market posture: ${posture}`,
+    niftyLtp  && `NIFTY at ${Number(niftyLtp).toLocaleString('en-IN')} (${niftyChg != null ? (niftyChg >= 0 ? '+' : '') + Number(niftyChg).toFixed(2) + '%' : ''})`,
+    vix       && `VIX at ${Number(vix).toFixed(1)}`,
+    fiiNet    && `FII net ${Number(fiiNet) >= 0 ? '+' : ''}₹${Number(fiiNet).toFixed(0)} Cr${fiiStreak != null ? ` (${Math.abs(fiiStreak)}d ${Number(fiiStreak) >= 0 ? 'buying' : 'selling'})` : ''}`,
+    advances  && declines && `Breadth: ${advances} advances, ${declines} declines`,
+  ].filter(Boolean).join('; ')
+
+  const chips = [
+    posture && {
+      label: `${posture === 'BULLISH' ? '📈' : posture === 'BEARISH' ? '📉' : '⚡'} ${posture} market — how to trade today?`,
+      q: `${ctx}. Given this ${posture.toLowerCase()} market setup, what should I focus on today — key levels to watch, sectors to favour, and positions to avoid?`,
+    },
+    fiiNet != null && {
+      label: `FII ${Number(fiiNet) >= 0 ? 'buying' : 'selling'} ₹${Math.abs(Number(fiiNet)).toFixed(0)} Cr — what does this mean?`,
+      q: `${ctx}. What does this FII flow pattern mean for NIFTY tomorrow and which sectors are most impacted?`,
+    },
+    advances != null && declines != null && {
+      label: `${advances} up vs ${declines} down — oversold or more downside?`,
+      q: `${ctx}. Is this breadth reading a sign of exhaustion and potential reversal, or does it suggest more downside ahead?`,
+    },
+    top_news?.length > 0 && {
+      label: '📰 What\'s the biggest market risk today?',
+      q: `${ctx}. Top news: ${top_news.slice(0, 3).map(n => n.headline ?? n.title ?? '').filter(Boolean).join(' | ')}. What is the single biggest risk to watch today?`,
+    },
+  ].filter(Boolean)
 
   return (
     <div className="bg-elevated border border-amber/30 rounded-xl p-4 max-w-2xl w-full space-y-4">
@@ -81,6 +121,23 @@ export default function MorningBriefCard({ data }) {
             <span className="text-muted">— {market_breadth.unchanged ?? '—'}</span>
           </div>
         </Section>
+      )}
+
+      {/* Contextual action chips */}
+      {chips.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1 border-t border-border">
+          {chips.map((chip) => (
+            <button
+              key={chip.label}
+              onClick={() => setDraft(chip.q)}
+              className="text-[11px] font-ui px-3 py-1.5 rounded-full border border-border
+                         text-muted hover:text-text hover:border-amber/50 hover:bg-amber/5
+                         transition-colors cursor-pointer"
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )

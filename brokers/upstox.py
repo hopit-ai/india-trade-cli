@@ -238,17 +238,18 @@ class UpstoxAPI(BrokerAPI):
             ltp = float(item.get("last_price", avg_px))
             isin = item.get("isin", "")
             symbol = item.get("tradingsymbol", isin)
+            pnl_pct = round((ltp - avg_px) / avg_px * 100, 2) if avg_px else 0.0
             holdings.append(
                 Holding(
                     symbol=symbol,
+                    exchange=item.get("exchange", "NSE"),
                     quantity=qty,
                     avg_price=avg_px,
                     last_price=ltp,
-                    pnl=(ltp - avg_px) * qty,
-                    day_change=0.0,
-                    day_change_pct=0.0,
-                    current_value=ltp * qty,
-                    isin=isin,
+                    pnl=round((ltp - avg_px) * qty, 2),
+                    pnl_pct=pnl_pct,
+                    day_change=round(float(item.get("day_change", 0) or 0), 2),
+                    day_change_pct=round(float(item.get("day_change_percentage", 0) or 0), 2),
                 )
             )
         return holdings
@@ -269,8 +270,8 @@ class UpstoxAPI(BrokerAPI):
                     avg_price=avg,
                     last_price=ltp,
                     pnl=float(item.get("pnl", 0)),
-                    day_change=0.0,
-                    day_change_pct=0.0,
+                    day_change=round(float(item.get("day_change", 0) or 0), 2),
+                    day_change_pct=round(float(item.get("day_change_percentage", 0) or 0), 2),
                     product=item.get("product", "D"),
                     exchange=item.get("exchange", "NSE"),
                     instrument_type=item.get("instrument_type", "EQ"),
@@ -281,25 +282,30 @@ class UpstoxAPI(BrokerAPI):
     # ── Quotes ────────────────────────────────────────────────
 
     def get_quote(self, symbols: list[str]) -> dict[str, Quote]:
-        """Get LTP + OHLC for a list of instrument keys (e.g. NSE_EQ|INE009A01021)."""
-        # Upstox uses instrument_key format; fall back to a simple lookup
+        """Get full OHLCV quote for a list of instrument keys (NSE_EQ|ISIN format)."""
         instruments = ",".join(f"NSE_EQ|{s}" for s in symbols)
         try:
-            data = self._get("/market-quote/ltp", instrument_key=instruments)
+            # Prefer full quote endpoint (OHLCV + change) over LTP-only
+            data = self._get("/market-quote/quotes", instrument_key=instruments)
             result = {}
             for sym, q in data.get("data", {}).items():
                 tradingsym = sym.split("|")[-1] if "|" in sym else sym
-                ltp = float(q.get("last_price", 0))
+                ohlc       = q.get("ohlc", {})
+                ltp        = float(q.get("last_price", 0))
+                prev_close = float(ohlc.get("close", ltp) or ltp)
+                change     = round(ltp - prev_close, 2)
+                change_pct = round((change / prev_close * 100), 2) if prev_close else 0.0
                 result[tradingsym] = Quote(
                     symbol=tradingsym,
                     last_price=ltp,
-                    open=ltp,
-                    high=ltp,
-                    low=ltp,
-                    close=ltp,
-                    volume=0,
-                    oi=0,
-                    timestamp=datetime.now(),
+                    open=float(ohlc.get("open", ltp) or ltp),
+                    high=float(ohlc.get("high", ltp) or ltp),
+                    low=float(ohlc.get("low", ltp) or ltp),
+                    close=prev_close,
+                    volume=int(q.get("volume", 0) or 0),
+                    oi=int(q.get("oi", 0) or 0),
+                    change=change,
+                    change_pct=change_pct,
                 )
             return result
         except Exception:
@@ -312,8 +318,8 @@ class UpstoxAPI(BrokerAPI):
                     low=0,
                     close=0,
                     volume=0,
-                    oi=0,
-                    timestamp=datetime.now(),
+                    change=0.0,
+                    change_pct=0.0,
                 )
                 for s in symbols
             }
