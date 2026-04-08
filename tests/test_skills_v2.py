@@ -521,7 +521,7 @@ class TestTelegramStatus:
 
 class TestProvider:
     def test_get_returns_current_provider(self, client, monkeypatch):
-        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+        monkeypatch.setenv("AI_PROVIDER", "anthropic")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
@@ -534,7 +534,7 @@ class TestProvider:
         assert "ollama" in d["available"]
 
     def test_post_switches_provider(self, client, monkeypatch):
-        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+        monkeypatch.setenv("AI_PROVIDER", "anthropic")
         r = client.post("/skills/provider/switch", json={"provider": "openai"})
         assert r.status_code == 200
         d = r.json()["data"]

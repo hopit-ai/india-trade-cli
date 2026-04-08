@@ -1167,8 +1167,8 @@ async def skill_provider():
     try:
         import os
 
-        provider = os.environ.get("LLM_PROVIDER", "anthropic")
-        model = os.environ.get("LLM_MODEL", "")
+        provider = os.environ.get("AI_PROVIDER", "anthropic")
+        model = os.environ.get("AI_MODEL", "")
         available = []
         if os.environ.get("ANTHROPIC_API_KEY"):
             available.append("anthropic")
@@ -1206,14 +1206,14 @@ async def skill_provider_switch(req: ProviderSwitchRequest):
         }
         if req.provider not in valid:
             raise _err(f"Unknown provider '{req.provider}'. Valid: {', '.join(sorted(valid))}", 400)
-        os.environ["LLM_PROVIDER"] = req.provider
+        os.environ["AI_PROVIDER"] = req.provider
         if req.model:
-            os.environ["LLM_MODEL"] = req.model
+            os.environ["AI_MODEL"] = req.model
         return {
             "status": "ok",
             "data": {
                 "current": req.provider,
-                "model": req.model or os.environ.get("LLM_MODEL", ""),
+                "model": req.model or os.environ.get("AI_MODEL", ""),
             },
         }
     except HTTPException:
@@ -1251,7 +1251,14 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
         # Unique session per symbol so the agent remembers the analysis context
         session_key = f"followup_{req.symbol}_{req.exchange}_{req.session_id}"
 
-        if session_key not in _chat_sessions:
+        # If new analysis context is provided, always create a fresh session
+        # so a second analyze of the same symbol gets fresh context (not stale)
+        has_new_context = bool(
+            req.context.get("analysts")
+            or req.context.get("synthesis_text")
+            or req.context.get("report")
+        )
+        if session_key not in _chat_sessions or has_new_context:
             agent = TradingAgent(stream=False)
             _chat_sessions[session_key] = agent
 
