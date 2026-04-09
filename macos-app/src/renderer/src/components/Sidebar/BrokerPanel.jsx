@@ -60,10 +60,28 @@ export default function BrokerPanel({ onClose }) {
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  const [successBroker, setSuccessBroker] = useState(null)
   const base = `http://127.0.0.1:${port}`
+  const pollRef = { current: null }
 
-  function openLogin(loginPath) {
-    window.electronAPI?.openExternal(`${base}${loginPath}`)
+  function openLoginAndPoll(broker) {
+    window.electronAPI?.openExternal(`${base}${broker.loginPath}`)
+    // Poll for auth completion
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${base}/api/status`)
+        const data = await res.json()
+        setBrokerStatuses(data)
+        if (data[broker.key]?.authenticated) {
+          clearInterval(pollRef.current)
+          pollRef.current = null
+          setExpandedBroker(null)
+          setSuccessBroker(broker.name)
+          setTimeout(() => onClose(), 1500)
+        }
+      } catch {}
+    }, 2000)
   }
 
   async function disconnect(brokerKey) {
@@ -104,7 +122,7 @@ export default function BrokerPanel({ onClose }) {
       // Refresh status then login
       const res = await fetch(`${base}/api/status`)
       setBrokerStatuses(await res.json())
-      openLogin(broker.loginPath)
+      openLoginAndPoll(broker)
     } catch (e) {
       setError(e.message)
     }
@@ -157,7 +175,7 @@ export default function BrokerPanel({ onClose }) {
                   </button>
                 ) : status.configured ? (
                   <button
-                    onClick={() => openLogin(broker.loginPath)}
+                    onClick={() => openLoginAndPoll(broker)}
                     className="text-[11px] font-ui px-2.5 py-1 rounded-md border border-green/30
                                text-green hover:bg-green/10 transition-colors cursor-pointer"
                   >
@@ -236,10 +254,17 @@ export default function BrokerPanel({ onClose }) {
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-border flex-shrink-0 space-y-1.5">
+        {successBroker && (
+          <p className="text-green text-sm font-ui font-semibold text-center py-2">
+            {successBroker} connected successfully
+          </p>
+        )}
         {error && <p className="text-red text-[10px] font-ui">Error: {error}</p>}
-        <p className="text-subtle text-[10px] font-ui leading-relaxed">
-          Login opens your browser. OAuth completes automatically.
-        </p>
+        {!successBroker && (
+          <p className="text-subtle text-[10px] font-ui leading-relaxed">
+            Login opens your browser. OAuth completes automatically.
+          </p>
+        )}
       </div>
     </div>
     </div>
