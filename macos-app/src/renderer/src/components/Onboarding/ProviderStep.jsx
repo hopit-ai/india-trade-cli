@@ -183,49 +183,16 @@ export default function ProviderStep({ formData, setFormData, onNext, port }) {
               )}
             </>
           ) : (
-            <div className="space-y-3">
-              {provider.setupHint && (
-                <div className="bg-elevated border border-border rounded-lg px-3 py-2">
-                  <code className="text-amber text-xs font-mono">{provider.setupHint}</code>
-                </div>
-              )}
-              {provider.id === 'claude_subscription' ? (
-                <button
-                  onClick={async () => {
-                    // For Claude subscription, just save the provider — no test needed
-                    await fetch(`${base}/api/onboarding/credential`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ key: 'AI_PROVIDER', value: 'claude_subscription' }),
-                    })
-                    setSaved(true)
-                    setFormData((prev) => ({ ...prev, aiProvider: 'claude_subscription' }))
-                    setTestResult({ ok: true, message: 'Claude subscription selected' })
-                  }}
-                  disabled={saved}
-                  className="px-4 py-2 bg-amber/10 text-amber border border-amber/30 rounded-lg
-                             text-sm font-ui font-semibold hover:bg-amber/20 transition-all
-                             disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {saved ? 'Selected' : 'Use Claude Subscription'}
-                </button>
-              ) : (
-                <button
-                  onClick={handleTest}
-                  disabled={testing}
-                  className="px-4 py-2 bg-amber/10 text-amber border border-amber/30 rounded-lg
-                             text-sm font-ui font-semibold hover:bg-amber/20 transition-all
-                             disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {testing ? 'Testing...' : 'Test Connection'}
-                </button>
-              )}
-              {testResult && (
-                <p className={`text-xs font-ui ${testResult.ok ? 'text-green' : 'text-red'}`}>
-                  {testResult.ok ? testResult.message : testResult.error}
-                </p>
-              )}
-            </div>
+            <SetupRunner
+              provider={provider}
+              base={base}
+              onComplete={() => {
+                setSaved(true)
+                setFormData((prev) => ({ ...prev, aiProvider: provider.id }))
+                setTestResult({ ok: true, message: `${provider.name} configured` })
+              }}
+              saved={saved}
+            />
           )}
         </div>
       )}
@@ -241,6 +208,187 @@ export default function ProviderStep({ formData, setFormData, onNext, port }) {
           Next
         </button>
       </div>
+    </div>
+  )
+}
+
+// ── Built-in setup runner for Ollama / Claude subscription ─────
+
+function SetupRunner({ provider, base, onComplete, saved }) {
+  const [steps, setSteps] = useState([])       // [{label, status, output}]
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState(null)
+
+  const addStep = (label, status = 'pending') => {
+    setSteps(prev => [...prev, { label, status, output: '' }])
+    return prev => prev.length // index
+  }
+
+  const updateStep = (index, update) => {
+    setSteps(prev => prev.map((s, i) => i === index ? { ...s, ...update } : s))
+  }
+
+  const callSetup = async (step) => {
+    const res = await fetch(`${base}/api/onboarding/setup-provider`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: provider.id, step }),
+    })
+    return res.json()
+  }
+
+  const saveProvider = async () => {
+    await fetch(`${base}/api/onboarding/credential`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'AI_PROVIDER', value: provider.id }),
+    })
+  }
+
+  const runSetup = async () => {
+    setRunning(true)
+    setError(null)
+    setSteps([])
+
+    try {
+      if (provider.id === 'ollama') {
+        // Step 1: Check
+        setSteps([{ label: 'Checking if Ollama is installed...', status: 'running', output: '' }])
+        const check = await callSetup('check')
+
+        if (!check.installed) {
+          updateStep(0, { status: 'done', output: 'Not installed' })
+          // Step 2: Install
+          setSteps(prev => [...prev, { label: 'Installing Ollama via Homebrew...', status: 'running', output: '' }])
+          const install = await callSetup('install')
+          if (!install.ok) {
+            updateStep(1, { status: 'error', output: install.error })
+            if (install.download_url) {
+              setError({ message: install.error, downloadUrl: install.download_url })
+            }
+            setRunning(false)
+            return
+          }
+          updateStep(1, { status: 'done', output: install.output || 'Installed' })
+        } else {
+          updateStep(0, { status: 'done', output: check.message })
+        }
+
+        // Step 3: Start if needed
+        if (!check.running) {
+          setSteps(prev => [...prev, { label: 'Starting Ollama server...', status: 'running', output: '' }])
+          const start = await callSetup('start')
+          const idx = steps.length // approximate
+          setSteps(prev => prev.map((s, i) => i === prev.length - 1 ? { ...s, status: start.ok ? 'done' : 'error', output: start.message || start.error } : s))
+          if (!start.ok) { setRunning(false); return }
+        }
+
+        // Step 4: Pull model
+        const recheck = await callSetup('check')
+        if (!recheck.models || recheck.models.length === 0) {
+          setSteps(prev => [...prev, { label: 'Downloading llama3.1 (~4GB)...', status: 'running', output: 'This may take a few minutes' }])
+          const pull = await callSetup('pull_model')
+          setSteps(prev => prev.map((s, i) => i === prev.length - 1 ? { ...s, status: pull.ok ? 'done' : 'error', output: pull.ok ? 'Model ready' : pull.error } : s))
+          if (!pull.ok) { setRunning(false); return }
+        }
+
+        await saveProvider()
+        setSteps(prev => [...prev, { label: 'Ollama configured', status: 'done', output: '' }])
+        onComplete()
+
+      } else if (provider.id === 'claude_subscription') {
+        // Step 1: Check
+        setSteps([{ label: 'Checking for Claude CLI...', status: 'running', output: '' }])
+        const check = await callSetup('check')
+
+        if (!check.installed) {
+          updateStep(0, { status: 'done', output: 'Not installed' })
+          // Step 2: Install
+          setSteps(prev => [...prev, { label: 'Installing Claude CLI via npm...', status: 'running', output: '' }])
+          const install = await callSetup('install')
+          if (!install.ok) {
+            updateStep(1, { status: 'error', output: install.error })
+            setRunning(false)
+            return
+          }
+          updateStep(1, { status: 'done', output: 'Claude CLI installed' })
+
+          if (install.needs_login) {
+            setSteps(prev => [...prev, {
+              label: 'Run "claude login" in your terminal to authenticate',
+              status: 'waiting',
+              output: 'Open a terminal window and run: claude login'
+            }])
+          }
+        } else {
+          updateStep(0, { status: 'done', output: check.message })
+        }
+
+        await saveProvider()
+        setSteps(prev => [...prev, { label: 'Claude subscription configured', status: 'done', output: '' }])
+        onComplete()
+      }
+    } catch (err) {
+      setError({ message: err.message })
+    }
+    setRunning(false)
+  }
+
+  if (saved) {
+    return (
+      <div className="space-y-2">
+        <p className="text-green text-xs font-ui">Setup complete</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Setup steps output */}
+      {steps.length > 0 && (
+        <div className="bg-elevated border border-border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+          {steps.map((step, i) => (
+            <div key={i} className="flex items-start gap-2 text-xs font-mono">
+              <span className="flex-shrink-0 mt-0.5">
+                {step.status === 'running' ? '...' :
+                 step.status === 'done' ? <span className="text-green">ok</span> :
+                 step.status === 'waiting' ? <span className="text-amber">!</span> :
+                 step.status === 'error' ? <span className="text-red">x</span> :
+                 <span className="text-muted">-</span>}
+              </span>
+              <div>
+                <span className="text-text">{step.label}</span>
+                {step.output && (
+                  <p className="text-muted text-[10px] mt-0.5">{step.output}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Error with download link */}
+      {error?.downloadUrl && (
+        <button
+          onClick={() => window.electronAPI?.openExternal(error.downloadUrl)}
+          className="text-xs text-amber underline font-ui cursor-pointer"
+        >
+          Download Ollama manually from ollama.com
+        </button>
+      )}
+
+      {/* Run button */}
+      {!saved && (
+        <button
+          onClick={runSetup}
+          disabled={running}
+          className="px-4 py-2 bg-amber/10 text-amber border border-amber/30 rounded-lg
+                     text-sm font-ui font-semibold hover:bg-amber/20 transition-all
+                     disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {running ? 'Setting up...' : steps.length > 0 ? 'Retry Setup' : 'Set Up Automatically'}
+        </button>
+      )}
     </div>
   )
 }

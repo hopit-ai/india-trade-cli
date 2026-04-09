@@ -1025,6 +1025,170 @@ async def onboarding_test_provider(req: TestProviderRequest):
         return {"ok": False, "error": str(e)}
 
 
+class SetupProviderRequest(BaseModel):
+    provider: str
+    step: str = "check"  # check | install | pull_model
+
+
+@app.post("/api/onboarding/setup-provider")
+async def onboarding_setup_provider(req: SetupProviderRequest):
+    """Run setup commands for Ollama or Claude subscription."""
+    import shutil
+    import subprocess
+
+    try:
+        if req.provider == "ollama":
+            if req.step == "check":
+                # Check if ollama is installed
+                ollama_path = shutil.which("ollama")
+                if ollama_path:
+                    # Check if running
+                    try:
+                        import httpx
+
+                        async with httpx.AsyncClient() as client:
+                            r = await client.get("http://localhost:11434/api/tags", timeout=3)
+                            models = r.json().get("models", [])
+                            return {
+                                "ok": True,
+                                "installed": True,
+                                "running": True,
+                                "models": [m["name"] for m in models],
+                                "message": f"Ollama running with {len(models)} model(s)",
+                            }
+                    except Exception:
+                        return {
+                            "ok": True,
+                            "installed": True,
+                            "running": False,
+                            "models": [],
+                            "message": "Ollama installed but not running. Starting...",
+                            "next_step": "start",
+                        }
+                return {
+                    "ok": True,
+                    "installed": False,
+                    "running": False,
+                    "models": [],
+                    "message": "Ollama not installed",
+                    "next_step": "install",
+                }
+
+            elif req.step == "install":
+                brew_path = shutil.which("brew")
+                if not brew_path:
+                    return {
+                        "ok": False,
+                        "error": "Homebrew not found. Install Ollama manually from https://ollama.com/download",
+                        "download_url": "https://ollama.com/download",
+                    }
+                result = subprocess.run(
+                    [brew_path, "install", "ollama"],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                if result.returncode == 0:
+                    return {
+                        "ok": True,
+                        "message": "Ollama installed successfully",
+                        "output": result.stdout[-500:],
+                        "next_step": "start",
+                    }
+                return {
+                    "ok": False,
+                    "error": f"Install failed: {result.stderr[-500:]}",
+                }
+
+            elif req.step == "start":
+                # Start ollama serve in background
+                subprocess.Popen(
+                    ["ollama", "serve"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                import asyncio
+
+                await asyncio.sleep(2)
+                return {"ok": True, "message": "Ollama started", "next_step": "pull_model"}
+
+            elif req.step == "pull_model":
+                result = subprocess.run(
+                    ["ollama", "pull", "llama3.1"],
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                )
+                if result.returncode == 0:
+                    return {
+                        "ok": True,
+                        "message": "Model llama3.1 downloaded",
+                        "output": result.stdout[-500:],
+                    }
+                return {
+                    "ok": False,
+                    "error": f"Pull failed: {result.stderr[-500:]}",
+                }
+
+        elif req.provider == "claude_subscription":
+            if req.step == "check":
+                claude_path = shutil.which("claude")
+                if claude_path:
+                    # Check if logged in by running claude --version
+                    result = subprocess.run(
+                        [claude_path, "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    return {
+                        "ok": True,
+                        "installed": True,
+                        "message": f"Claude CLI found: {result.stdout.strip()}",
+                    }
+                # Check if npm is available
+                npm_path = shutil.which("npm")
+                return {
+                    "ok": True,
+                    "installed": False,
+                    "npm_available": bool(npm_path),
+                    "message": "Claude CLI not installed",
+                    "next_step": "install",
+                }
+
+            elif req.step == "install":
+                npm_path = shutil.which("npm")
+                if not npm_path:
+                    return {
+                        "ok": False,
+                        "error": "npm not found. Install Node.js from https://nodejs.org first.",
+                    }
+                result = subprocess.run(
+                    [npm_path, "i", "-g", "@anthropic-ai/claude-code"],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode == 0:
+                    return {
+                        "ok": True,
+                        "message": "Claude CLI installed. Run 'claude login' in your terminal to authenticate.",
+                        "output": result.stdout[-500:],
+                        "needs_login": True,
+                    }
+                return {
+                    "ok": False,
+                    "error": f"Install failed: {result.stderr[-500:]}",
+                }
+
+        return {"ok": False, "error": f"Unknown provider: {req.provider}"}
+
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Command timed out"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 class TestNewsAPIRequest(BaseModel):
     key: str
 
