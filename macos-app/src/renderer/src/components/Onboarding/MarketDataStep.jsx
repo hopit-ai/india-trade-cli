@@ -250,20 +250,26 @@ export default function MarketDataStep({ formData, setFormData, onNext, port }) 
                     {/* Broker header — click to expand */}
                     <button
                       onClick={() => setExpandedBroker(isExpanded ? null : id)}
-                      className="w-full flex items-center justify-between p-3 bg-elevated
-                                 hover:bg-elevated/80 transition-all text-left"
+                      className={`w-full flex items-center justify-between p-4 bg-elevated
+                                 hover:border-amber/50 transition-all text-left border-b
+                                 ${isExpanded ? 'border-amber/30' : 'border-transparent'}`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-text text-sm font-semibold font-ui">{broker.name}</span>
-                        <span className={`text-[10px] font-ui font-semibold px-1.5 py-0.5 rounded ${broker.badgeColor}`}>
-                          {broker.badge}
-                        </span>
-                        {isConfigured && <span className="text-green text-[10px] font-ui">Keys set</span>}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-text text-sm font-semibold font-ui">{broker.name}</span>
+                          <span className={`text-[10px] font-ui font-semibold px-1.5 py-0.5 rounded ${broker.badgeColor}`}>
+                            {broker.badge}
+                          </span>
+                          {isConfigured && <span className="text-green text-[10px] font-ui">Keys set</span>}
+                        </div>
+                        <span className="text-muted text-[11px] font-ui mt-0.5 block">{broker.desc}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted text-[10px] font-ui">{broker.desc}</span>
-                        <span className="text-muted text-xs">{isExpanded ? '▾' : '▸'}</span>
-                      </div>
+                      <span className={`px-3 py-1.5 rounded-lg text-xs font-ui font-semibold transition-all
+                        ${isExpanded
+                          ? 'bg-amber/10 text-amber border border-amber/30'
+                          : 'bg-elevated text-muted border border-border hover:text-text'}`}>
+                        {isExpanded ? 'Hide' : 'Set Up'}
+                      </span>
                     </button>
 
                     {/* Expanded: setup guide + key inputs */}
