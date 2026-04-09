@@ -8,6 +8,7 @@ const PROVIDERS = [
     badgeColor: 'bg-green/20 text-green',
     desc: 'Free tier at aistudio.google.com',
     keyEnv: 'GEMINI_API_KEY',
+    keyLabel: 'Gemini API key',
     needsKey: true,
   },
   {
@@ -15,9 +16,21 @@ const PROVIDERS = [
     name: 'Claude API',
     badge: 'API',
     badgeColor: 'bg-blue/20 text-blue',
-    desc: 'Anthropic Claude - pay per token',
+    desc: 'Anthropic Claude — pay per token',
     keyEnv: 'ANTHROPIC_API_KEY',
+    keyLabel: 'Anthropic API key',
     needsKey: true,
+  },
+  {
+    id: 'claude_subscription',
+    name: 'Claude Pro/Max',
+    badge: 'Free*',
+    badgeColor: 'bg-blue/20 text-blue',
+    desc: 'Uses your Claude subscription — no API key',
+    keyEnv: null,
+    keyLabel: null,
+    needsKey: false,
+    setupHint: 'Requires: npm i -g @anthropic-ai/claude-code && claude login',
   },
   {
     id: 'openai',
@@ -26,6 +39,7 @@ const PROVIDERS = [
     badgeColor: 'bg-green/20 text-green',
     desc: 'GPT-4o and compatible endpoints',
     keyEnv: 'OPENAI_API_KEY',
+    keyLabel: 'OpenAI API key',
     needsKey: true,
   },
   {
@@ -33,9 +47,11 @@ const PROVIDERS = [
     name: 'Ollama',
     badge: 'Free',
     badgeColor: 'bg-green/20 text-green',
-    desc: 'Local models - no API key needed',
+    desc: 'Local models — no API key needed',
     keyEnv: null,
+    keyLabel: null,
     needsKey: false,
+    setupHint: 'Requires: brew install ollama && ollama pull llama3.1',
   },
 ]
 
@@ -109,7 +125,7 @@ export default function ProviderStep({ formData, setFormData, onNext, port }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 max-w-lg mx-auto w-full">
+      <div className="grid grid-cols-2 gap-3 max-w-xl mx-auto w-full">
         {PROVIDERS.map((p) => (
           <button
             key={p.id}
@@ -168,18 +184,42 @@ export default function ProviderStep({ formData, setFormData, onNext, port }) {
             </>
           ) : (
             <div className="space-y-3">
-              <p className="text-muted text-xs font-ui">
-                Make sure Ollama is running locally (ollama serve)
-              </p>
-              <button
-                onClick={handleTest}
-                disabled={testing}
-                className="px-4 py-2 bg-amber/10 text-amber border border-amber/30 rounded-lg
-                           text-sm font-ui font-semibold hover:bg-amber/20 transition-all
-                           disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {testing ? 'Testing...' : 'Test Connection'}
-              </button>
+              {provider.setupHint && (
+                <div className="bg-elevated border border-border rounded-lg px-3 py-2">
+                  <code className="text-amber text-xs font-mono">{provider.setupHint}</code>
+                </div>
+              )}
+              {provider.id === 'claude_subscription' ? (
+                <button
+                  onClick={async () => {
+                    // For Claude subscription, just save the provider — no test needed
+                    await fetch(`${base}/api/onboarding/credential`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: 'AI_PROVIDER', value: 'claude_subscription' }),
+                    })
+                    setSaved(true)
+                    setFormData((prev) => ({ ...prev, aiProvider: 'claude_subscription' }))
+                    setTestResult({ ok: true, message: 'Claude subscription selected' })
+                  }}
+                  disabled={saved}
+                  className="px-4 py-2 bg-amber/10 text-amber border border-amber/30 rounded-lg
+                             text-sm font-ui font-semibold hover:bg-amber/20 transition-all
+                             disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {saved ? 'Selected' : 'Use Claude Subscription'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleTest}
+                  disabled={testing}
+                  className="px-4 py-2 bg-amber/10 text-amber border border-amber/30 rounded-lg
+                             text-sm font-ui font-semibold hover:bg-amber/20 transition-all
+                             disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {testing ? 'Testing...' : 'Test Connection'}
+                </button>
+              )}
               {testResult && (
                 <p className={`text-xs font-ui ${testResult.ok ? 'text-green' : 'text-red'}`}>
                   {testResult.ok ? testResult.message : testResult.error}
