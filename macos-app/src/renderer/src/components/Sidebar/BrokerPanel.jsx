@@ -112,7 +112,9 @@ export default function BrokerPanel({ onClose }) {
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-panel border-r border-border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="w-[480px] max-h-[80vh] flex flex-col bg-panel border border-border rounded-xl shadow-2xl"
+         onClick={(e) => e.stopPropagation()}>
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
@@ -239,6 +241,7 @@ export default function BrokerPanel({ onClose }) {
           Login opens your browser. OAuth completes automatically.
         </p>
       </div>
+    </div>
     </div>
   )
 }
