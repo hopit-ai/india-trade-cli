@@ -72,6 +72,10 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     ("TELEGRAM_BOT_TOKEN", "Telegram Bot Token", True),
 ]
 
+# Settings saved to keychain by onboarding but NOT auto-loaded into env
+# (they're read explicitly by the onboarding status endpoint)
+SETTING_KEYS = {"TOTAL_CAPITAL", "DEFAULT_RISK_PCT", "TRADING_MODE", "ONBOARDING_COMPLETE"}
+
 _KNOWN_KEYS = {k for k, _, _ in KNOWN_CREDENTIALS}
 
 

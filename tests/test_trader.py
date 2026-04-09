@@ -40,15 +40,18 @@ class TestRiskProfiles:
 
 
 class TestTraderAgentInit:
-    def test_default_capital(self):
+    def test_default_capital(self, monkeypatch):
+        monkeypatch.delenv("TOTAL_CAPITAL", raising=False)
         t = TraderAgent()
         assert t.capital == 200000
 
-    def test_custom_capital(self):
+    def test_custom_capital(self, monkeypatch):
+        monkeypatch.delenv("TOTAL_CAPITAL", raising=False)
         t = TraderAgent(capital=500000)
         assert t.capital == 500000
 
-    def test_default_profile_is_neutral(self):
+    def test_default_profile_is_neutral(self, monkeypatch):
+        monkeypatch.delenv("TOTAL_CAPITAL", raising=False)
         t = TraderAgent()
         assert t.profile.name == "Neutral"
 

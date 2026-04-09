@@ -54,6 +54,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(Path.home() / ".trading_platform" / ".env", override=False)
 from config.credentials import load_all as _load_keychain
 
 _load_keychain()
@@ -902,6 +903,360 @@ async def api_status(request: Request):
         "upstox": {"configured": _has_upstox(), "authenticated": _upstox_auth()},
         "fyers": {"configured": _has_fyers(), "authenticated": _fyers_auth()},
     }
+
+
+# ── Onboarding API ───────────────────────────────────────────
+
+from pydantic import BaseModel
+
+
+@app.get("/api/onboarding/status")
+async def onboarding_status():
+    import os
+    from config.credentials import _kr_get
+
+    ai_provider = os.environ.get("AI_PROVIDER") or _kr_get("AI_PROVIDER") or ""
+    newsapi = bool(os.environ.get("NEWSAPI_KEY") or _kr_get("NEWSAPI_KEY"))
+    onboarding_done = bool(os.environ.get("ONBOARDING_COMPLETE") or _kr_get("ONBOARDING_COMPLETE"))
+
+    # Check broker status
+    broker_connected = False
+    try:
+        from brokers.session import get_broker
+
+        get_broker()
+        broker_connected = True
+    except Exception:
+        pass
+
+    return {
+        "onboarding_complete": onboarding_done or bool(ai_provider),
+        "ai_provider": ai_provider,
+        "newsapi_key_set": newsapi,
+        "broker_connected": broker_connected,
+        "capital": os.environ.get("TOTAL_CAPITAL") or _kr_get("TOTAL_CAPITAL") or "200000",
+        "risk_pct": os.environ.get("DEFAULT_RISK_PCT") or _kr_get("DEFAULT_RISK_PCT") or "2",
+        "trading_mode": os.environ.get("TRADING_MODE") or _kr_get("TRADING_MODE") or "PAPER",
+    }
+
+
+class CredentialRequest(BaseModel):
+    key: str
+    value: str
+
+
+@app.post("/api/onboarding/credential")
+async def onboarding_set_credential(req: CredentialRequest):
+    from config.credentials import set_credential
+
+    set_credential(req.key, req.value)
+    return {"ok": True, "key": req.key}
+
+
+class TestProviderRequest(BaseModel):
+    provider: str
+    api_key: str = ""
+    model: str = ""
+
+
+@app.post("/api/onboarding/test-provider")
+async def onboarding_test_provider(req: TestProviderRequest):
+    import httpx
+
+    try:
+        if req.provider == "gemini":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models?key={req.api_key}"
+            async with httpx.AsyncClient() as client:
+                r = await client.get(url, timeout=10)
+                if r.status_code == 200:
+                    return {"ok": True, "message": "Gemini API key is valid"}
+                return {"ok": False, "error": f"Invalid key (HTTP {r.status_code})"}
+
+        elif req.provider == "anthropic":
+            async with httpx.AsyncClient() as client:
+                r = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": req.api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-haiku-4-5-20251001",
+                        "max_tokens": 10,
+                        "messages": [{"role": "user", "content": "Hi"}],
+                    },
+                    timeout=15,
+                )
+                if r.status_code == 200:
+                    return {"ok": True, "message": "Anthropic API key is valid"}
+                return {"ok": False, "error": f"Invalid key (HTTP {r.status_code})"}
+
+        elif req.provider == "openai":
+            base = (
+                req.model
+                if req.model and req.model.startswith("http")
+                else "https://api.openai.com/v1"
+            )
+            async with httpx.AsyncClient() as client:
+                r = await client.get(
+                    f"{base}/models",
+                    headers={"Authorization": f"Bearer {req.api_key}"},
+                    timeout=10,
+                )
+                if r.status_code == 200:
+                    return {"ok": True, "message": "OpenAI API key is valid"}
+                return {"ok": False, "error": f"Invalid key (HTTP {r.status_code})"}
+
+        elif req.provider == "ollama":
+            async with httpx.AsyncClient() as client:
+                r = await client.get("http://localhost:11434/api/tags", timeout=5)
+                if r.status_code == 200:
+                    models = r.json().get("models", [])
+                    return {
+                        "ok": True,
+                        "message": f"Ollama running with {len(models)} models",
+                    }
+                return {"ok": False, "error": "Ollama not running. Run: ollama serve"}
+
+        else:
+            return {"ok": False, "error": f"Unknown provider: {req.provider}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+class SetupProviderRequest(BaseModel):
+    provider: str
+    step: str = "check"  # check | install | pull_model
+
+
+@app.post("/api/onboarding/setup-provider")
+async def onboarding_setup_provider(req: SetupProviderRequest):
+    """Run setup commands for Ollama or Claude subscription."""
+    import shutil
+    import subprocess
+
+    try:
+        if req.provider == "ollama":
+            if req.step == "check":
+                # Check if ollama is installed
+                ollama_path = shutil.which("ollama")
+                if ollama_path:
+                    # Check if running
+                    try:
+                        import httpx
+
+                        async with httpx.AsyncClient() as client:
+                            r = await client.get("http://localhost:11434/api/tags", timeout=3)
+                            models = r.json().get("models", [])
+                            return {
+                                "ok": True,
+                                "installed": True,
+                                "running": True,
+                                "models": [m["name"] for m in models],
+                                "message": f"Ollama running with {len(models)} model(s)",
+                            }
+                    except Exception:
+                        return {
+                            "ok": True,
+                            "installed": True,
+                            "running": False,
+                            "models": [],
+                            "message": "Ollama installed but not running. Starting...",
+                            "next_step": "start",
+                        }
+                return {
+                    "ok": True,
+                    "installed": False,
+                    "running": False,
+                    "models": [],
+                    "message": "Ollama not installed",
+                    "next_step": "install",
+                }
+
+            elif req.step == "install":
+                brew_path = shutil.which("brew")
+                if not brew_path:
+                    return {
+                        "ok": False,
+                        "error": "Homebrew not found. Install Ollama manually from https://ollama.com/download",
+                        "download_url": "https://ollama.com/download",
+                    }
+                result = subprocess.run(
+                    [brew_path, "install", "ollama"],
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                if result.returncode == 0:
+                    return {
+                        "ok": True,
+                        "message": "Ollama installed successfully",
+                        "output": result.stdout[-500:],
+                        "next_step": "start",
+                    }
+                return {
+                    "ok": False,
+                    "error": f"Install failed: {result.stderr[-500:]}",
+                }
+
+            elif req.step == "start":
+                # Start ollama serve in background
+                subprocess.Popen(
+                    ["ollama", "serve"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                import asyncio
+
+                await asyncio.sleep(2)
+                return {"ok": True, "message": "Ollama started", "next_step": "pull_model"}
+
+            elif req.step == "pull_model":
+                result = subprocess.run(
+                    ["ollama", "pull", "llama3.1"],
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                )
+                if result.returncode == 0:
+                    return {
+                        "ok": True,
+                        "message": "Model llama3.1 downloaded",
+                        "output": result.stdout[-500:],
+                    }
+                return {
+                    "ok": False,
+                    "error": f"Pull failed: {result.stderr[-500:]}",
+                }
+
+        elif req.provider == "claude_subscription":
+            if req.step == "check":
+                claude_path = shutil.which("claude")
+                if claude_path:
+                    # Check if logged in by running claude --version
+                    result = subprocess.run(
+                        [claude_path, "--version"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    return {
+                        "ok": True,
+                        "installed": True,
+                        "message": f"Claude CLI found: {result.stdout.strip()}",
+                    }
+                # Check if npm is available
+                npm_path = shutil.which("npm")
+                return {
+                    "ok": True,
+                    "installed": False,
+                    "npm_available": bool(npm_path),
+                    "message": "Claude CLI not installed",
+                    "next_step": "install",
+                }
+
+            elif req.step == "install":
+                npm_path = shutil.which("npm")
+                if not npm_path:
+                    return {
+                        "ok": False,
+                        "error": "npm not found. Install Node.js from https://nodejs.org first.",
+                    }
+                result = subprocess.run(
+                    [npm_path, "i", "-g", "@anthropic-ai/claude-code"],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode == 0:
+                    return {
+                        "ok": True,
+                        "message": "Claude CLI installed. Run 'claude login' in your terminal to authenticate.",
+                        "output": result.stdout[-500:],
+                        "needs_login": True,
+                    }
+                return {
+                    "ok": False,
+                    "error": f"Install failed: {result.stderr[-500:]}",
+                }
+
+        return {"ok": False, "error": f"Unknown provider: {req.provider}"}
+
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Command timed out"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+class TestNewsAPIRequest(BaseModel):
+    key: str
+
+
+@app.post("/api/onboarding/test-newsapi")
+async def onboarding_test_newsapi(req: TestNewsAPIRequest):
+    import httpx
+
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"https://newsapi.org/v2/top-headlines?country=in&pageSize=1&apiKey={req.key}",
+                timeout=10,
+            )
+            if r.status_code == 200 and r.json().get("status") == "ok":
+                return {"ok": True}
+            return {"ok": False, "error": f"Invalid key (HTTP {r.status_code})"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+class OnboardingCompleteRequest(BaseModel):
+    capital: int = 200000
+    risk_pct: float = 2
+    trading_mode: str = "PAPER"
+
+
+@app.post("/api/onboarding/complete")
+async def onboarding_complete(req: OnboardingCompleteRequest):
+    import os
+    from config.credentials import set_credential
+    from pathlib import Path
+
+    set_credential("TOTAL_CAPITAL", str(req.capital))
+    set_credential("DEFAULT_RISK_PCT", str(req.risk_pct))
+    set_credential("TRADING_MODE", req.trading_mode)
+    set_credential("ONBOARDING_COMPLETE", "1")
+
+    # Also write to ~/.trading_platform/.env as backup for packaged mode
+    env_path = Path.home() / ".trading_platform" / ".env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = []
+    if env_path.exists():
+        lines = env_path.read_text().splitlines()
+
+    # Update or append each key
+    for key, val in [
+        ("TOTAL_CAPITAL", str(req.capital)),
+        ("DEFAULT_RISK_PCT", str(req.risk_pct)),
+        ("TRADING_MODE", req.trading_mode),
+        ("ONBOARDING_COMPLETE", "1"),
+        ("AI_PROVIDER", os.environ.get("AI_PROVIDER", "")),
+        ("NEWSAPI_KEY", os.environ.get("NEWSAPI_KEY", "")),
+    ]:
+        if not val:
+            continue
+        found = False
+        for i, line in enumerate(lines):
+            if line.startswith(f"{key}="):
+                lines[i] = f"{key}={val}"
+                found = True
+                break
+        if not found:
+            lines.append(f"{key}={val}")
+
+    env_path.write_text("\n".join(lines) + "\n")
+
+    return {"ok": True}
 
 
 _BROKER_SESSION_FILES = {
