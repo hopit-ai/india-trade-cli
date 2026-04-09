@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar'
 import ChatArea from './components/Chat/ChatArea'
 import InputBar from './components/Input/InputBar'
 import SetupScreen from './components/SetupScreen'
+import OnboardingWizard from './components/Onboarding/OnboardingWizard'
 
 export default function App() {
   const { setPort, setSidecarError, setBrokerStatuses } = useChatStore()
@@ -12,7 +13,7 @@ export default function App() {
 
   // Setup phase state machine
   const [setupPhase, setSetupPhase] = useState('initializing')
-  // 'initializing' | 'progress' | 'python_missing' | 'error' | 'ready'
+  // 'initializing' | 'progress' | 'python_missing' | 'error' | 'onboarding' | 'ready'
   const [setupData, setSetupData] = useState(null)
 
   useEffect(() => {
@@ -28,10 +29,20 @@ export default function App() {
       setSetupData(data)
     })
 
-    // Sidecar ready — setup complete
-    window.electronAPI?.onSidecarReady(({ port }) => {
+    // Sidecar ready — check onboarding before showing main UI
+    window.electronAPI?.onSidecarReady(async ({ port }) => {
       setPort(port)
-      setSetupPhase('ready')
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/api/onboarding/status`)
+        const data = await res.json()
+        if (data.onboarding_complete) {
+          setSetupPhase('ready')
+        } else {
+          setSetupPhase('onboarding')
+        }
+      } catch {
+        setSetupPhase('ready')
+      }
     })
 
     // Sidecar error — could be during setup or runtime
@@ -44,10 +55,20 @@ export default function App() {
     })
 
     // Check if port already set (HMR / reload)
-    window.electronAPI?.getPort().then(port => {
+    window.electronAPI?.getPort().then(async (port) => {
       if (port) {
         setPort(port)
-        setSetupPhase('ready')
+        try {
+          const res = await fetch(`http://127.0.0.1:${port}/api/onboarding/status`)
+          const data = await res.json()
+          if (data.onboarding_complete) {
+            setSetupPhase('ready')
+          } else {
+            setSetupPhase('onboarding')
+          }
+        } catch {
+          setSetupPhase('ready')
+        }
       }
     })
   }, [])
@@ -64,6 +85,11 @@ export default function App() {
     const t = setInterval(fetchStatus, 8000)
     return () => clearInterval(t)
   }, [port])
+
+  // Show onboarding wizard for first-launch setup
+  if (setupPhase === 'onboarding') {
+    return <OnboardingWizard port={port} onComplete={() => setSetupPhase('ready')} />
+  }
 
   // Show setup screen until ready
   if (setupPhase !== 'ready') {
