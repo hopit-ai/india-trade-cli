@@ -70,12 +70,11 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     ("NEWSAPI_KEY", "NewsAPI.org Key", True),
     # ── Notifications ─────────────────────────────────────────
     ("TELEGRAM_BOT_TOKEN", "Telegram Bot Token", True),
-    # ── Trading Settings ──────────────────────────────────────
-    ("TOTAL_CAPITAL", "Trading Capital (INR)", False),
-    ("DEFAULT_RISK_PCT", "Default Risk Per Trade (%)", False),
-    ("TRADING_MODE", "Trading Mode (PAPER/LIVE)", False),
-    ("ONBOARDING_COMPLETE", "Onboarding Complete Flag", False),
 ]
+
+# Settings saved to keychain by onboarding but NOT auto-loaded into env
+# (they're read explicitly by the onboarding status endpoint)
+SETTING_KEYS = {"TOTAL_CAPITAL", "DEFAULT_RISK_PCT", "TRADING_MODE", "ONBOARDING_COMPLETE"}
 
 _KNOWN_KEYS = {k for k, _, _ in KNOWN_CREDENTIALS}
 

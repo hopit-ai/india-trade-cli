@@ -934,9 +934,9 @@ async def onboarding_status():
         "ai_provider": ai_provider,
         "newsapi_key_set": newsapi,
         "broker_connected": broker_connected,
-        "capital": os.environ.get("TOTAL_CAPITAL", "200000"),
-        "risk_pct": os.environ.get("DEFAULT_RISK_PCT", "2"),
-        "trading_mode": os.environ.get("TRADING_MODE", "PAPER"),
+        "capital": os.environ.get("TOTAL_CAPITAL") or _kr_get("TOTAL_CAPITAL") or "200000",
+        "risk_pct": os.environ.get("DEFAULT_RISK_PCT") or _kr_get("DEFAULT_RISK_PCT") or "2",
+        "trading_mode": os.environ.get("TRADING_MODE") or _kr_get("TRADING_MODE") or "PAPER",
     }
 
 
