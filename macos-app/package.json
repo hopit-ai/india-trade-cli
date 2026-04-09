@@ -42,8 +42,9 @@
     ],
     "extraResources": [
       {
-        "from": "dist/india_trade_cli-*.whl",
-        "to": "python-pkg/"
+        "from": "dist/",
+        "to": "python-pkg/",
+        "filter": ["*.whl"]
       }
     ],
     "mac": {
