@@ -17,6 +17,32 @@ export default function App() {
   const [setupData, setSetupData] = useState(null)
 
   useEffect(() => {
+    // Web mode — no Electron IPC, just check if server is ready
+    if (window.__INDIA_TRADE_WEB__) {
+      const checkReady = async () => {
+        try {
+          const res = await fetch('/api/onboarding/status')
+          if (res.status === 401) {
+            // Not authenticated — auth.html should have redirected, but just in case
+            window.location.href = '/'
+            return
+          }
+          const data = await res.json()
+          setPort(0) // Signal that API is available (web uses relative URLs)
+          if (data.onboarding_complete) {
+            setSetupPhase('ready')
+          } else {
+            setSetupPhase('onboarding')
+          }
+        } catch {
+          setSetupPhase('error')
+          setSetupData({ message: 'Cannot connect to server' })
+        }
+      }
+      checkReady()
+      return
+    }
+
     // Setup progress events
     window.electronAPI?.onSetupProgress((data) => {
       setSetupPhase('progress')
@@ -75,9 +101,12 @@ export default function App() {
 
   // Poll /api/status every 8s once sidecar is up
   useEffect(() => {
-    if (!port) return
+    if (!port && port !== 0) return
+    const statusUrl = window.__INDIA_TRADE_WEB__
+      ? '/api/status'
+      : `http://127.0.0.1:${port}/api/status`
     const fetchStatus = () =>
-      fetch(`http://127.0.0.1:${port}/api/status`)
+      fetch(statusUrl)
         .then(r => r.json())
         .then(setBrokerStatuses)
         .catch(() => {})
