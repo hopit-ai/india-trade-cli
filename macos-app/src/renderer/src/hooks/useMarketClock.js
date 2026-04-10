@@ -47,7 +47,11 @@ export function useMarketClock() {
   async function fetchNifty() {
     if (!port) return
     try {
-      const res = await fetch(`${getBaseUrl(port)}/skills/quote?symbol=NIFTY50&exchange=NSE`)
+      const res = await fetch(`${getBaseUrl(port)}/skills/quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: 'NIFTY50', exchange: 'NSE' }),
+      })
       if (!res.ok) return
       const data = await res.json()
       const ltp  = data?.data?.ltp ?? data?.ltp

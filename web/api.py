@@ -97,6 +97,12 @@ async def auth_middleware(request: _Request, call_next):
     ):
         return await call_next(request)
 
+    # Localhost requests skip auth (Electron app, CLI, local dev)
+    # Auth only enforced for remote/web access
+    client_host = request.client.host if request.client else ""
+    if client_host in ("127.0.0.1", "::1", "localhost"):
+        return await call_next(request)
+
     # Self-hosted mode: skip auth if no users exist yet
     deploy_mode = os.environ.get("DEPLOY_MODE", "")
     if deploy_mode == "self-hosted" and user_count() == 0:
