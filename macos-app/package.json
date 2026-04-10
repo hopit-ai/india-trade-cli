@@ -12,7 +12,8 @@
     "preview": "electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "build:web": "electron-vite build && node scripts/build-web.js"
   },
   "dependencies": {
     "react": "^18.3.1",

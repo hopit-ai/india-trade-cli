@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getBaseUrl } from '../../store/chatStore'
 
 const BROKERS = {
   fyers: {
@@ -53,7 +54,7 @@ export default function MarketDataStep({ formData, setFormData, onNext, port }) 
   const [brokerPolling, setBrokerPolling] = useState(null)
   const pollRef = useRef(null)
 
-  const base = `http://127.0.0.1:${port}`
+  const base = getBaseUrl(port)
 
   // Fetch broker status on mount
   useEffect(() => {
@@ -130,7 +131,7 @@ export default function MarketDataStep({ formData, setFormData, onNext, port }) 
 
   const handleBrokerLogin = (brokerId) => {
     setBrokerPolling(brokerId)
-    const url = `http://127.0.0.1:${port}/${brokerId}/login`
+    const url = `${getBaseUrl(port)}/${brokerId}/login`
     if (window.electronAPI?.openExternal) {
       window.electronAPI.openExternal(url)
     } else {

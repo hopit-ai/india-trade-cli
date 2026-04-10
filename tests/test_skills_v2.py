@@ -10,7 +10,9 @@ No real broker, LLM, or network calls.
 
 from __future__ import annotations
 
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -23,6 +25,10 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture(scope="module")
 def client():
+    import os
+
+    os.environ["DEPLOY_MODE"] = "self-hosted"
+    os.environ["AUTH_DB_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
     with (
         patch("config.credentials.load_all", return_value=None),
         patch("dotenv.load_dotenv", return_value=None),

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useChatStore } from '../../store/chatStore'
+import { useChatStore, getBaseUrl } from '../../store/chatStore'
 
 export default function AlertsCard({ data }) {
   const port    = useChatStore((s) => s.port)
@@ -10,7 +10,7 @@ export default function AlertsCard({ data }) {
   async function remove(alertId) {
     setRemoving(alertId)
     try {
-      await fetch(`http://127.0.0.1:${port}/skills/alerts/remove`, {
+      await fetch(`${getBaseUrl(port)}/skills/alerts/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ alert_id: alertId }),

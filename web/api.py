@@ -48,7 +48,9 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request as _Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+
+from web.auth import auth_router, init_db as init_auth_db, get_session, user_count
 
 # Load .env + keychain at server startup
 from dotenv import load_dotenv
@@ -68,9 +70,50 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "file://"],
     allow_origin_regex=r"(http://localhost:\d+|file://.*)",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Auth router ──────────────────────────────────────────────────
+app.include_router(auth_router)
+
+
+# ── Auth middleware for /api/* and /skills/* ──────────────────────
+@app.middleware("http")
+async def auth_middleware(request: _Request, call_next):
+    path = request.url.path
+    # Public paths — no auth required
+    if (
+        path.startswith("/auth/")
+        or path == "/health"
+        or path.startswith("/.well-known/")
+        or path.startswith("/fyers/")  # OAuth callbacks
+        or path.startswith("/zerodha/")  # OAuth callbacks
+        or path.startswith("/groww/")
+        or path.startswith("/upstox/")
+        or path.startswith("/angelone/")
+        or not (path.startswith("/api/") or path.startswith("/skills/"))
+    ):
+        return await call_next(request)
+
+    # Self-hosted mode: skip auth if no users exist yet
+    deploy_mode = os.environ.get("DEPLOY_MODE", "")
+    if deploy_mode == "self-hosted" and user_count() == 0:
+        return await call_next(request)
+
+    # Check session cookie
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+
+    session = get_session(session_id)
+    if not session:
+        return JSONResponse({"detail": "Session expired"}, status_code=401)
+
+    request.state.user = session
+    return await call_next(request)
+
 
 # ── OpenClaw Skills ───────────────────────────────────────────
 
@@ -95,6 +138,12 @@ app.include_router(_skills_router)
 
 
 # ── Startup: auto-restore broker sessions from disk ───────────
+
+
+@app.on_event("startup")
+async def _init_auth() -> None:
+    """Initialize the auth database on startup."""
+    init_auth_db()
 
 
 @app.on_event("startup")
@@ -482,10 +531,20 @@ def _broker_btn(
     return f'<a {href} class="btn {cls}" {dis} style="{style}">{icon}&nbsp; {tag}</a>'
 
 
-# ── Home / Login page ─────────────────────────────────────────
+# ── Home / Broker Login page ──────────────────────────────────
+# In web mode (static/auth.html exists), the root GET / serves auth.html
+# from the static block at the bottom. The broker login page is at /broker-login.
+# In non-web mode, GET / serves the broker login page directly.
+
+_web_static_dir = os.path.join(os.path.dirname(__file__), "static")
+_web_mode = os.path.isdir(_web_static_dir) and os.path.exists(
+    os.path.join(_web_static_dir, "auth.html")
+)
+
+_broker_login_path = "/broker-login" if _web_mode else "/"
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get(_broker_login_path, response_class=HTMLResponse)
 async def index():
     none_configured = not any(
         [
@@ -565,6 +624,14 @@ async def index():
       <a href="/status" style="color:#58a6ff">View connection status →</a>
     </div>"""
     return HTMLResponse(_page("Login", body))
+
+
+# In non-web mode, also register /broker-login as an alias
+if not _web_mode:
+
+    @app.get("/broker-login", response_class=HTMLResponse)
+    async def broker_login_alias():
+        return await index()
 
 
 # ── Zerodha ───────────────────────────────────────────────────
@@ -1475,3 +1542,26 @@ async def api_portfolio(request: Request):
         "holding_count": len(holdings),
         "position_count": len(positions),
     }
+
+
+# ── Static file serving (web mode) ──────────────────────────────
+
+_static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(_static_dir):
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    @app.get("/app/{rest_of_path:path}")
+    async def serve_spa(rest_of_path: str):
+        """Serve React SPA for all /app/* routes."""
+        index = os.path.join(_static_dir, "index.html")
+        if os.path.exists(index):
+            return FileResponse(index)
+        raise _HTTPException(404, "Web UI not built")
+
+    @app.get("/")
+    async def root():
+        """Redirect to login or app based on session."""
+        return FileResponse(os.path.join(_static_dir, "auth.html"))
+
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")

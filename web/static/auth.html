@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>India Trade — Login</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0d0d0d;
+      color: #e5e5e5;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .container {
+      max-width: 400px;
+      width: 100%;
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .logo-icon {
+      font-size: 1.8rem;
+      color: #f59e0b;
+      margin-bottom: 0.5rem;
+    }
+
+    .logo h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #e5e5e5;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .logo p {
+      color: #737373;
+      font-size: 0.8rem;
+      margin-top: 0.4rem;
+      letter-spacing: 0.5px;
+    }
+
+    .card {
+      background: #171717;
+      border: 1px solid #262626;
+      border-radius: 12px;
+      padding: 2rem;
+    }
+
+    .tabs {
+      display: flex;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid #262626;
+    }
+
+    .tab {
+      flex: 1;
+      background: none;
+      border: none;
+      color: #737373;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.75rem 0;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+      letter-spacing: 0.5px;
+    }
+
+    .tab:hover {
+      color: #a3a3a3;
+    }
+
+    .tab.active {
+      color: #f59e0b;
+    }
+
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #f59e0b;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.75rem;
+      color: #737373;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 0.7rem 0.9rem;
+      background: #0d0d0d;
+      border: 1px solid #262626;
+      border-radius: 8px;
+      color: #e5e5e5;
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      border-color: #f59e0b;
+    }
+
+    .form-group input::placeholder {
+      color: #404040;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: #f59e0b;
+      border: none;
+      border-radius: 8px;
+      color: #0d0d0d;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      margin-top: 0.5rem;
+      letter-spacing: 0.5px;
+    }
+
+    .submit-btn:hover {
+      background: #d97706;
+    }
+
+    .submit-btn:active {
+      transform: scale(0.98);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .error-msg {
+      background: #1c0a0a;
+      border: 1px solid #7f1d1d;
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      margin-bottom: 1rem;
+      font-size: 0.8rem;
+      color: #fca5a5;
+      display: none;
+      line-height: 1.5;
+    }
+
+    .error-msg.visible {
+      display: block;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      color: #404040;
+      font-size: 0.7rem;
+      line-height: 1.6;
+    }
+
+    .footer a {
+      color: #f59e0b;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <div class="logo-icon">&#9670;</div>
+      <h1>India Trade</h1>
+      <p>Stock &amp; Options Trading Platform</p>
+    </div>
+
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" id="tab-login" onclick="switchTab('login')">Login</button>
+        <button class="tab" id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+      </div>
+
+      <div class="error-msg" id="error-msg"></div>
+
+      <form id="auth-form" onsubmit="handleSubmit(event)">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="Min 8 characters" required minlength="8" autocomplete="current-password" />
+        </div>
+        <button type="submit" class="submit-btn" id="submit-btn">Login</button>
+      </form>
+    </div>
+
+    <div class="footer">
+      Powered by India Trade CLI
+    </div>
+  </div>
+
+  <script>
+    let mode = 'login'
+
+    function switchTab(newMode) {
+      mode = newMode
+      document.getElementById('tab-login').classList.toggle('active', mode === 'login')
+      document.getElementById('tab-signup').classList.toggle('active', mode === 'signup')
+      document.getElementById('submit-btn').textContent = mode === 'login' ? 'Login' : 'Create Account'
+      document.getElementById('password').setAttribute(
+        'autocomplete',
+        mode === 'login' ? 'current-password' : 'new-password'
+      )
+      hideError()
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg')
+      el.textContent = msg
+      el.classList.add('visible')
+    }
+
+    function hideError() {
+      document.getElementById('error-msg').classList.remove('visible')
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault()
+      hideError()
+
+      const email = document.getElementById('email').value.trim()
+      const password = document.getElementById('password').value
+
+      if (!email || !password) {
+        showError('Please fill in all fields.')
+        return
+      }
+
+      if (password.length < 8) {
+        showError('Password must be at least 8 characters.')
+        return
+      }
+
+      const btn = document.getElementById('submit-btn')
+      btn.disabled = true
+      btn.textContent = mode === 'login' ? 'Logging in...' : 'Creating account...'
+
+      try {
+        const endpoint = mode === 'login' ? '/auth/login' : '/auth/signup'
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          showError(data.detail || 'Something went wrong.')
+          btn.disabled = false
+          btn.textContent = mode === 'login' ? 'Login' : 'Create Account'
+          return
+        }
+
+        // Success — redirect to the app
+        window.location.href = '/app'
+      } catch (err) {
+        showError('Cannot connect to server. Is it running?')
+        btn.disabled = false
+        btn.textContent = mode === 'login' ? 'Login' : 'Create Account'
+      }
+    }
+
+    // Check if already logged in
+    fetch('/auth/me')
+      .then(r => { if (r.ok) window.location.href = '/app' })
+      .catch(() => {})
+  </script>
+</body>
+</html>
