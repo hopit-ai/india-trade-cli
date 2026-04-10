@@ -1267,7 +1267,36 @@ def run_repl(broker: BrokerAPI) -> None:
                     )
                 else:
                     agent = get_agent()
-                    output = agent.run_multi_agent_analysis(symbol, risk_debate=wants_risk_debate)
+
+                    # Context prompt callback (#113): runs after analysts,
+                    # before debate — a natural pause for user input.
+                    def _prompt_for_context():
+                        console.print()
+                        console.print(
+                            "[blue]◆ Add context for synthesis "
+                            "(e.g. 'focus on AI deals') or press Enter to skip:[/blue]"
+                        )
+                        try:
+                            hint = input("  ◆ ").strip()
+                            if hint:
+                                console.print(f"[dim]  ◆ Context queued: {hint}[/dim]")
+                            return hint if hint else None
+                        except (EOFError, KeyboardInterrupt):
+                            return None
+
+                    from agent.multi_agent import MultiAgentAnalyzer
+
+                    _analyzer = MultiAgentAnalyzer(
+                        registry=agent._registry,
+                        llm_provider=agent._provider,
+                        parallel=True,
+                        verbose=True,
+                        risk_debate=wants_risk_debate,
+                        context_prompt_callback=_prompt_for_context,
+                    )
+                    output = _analyzer.analyze(symbol, "NSE")
+                    agent._last_trade_plans = getattr(_analyzer, "last_trade_plans", {})
+
                     _last_output = output or ""
                     _last_command = f"Analysis {symbol}"
                     _last_trade_plans = getattr(agent, "_last_trade_plans", {})

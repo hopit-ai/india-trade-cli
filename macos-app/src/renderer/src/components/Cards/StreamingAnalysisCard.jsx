@@ -73,6 +73,8 @@ export default function StreamingAnalysisCard({ data }) {
     phase        = 'analysts',
     report       = null,
     trade_plans  = null,
+    hint_ack     = null,    // #113 — hint received confirmation
+    hint_applied = null,    // #113 — hint injected into synthesis
   } = data ?? {}
 
   const done     = phase === 'done'
@@ -154,6 +156,23 @@ export default function StreamingAnalysisCard({ data }) {
         </div>
       </div>
 
+      {/* #113 — Hint status banner (between analysts and phases) */}
+      {(hint_ack || hint_applied) && (
+        <div className={`flex items-center gap-2 rounded-lg px-3 py-2 border
+          ${hint_applied
+            ? 'border-green/30 bg-green/5'
+            : 'border-blue/30 bg-blue/5'}`}>
+          <span className={`text-[11px] font-ui ${hint_applied ? 'text-green' : 'text-blue'}`}>
+            {hint_applied
+              ? '◆ Context applied to synthesis'
+              : '◆ Your context will shape the synthesis'}
+          </span>
+          <span className="text-[10px] text-muted font-ui ml-auto truncate max-w-[250px]">
+            &ldquo;{hint_applied || hint_ack}&rdquo;
+          </span>
+        </div>
+      )}
+
       {/* Phase 2 + 3 status */}
       <div className="border-t border-border pt-3 grid grid-cols-2 gap-2">
         <PhaseLabel label="Phase 2 — Debate" active={debating} done={synth} />
@@ -199,6 +218,18 @@ export default function StreamingAnalysisCard({ data }) {
       {/* Trade plans — shown once done */}
       {done && trade_plans && Object.entries(trade_plans).filter(([, v]) => v != null).length > 0 && (
         <TradePlans plans={trade_plans} />
+      )}
+
+      {/* #113 — Hint reminder at bottom of completed analysis */}
+      {done && hint_applied && (
+        <div className="flex items-center gap-2 rounded-lg px-3 py-1.5 border border-green/30 bg-green/5">
+          <span className="text-[11px] font-ui text-green">
+            ◆ User context applied
+          </span>
+          <span className="text-[10px] text-muted font-ui ml-auto truncate max-w-[250px]">
+            &ldquo;{hint_applied}&rdquo;
+          </span>
+        </div>
       )}
 
       {/* ── #104 Action chips — appear once analysis is done ── */}
