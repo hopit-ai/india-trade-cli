@@ -61,7 +61,9 @@ export default function BrokerPanel({ onClose }) {
   const [saving, setSaving] = useState(false)
 
   const [successBroker, setSuccessBroker] = useState(null)
-  const base = `http://127.0.0.1:${port}`
+  const base = window.__INDIA_TRADE_WEB__
+    ? window.location.origin
+    : `http://127.0.0.1:${port}`
   const pollRef = { current: null }
 
   function openLoginAndPoll(broker) {

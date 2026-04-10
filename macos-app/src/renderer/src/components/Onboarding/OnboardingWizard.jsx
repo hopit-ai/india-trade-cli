@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getBaseUrl } from '../../store/chatStore'
 import StepIndicator from './StepIndicator'
 import WelcomeStep from './WelcomeStep'
 import ProviderStep from './ProviderStep'
@@ -20,7 +21,7 @@ export default function OnboardingWizard({ port, onComplete }) {
     tradingMode: 'PAPER',
   })
 
-  const base = `http://127.0.0.1:${port}`
+  const base = getBaseUrl(port)
 
   const handleComplete = async () => {
     setCompleting(true)

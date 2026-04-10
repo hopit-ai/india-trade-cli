@@ -8,7 +8,7 @@
  *   Closed   : everything else
  */
 import { useState, useEffect, useRef } from 'react'
-import { useChatStore } from '../store/chatStore'
+import { useChatStore, getBaseUrl } from '../store/chatStore'
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000   // UTC+5:30
 
@@ -47,7 +47,7 @@ export function useMarketClock() {
   async function fetchNifty() {
     if (!port) return
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/skills/quote?symbol=NIFTY50&exchange=NSE`)
+      const res = await fetch(`${getBaseUrl(port)}/skills/quote?symbol=NIFTY50&exchange=NSE`)
       if (!res.ok) return
       const data = await res.json()
       const ltp  = data?.data?.ltp ?? data?.ltp

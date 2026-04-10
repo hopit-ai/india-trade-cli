@@ -7,7 +7,7 @@
  *  – Full AnalysisCard content appears once "done" arrives
  */
 import React, { useEffect, useRef, useState } from 'react'
-import { useChatStore } from '../../store/chatStore'
+import { useChatStore, getBaseUrl } from '../../store/chatStore'
 
 // These must match the `name` class attribute on each analyst in multi_agent.py
 const ANALYSTS = [
@@ -516,7 +516,7 @@ function FollowupChat({
     setThread([{ q, a: null }])  // show user question immediately while waiting
     ;(async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:${port}/skills/analyze/followup`, {
+        const res = await fetch(`${getBaseUrl(port)}/skills/analyze/followup`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -551,7 +551,7 @@ function FollowupChat({
     setLoading(true)
 
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/skills/analyze/followup`, {
+      const res = await fetch(`${getBaseUrl(port)}/skills/analyze/followup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -52,6 +52,9 @@ if (!fs.existsSync(indexPath)) {
 
 let html = fs.readFileSync(indexPath, 'utf8')
 
+// Fix asset paths: ./assets/ → /static/assets/ (absolute, works from any route)
+html = html.replace(/\.\/assets\//g, '/static/assets/')
+
 // Inject electron-stubs.js before the first <script> tag (the React bundle)
 html = html.replace(
   '<script',

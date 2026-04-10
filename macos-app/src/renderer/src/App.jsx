@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useChatStore } from './store/chatStore'
+import { useChatStore, getBaseUrl } from './store/chatStore'
 import { useMarketClock } from './hooks/useMarketClock'
 import Sidebar from './components/Sidebar'
 import ChatArea from './components/Chat/ChatArea'
@@ -59,7 +59,7 @@ export default function App() {
     window.electronAPI?.onSidecarReady(async ({ port }) => {
       setPort(port)
       try {
-        const res = await fetch(`http://127.0.0.1:${port}/api/onboarding/status`)
+        const res = await fetch(`${getBaseUrl(port)}/api/onboarding/status`)
         const data = await res.json()
         if (data.onboarding_complete) {
           setSetupPhase('ready')
@@ -85,7 +85,7 @@ export default function App() {
       if (port) {
         setPort(port)
         try {
-          const res = await fetch(`http://127.0.0.1:${port}/api/onboarding/status`)
+          const res = await fetch(`${getBaseUrl(port)}/api/onboarding/status`)
           const data = await res.json()
           if (data.onboarding_complete) {
             setSetupPhase('ready')
@@ -102,9 +102,7 @@ export default function App() {
   // Poll /api/status every 8s once sidecar is up
   useEffect(() => {
     if (!port && port !== 0) return
-    const statusUrl = window.__INDIA_TRADE_WEB__
-      ? '/api/status'
-      : `http://127.0.0.1:${port}/api/status`
+    const statusUrl = `${getBaseUrl(port)}/api/status`
     const fetchStatus = () =>
       fetch(statusUrl)
         .then(r => r.json())
