@@ -42,6 +42,7 @@ Key design choices:
 from __future__ import annotations
 
 import json
+import queue as _queue_mod
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -1047,6 +1048,7 @@ class MultiAgentAnalyzer:
         verbose: bool = True,
         risk_debate: bool = False,
         progress_callback=None,
+        context_prompt_callback=None,
     ) -> None:
         self.registry = registry
         self.llm = llm_provider
@@ -1054,6 +1056,14 @@ class MultiAgentAnalyzer:
         self.verbose = verbose
         self.risk_debate = risk_debate  # enable 3-way risk debate (aggressive/conservative/neutral)
         self.progress_callback = progress_callback
+        # CLI context prompt: called after analysts, before debate (#113)
+        # Signature: () -> Optional[str] — returns hint text or None
+        self.context_prompt_callback = context_prompt_callback
+
+        # Mid-stream context injection (#113): thread-safe queue for user hints
+        self.user_hints: _queue_mod.Queue = _queue_mod.Queue()
+        self._user_hint_text: str = ""
+        self._synthesis_started: bool = False
 
         news_analyst = NewsMacroAnalyst(registry)
         news_analyst.set_llm(llm_provider)
@@ -1102,6 +1112,17 @@ class MultiAgentAnalyzer:
         if self.verbose:
             console.print(f"\n[dim]{scorecard.summary()}[/dim]")
 
+        # ── CLI context prompt (#113) ─────────────────────────
+        # After analysts complete, prompt user for optional focus context.
+        # This is the natural break point — no output interleaving.
+        if getattr(self, "context_prompt_callback", None):
+            try:
+                _ctx = self.context_prompt_callback()
+                if _ctx and _ctx.strip():
+                    self.user_hints.put(_ctx.strip())
+            except Exception:
+                pass  # prompt failed, continue without context
+
         # ── Phase 2: Bull/Bear Debate ────────────────────────
         if self.progress_callback:
             self.progress_callback({"type": "phase", "phase": "debate"})
@@ -1133,6 +1154,21 @@ class MultiAgentAnalyzer:
             risk_debate_time = time.time() - t_risk
             if self.verbose:
                 console.print(f"[dim]Risk debate completed in {risk_debate_time:.1f}s[/dim]")
+
+        # ── Drain user hints before synthesis (#113) ─────────
+        hints = []
+        _hints_q = getattr(self, "user_hints", None)
+        if _hints_q is not None:
+            while not _hints_q.empty():
+                try:
+                    hints.append(_hints_q.get_nowait())
+                except _queue_mod.Empty:
+                    break
+        self._user_hint_text = "\n".join(hints) if hints else ""
+        self._synthesis_started = True  # late hints go to follow-up
+
+        if self._user_hint_text and self.progress_callback:
+            self.progress_callback({"type": "hint_applied", "hint_text": self._user_hint_text})
 
         # ── Phase 3: Synthesis ───────────────────────────────
         if self.progress_callback:
@@ -1735,7 +1771,24 @@ class MultiAgentAnalyzer:
                 f"## Neutral Synthesis\n{risk_debate.neutral_view}"
             )
 
-        synthesis_prompt = SYNTHESIS_PROMPT.format(
+        # Inject user hints into synthesis prompt (#113) — prepend for priority
+        _hint = getattr(self, "_user_hint_text", "")
+        _hint_prefix = ""
+        _hint_suffix = ""
+        if _hint:
+            _hint_prefix = (
+                f"IMPORTANT USER REQUEST: The user specifically asked you to "
+                f'"{_hint}". Your analysis MUST prominently address this. '
+                f"Dedicate a specific section to this topic.\n\n"
+            )
+            _hint_suffix = (
+                f"\n\n## USER CONTEXT — PRIORITIZE THIS\n"
+                f"Reminder: the user asked you to: {_hint}\n"
+                f"You MUST include a dedicated section addressing this request "
+                f"in your synthesis. Do not bury it — make it prominent."
+            )
+
+        synthesis_prompt = _hint_prefix + SYNTHESIS_PROMPT.format(
             symbol=symbol,
             exchange=exchange,
             analyst_data=analyst_context,
@@ -1744,9 +1797,11 @@ class MultiAgentAnalyzer:
             risk_context=risk_context,
             memory_context=memory_context,
             pattern_context=pattern_context,
-        )
+        ) + _hint_suffix
 
         if self.verbose:
+            if _hint:
+                console.print(f"\n[blue]◆ User context injected: {_hint}[/blue]")
             console.print("\nSynthesizing final verdict...")
 
         synthesis = self.llm.chat(

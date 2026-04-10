@@ -44,6 +44,7 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -57,6 +58,11 @@ router = APIRouter(prefix="/skills", tags=["OpenClaw Skills"])
 # Keyed by session_id → TradingAgent instance.
 # In-memory only; sessions are lost on server restart.
 _chat_sessions: dict[str, object] = {}
+
+# ── Active stream tracking (#113 mid-stream context injection) ──
+# Keyed by stream_id → MultiAgentAnalyzer instance.
+# Allows the /analyze/hint endpoint to push user hints into running analyses.
+_active_streams: dict[str, object] = {}
 
 
 # ── Request models ────────────────────────────────────────────
@@ -118,6 +124,12 @@ class AlertAddRequest(BaseModel):
 
 class AlertRemoveRequest(BaseModel):
     alert_id: str
+
+
+class HintRequest(BaseModel):
+    """Mid-stream context injection (#113)."""
+    stream_id: str
+    hint: str
 
 
 # ── Helper ────────────────────────────────────────────────────
@@ -300,14 +312,18 @@ async def skill_analyze_stream(symbol: str, exchange: str = "NSE"):
     SSE stream of multi-agent analysis progress.
 
     Events (text/event-stream):
+      {"type":"started","symbol":"...","exchange":"...","stream_id":"..."}
       {"type":"analyst","name":"...","verdict":"...","confidence":70,"score":0.6,"error":null}
       {"type":"phase","phase":"debate"}
+      {"type":"hint_ack","hint":"..."}
+      {"type":"hint_applied","hint_text":"..."}
       {"type":"phase","phase":"synthesis"}
       {"type":"done","symbol":"...","exchange":"...","report":"...","trade_plans":{...}}
       {"type":"error","message":"..."}
     """
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
+    stream_id = f"{symbol.upper()}_{exchange.upper()}_{uuid4().hex[:8]}"
 
     def _cb(event: dict):
         asyncio.run_coroutine_threadsafe(queue.put(event), loop)
@@ -327,6 +343,10 @@ async def skill_analyze_stream(symbol: str, exchange: str = "NSE"):
             registry = build_registry()
             provider = get_provider(registry=registry)
             analyzer = _MAA(registry, provider, verbose=False, progress_callback=_cb)
+
+            # Register for mid-stream context injection (#113)
+            _active_streams[stream_id] = analyzer
+
             report = analyzer.analyze(symbol.upper(), exchange.upper())
             _cb(
                 {
@@ -340,11 +360,12 @@ async def skill_analyze_stream(symbol: str, exchange: str = "NSE"):
         except Exception as exc:
             _cb({"type": "error", "message": str(exc)})
         finally:
+            _active_streams.pop(stream_id, None)
             asyncio.run_coroutine_threadsafe(queue.put(None), loop)  # sentinel
 
     async def _generator():
         # Immediately confirm the stream is open (before any LLM work begins)
-        yield f"data: {json.dumps({'type': 'started', 'symbol': symbol.upper(), 'exchange': exchange.upper()})}\n\n"
+        yield f"data: {json.dumps({'type': 'started', 'symbol': symbol.upper(), 'exchange': exchange.upper(), 'stream_id': stream_id})}\n\n"
         # Fire off analysis in a background thread — does NOT block the event loop
         asyncio.ensure_future(loop.run_in_executor(None, _run))
         while True:
@@ -358,6 +379,32 @@ async def skill_analyze_stream(symbol: str, exchange: str = "NSE"):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/analyze/hint")
+async def skill_analyze_hint(req: HintRequest):
+    """
+    Inject user context into a running analysis (#113).
+
+    If the analysis is still in analysts/debate phase, the hint is queued
+    and will be included in the synthesis prompt. If synthesis has already
+    started or the stream is gone, returns 'expired'.
+    """
+    hint = req.hint.strip()
+    if not hint:
+        return {"status": "ignored"}
+
+    analyzer = _active_streams.get(req.stream_id)
+    if not analyzer:
+        return {"status": "expired"}
+
+    if getattr(analyzer, "_synthesis_started", False):
+        return {"status": "expired"}
+
+    analyzer.user_hints.put(hint)
+    if analyzer.progress_callback:
+        analyzer.progress_callback({"type": "hint_ack", "hint": hint})
+    return {"status": "queued"}
 
 
 @router.post("/deep_analyze")
