@@ -1290,7 +1290,7 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
                     ctx_lines.append(
                         f"\nFull Report:\n{report[:3000]}"
                     )  # cap to avoid token overflow
-                ctx_lines.append(f"\nUse the analysis above as your primary source of truth.")
+                ctx_lines.append("\nUse the analysis above as your primary source of truth.")
 
             system_msg = "\n".join(ctx_lines)
             # Store session as dict with system prompt and message history
