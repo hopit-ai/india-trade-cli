@@ -1279,9 +1279,7 @@ def run_repl(broker: BrokerAPI) -> None:
                         try:
                             hint = input("  ◆ ").strip()
                             if hint:
-                                console.print(
-                                    f"[dim]  ◆ Context queued: {hint}[/dim]"
-                                )
+                                console.print(f"[dim]  ◆ Context queued: {hint}[/dim]")
                             return hint if hint else None
                         except (EOFError, KeyboardInterrupt):
                             return None
@@ -1297,9 +1295,7 @@ def run_repl(broker: BrokerAPI) -> None:
                         context_prompt_callback=_prompt_for_context,
                     )
                     output = _analyzer.analyze(symbol, "NSE")
-                    agent._last_trade_plans = getattr(
-                        _analyzer, "last_trade_plans", {}
-                    )
+                    agent._last_trade_plans = getattr(_analyzer, "last_trade_plans", {})
 
                     _last_output = output or ""
                     _last_command = f"Analysis {symbol}"

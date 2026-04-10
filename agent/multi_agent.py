@@ -1788,16 +1788,20 @@ class MultiAgentAnalyzer:
                 f"in your synthesis. Do not bury it — make it prominent."
             )
 
-        synthesis_prompt = _hint_prefix + SYNTHESIS_PROMPT.format(
-            symbol=symbol,
-            exchange=exchange,
-            analyst_data=analyst_context,
-            debate_text=debate_text,
-            risk_debate_text=risk_debate_text,
-            risk_context=risk_context,
-            memory_context=memory_context,
-            pattern_context=pattern_context,
-        ) + _hint_suffix
+        synthesis_prompt = (
+            _hint_prefix
+            + SYNTHESIS_PROMPT.format(
+                symbol=symbol,
+                exchange=exchange,
+                analyst_data=analyst_context,
+                debate_text=debate_text,
+                risk_debate_text=risk_debate_text,
+                risk_context=risk_context,
+                memory_context=memory_context,
+                pattern_context=pattern_context,
+            )
+            + _hint_suffix
+        )
 
         if self.verbose:
             if _hint:

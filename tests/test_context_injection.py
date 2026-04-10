@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 
 # ── Helpers ──────────────────────────────────────────────────────
 
+
 def _make_analyzer(**kwargs):
     """Create a MultiAgentAnalyzer with all heavy deps mocked out."""
     from agent.multi_agent import MultiAgentAnalyzer
@@ -157,8 +158,10 @@ class TestSynthesisPromptInjection:
         debate = _fake_debate()
 
         # Patch trade_memory and pattern to avoid side effects
-        with patch("engine.memory.trade_memory", MagicMock()), \
-             patch("engine.patterns.get_pattern_context", MagicMock(return_value="")):
+        with (
+            patch("engine.memory.trade_memory", MagicMock()),
+            patch("engine.patterns.get_pattern_context", MagicMock(return_value="")),
+        ):
             analyzer._run_synthesis("INFY", "NSE", reports, debate)
 
         # The provider.chat should have been called with a prompt containing user hint
@@ -175,8 +178,10 @@ class TestSynthesisPromptInjection:
         reports = [_fake_report()]
         debate = _fake_debate()
 
-        with patch("engine.memory.trade_memory", MagicMock()), \
-             patch("engine.patterns.get_pattern_context", MagicMock(return_value="")):
+        with (
+            patch("engine.memory.trade_memory", MagicMock()),
+            patch("engine.patterns.get_pattern_context", MagicMock(return_value="")),
+        ):
             analyzer._run_synthesis("INFY", "NSE", reports, debate)
 
         call_args = analyzer.llm.chat.call_args
@@ -192,8 +197,10 @@ class TestSynthesisPromptInjection:
         reports = [_fake_report()]
         debate = _fake_debate()
 
-        with patch("engine.memory.trade_memory", MagicMock()), \
-             patch("engine.patterns.get_pattern_context", MagicMock(return_value="")):
+        with (
+            patch("engine.memory.trade_memory", MagicMock()),
+            patch("engine.patterns.get_pattern_context", MagicMock(return_value="")),
+        ):
             analyzer._run_synthesis("INFY", "NSE", reports, debate)
 
         # Check that hint_applied was emitted via progress_callback

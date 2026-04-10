@@ -128,6 +128,7 @@ class AlertRemoveRequest(BaseModel):
 
 class HintRequest(BaseModel):
     """Mid-stream context injection (#113)."""
+
     stream_id: str
     hint: str
 
@@ -1353,6 +1354,7 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
 
         # Direct LLM call — empty registry so NO tools are available
         from agent.core import ToolRegistry
+
         provider = get_provider(registry=ToolRegistry())
         messages = [
             {"role": "system", "content": session["system"]},
