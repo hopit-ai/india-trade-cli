@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     # Ensure clean env for each test
     for key in (
         "AI_PROVIDER",
@@ -28,6 +28,10 @@ def client(monkeypatch):
         "OPENAI_API_KEY",
     ):
         monkeypatch.delenv(key, raising=False)
+
+    # Self-hosted mode with empty auth DB — bypasses auth middleware
+    monkeypatch.setenv("DEPLOY_MODE", "self-hosted")
+    monkeypatch.setenv("AUTH_DB_PATH", str(tmp_path / "test.db"))
 
     # Mock keychain to avoid picking up real credentials
     monkeypatch.setattr("config.credentials._kr_get", lambda key: None)

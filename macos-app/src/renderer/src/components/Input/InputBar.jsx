@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useChatStore } from '../../store/chatStore'
+import { useChatStore, getBaseUrl } from '../../store/chatStore'
 import { useAPI } from '../../hooks/useAPI'
 
 // Maps typed commands → API endpoint + card type
@@ -207,7 +207,7 @@ export default function InputBar() {
     const msgId = Date.now() + 1
     startStreamingMessage(msgId, symbol, exchange)
 
-    const url = `http://127.0.0.1:${port}/skills/analyze/stream?symbol=${symbol}&exchange=${exchange}`
+    const url = `${getBaseUrl(port)}/skills/analyze/stream?symbol=${symbol}&exchange=${exchange}`
     const es  = new EventSource(url)
 
     function applyEvent(event) {

@@ -1,5 +1,11 @@
 import { create } from 'zustand'
 
+/** Get the API base URL — works in both Electron and web mode. */
+export function getBaseUrl(port) {
+  if (window.__INDIA_TRADE_WEB__) return window.location.origin
+  return port ? `http://127.0.0.1:${port}` : null
+}
+
 export const useChatStore = create((set, get) => ({
   messages:      [],
   isLoading:     false,

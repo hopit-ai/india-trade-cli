@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8765:8765"
+    volumes:
+      - india-trade-data:/root/.trading_platform
+    environment:
+      - DEPLOY_MODE=self-hosted
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
+    restart: unless-stopped
+
+volumes:
+  india-trade-data:

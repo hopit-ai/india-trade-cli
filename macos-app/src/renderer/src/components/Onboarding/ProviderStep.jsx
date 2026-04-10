@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getBaseUrl } from '../../store/chatStore'
 
 const PROVIDERS = [
   {
@@ -62,7 +63,7 @@ export default function ProviderStep({ formData, setFormData, onNext, port }) {
   const [testResult, setTestResult] = useState(null)
   const [saved, setSaved] = useState(false)
 
-  const base = `http://127.0.0.1:${port}`
+  const base = getBaseUrl(port)
 
   const provider = PROVIDERS.find((p) => p.id === selected)
 
