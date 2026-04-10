@@ -978,8 +978,8 @@ class RiskAnalyst(BaseAnalyst):
                 pass
 
             # Risk sizing
-            capital = int(os.environ.get("TOTAL_CAPITAL", "200000"))
-            risk_pct = int(os.environ.get("DEFAULT_RISK_PCT", "2"))
+            capital = int(float(os.environ.get("TOTAL_CAPITAL", "200000")))
+            risk_pct = int(float(os.environ.get("DEFAULT_RISK_PCT", "2")))
             max_risk = capital * risk_pct / 100
             data["max_risk_per_trade"] = max_risk
             data["capital"] = capital

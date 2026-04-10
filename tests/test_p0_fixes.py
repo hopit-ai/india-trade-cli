@@ -11,7 +11,6 @@ import time
 from unittest.mock import MagicMock, patch
 
 
-
 # ── Bug #133: Broker primary overwrite ─────────────────────────
 
 
@@ -207,6 +206,11 @@ class TestFIIDIISorting:
 
 
 # ── Bug #116: IV solver for deep ITM ──────────────────────────
+
+
+import pytest
+
+scipy = pytest.importorskip("scipy", reason="scipy not installed")
 
 
 class TestIVSolverDeepITM:
