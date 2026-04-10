@@ -14,6 +14,7 @@ export const useChatStore = create((set, get) => ({
   brokerStatus:   { connected: false, broker: null },
   brokerStatuses: {},   // full /api/status response
   streamCancel:  null,   // () => void — closes the active EventSource
+  activeStreamId: null,  // stream_id from SSE started event (#113)
 
   setPort:         (port)   => set({ port, sidecarError: null }),
   setSidecarError: (msg)    => set({ sidecarError: msg }),
@@ -46,6 +47,7 @@ export const useChatStore = create((set, get) => ({
   setLoading: (v) => set({ isLoading: v }),
 
   setStreamCancel: (fn) => set({ streamCancel: fn }),
+  setActiveStreamId: (id) => set({ activeStreamId: id }),
 
   cancelStream: () => {
     const { streamCancel } = get()
@@ -67,7 +69,7 @@ export const useChatStore = create((set, get) => ({
     messages: s.messages.map((m) => m.id === id ? { ...m, data: updater(m.data) } : m),
   })),
 
-  finalizeStreamingMessage: (_id) => set({ isLoading: false }),
+  finalizeStreamingMessage: (_id) => set({ isLoading: false, activeStreamId: null }),
 
   // Draft message — lets cards pre-fill the input bar
   draft: '',
