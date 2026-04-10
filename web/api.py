@@ -361,20 +361,45 @@ def _env(key: str) -> str:
     return os.environ.get(key, "")
 
 
+# ── Auth validation with cached profile check ──────────────
+import time as _time
+
+_auth_cache: dict[str, tuple[bool, float]] = {}
+_AUTH_CACHE_TTL = 300  # 5 minutes
+
+
+def _cached_auth(broker_key: str, check_fn) -> bool:
+    """Return cached auth result if fresh (< 5 min), otherwise re-check."""
+    now = _time.time()
+    cached = _auth_cache.get(broker_key)
+    if cached and (now - cached[1]) < _AUTH_CACHE_TTL:
+        return cached[0]
+    result = check_fn()
+    _auth_cache[broker_key] = (result, now)
+    return result
+
+
 # Zerodha
 def _has_zerodha() -> bool:
     return bool(_env("KITE_API_KEY") and _env("KITE_API_SECRET"))
 
 
 def _zerodha_auth() -> bool:
-    try:
-        if not _has_zerodha():
-            return False
-        from brokers.zerodha import ZerodhaAPI
+    def _check():
+        try:
+            if not _has_zerodha():
+                return False
+            from brokers.zerodha import ZerodhaAPI
 
-        return ZerodhaAPI(_env("KITE_API_KEY"), _env("KITE_API_SECRET")).is_authenticated()
-    except Exception:
-        return False
+            b = ZerodhaAPI(_env("KITE_API_KEY"), _env("KITE_API_SECRET"))
+            if not b.is_authenticated():
+                return False
+            b.get_profile()  # Test call — will throw if token expired
+            return True
+        except Exception:
+            return False
+
+    return _cached_auth("zerodha", _check)
 
 
 # Groww
@@ -383,14 +408,21 @@ def _has_groww() -> bool:
 
 
 def _groww_auth() -> bool:
-    try:
-        if not _has_groww():
-            return False
-        from brokers.groww import GrowwAPI
+    def _check():
+        try:
+            if not _has_groww():
+                return False
+            from brokers.groww import GrowwAPI
 
-        return GrowwAPI(_env("GROWW_CLIENT_ID"), _env("GROWW_CLIENT_SECRET")).is_authenticated()
-    except Exception:
-        return False
+            b = GrowwAPI(_env("GROWW_CLIENT_ID"), _env("GROWW_CLIENT_SECRET"))
+            if not b.is_authenticated():
+                return False
+            b.get_profile()
+            return True
+        except Exception:
+            return False
+
+    return _cached_auth("groww", _check)
 
 
 # Angel One
@@ -399,19 +431,26 @@ def _has_angelone() -> bool:
 
 
 def _angelone_auth() -> bool:
-    try:
-        if not _has_angelone():
-            return False
-        from brokers.angelone import AngelOneAPI
+    def _check():
+        try:
+            if not _has_angelone():
+                return False
+            from brokers.angelone import AngelOneAPI
 
-        return AngelOneAPI(
-            api_key=_env("ANGEL_API_KEY"),
-            client_code=_env("ANGEL_CLIENT_CODE"),
-            password=_env("ANGEL_PASSWORD"),
-            totp_secret=_env("ANGEL_TOTP_SECRET"),
-        ).is_authenticated()
-    except Exception:
-        return False
+            b = AngelOneAPI(
+                api_key=_env("ANGEL_API_KEY"),
+                client_code=_env("ANGEL_CLIENT_CODE"),
+                password=_env("ANGEL_PASSWORD"),
+                totp_secret=_env("ANGEL_TOTP_SECRET"),
+            )
+            if not b.is_authenticated():
+                return False
+            b.get_profile()
+            return True
+        except Exception:
+            return False
+
+    return _cached_auth("angelone", _check)
 
 
 # Upstox
@@ -420,14 +459,21 @@ def _has_upstox() -> bool:
 
 
 def _upstox_auth() -> bool:
-    try:
-        if not _has_upstox():
-            return False
-        from brokers.upstox import UpstoxAPI
+    def _check():
+        try:
+            if not _has_upstox():
+                return False
+            from brokers.upstox import UpstoxAPI
 
-        return UpstoxAPI(_env("UPSTOX_API_KEY"), _env("UPSTOX_API_SECRET")).is_authenticated()
-    except Exception:
-        return False
+            b = UpstoxAPI(_env("UPSTOX_API_KEY"), _env("UPSTOX_API_SECRET"))
+            if not b.is_authenticated():
+                return False
+            b.get_profile()
+            return True
+        except Exception:
+            return False
+
+    return _cached_auth("upstox", _check)
 
 
 # Fyers
@@ -436,14 +482,21 @@ def _has_fyers() -> bool:
 
 
 def _fyers_auth() -> bool:
-    try:
-        if not _has_fyers():
-            return False
-        from brokers.fyers import FyersAPI
+    def _check():
+        try:
+            if not _has_fyers():
+                return False
+            from brokers.fyers import FyersAPI
 
-        return FyersAPI(_env("FYERS_APP_ID"), _env("FYERS_SECRET_KEY")).is_authenticated()
-    except Exception:
-        return False
+            b = FyersAPI(_env("FYERS_APP_ID"), _env("FYERS_SECRET_KEY"))
+            if not b.is_authenticated():
+                return False
+            b.get_profile()
+            return True
+        except Exception:
+            return False
+
+    return _cached_auth("fyers", _check)
 
 
 # ── Shared success card ───────────────────────────────────────

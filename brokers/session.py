@@ -100,7 +100,7 @@ _BROKER_MENU = [
 # ── Public accessors ──────────────────────────────────────────
 
 
-def register_broker(key: str, broker: BrokerAPI, *, primary: bool = True) -> None:
+def register_broker(key: str, broker: BrokerAPI, *, primary: bool = False) -> None:
     """
     Register an externally-created broker instance.
 

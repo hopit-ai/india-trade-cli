@@ -16,10 +16,10 @@ function extractText(data) {
   return JSON.stringify(data, null, 2)
 }
 
-// Render inline markdown: **bold** and `code`
+// Render inline markdown: **bold**, *italic*, and `code`
 function renderInline(text) {
   const parts = []
-  const re    = /\*\*(.+?)\*\*|`(.+?)`/g
+  const re    = /\*\*(.+?)\*\*|`(.+?)`|(?<!\*)\*([^*]+?)\*(?!\*)/g
   let last    = 0
   let match
 
@@ -27,6 +27,7 @@ function renderInline(text) {
     if (match.index > last) parts.push(text.slice(last, match.index))
     if (match[1] != null) parts.push(<strong key={match.index} className="font-semibold text-text">{match[1]}</strong>)
     if (match[2] != null) parts.push(<code key={match.index} className="font-mono text-amber bg-panel px-1 rounded text-[10px]">{match[2]}</code>)
+    if (match[3] != null) parts.push(<em key={match.index} className="italic text-text">{match[3]}</em>)
     last = re.lastIndex
   }
   if (last < text.length) parts.push(text.slice(last))
@@ -87,10 +88,45 @@ export default function MarkdownCard({ data }) {
   const text  = raw.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
   const lines = text.split('\n')
 
+  // Process lines: merge code blocks (``` ... ```) into single elements
+  const elements = []
+  let i = 0
+  while (i < lines.length) {
+    if (lines[i].trimStart().startsWith('```')) {
+      // Collect code block lines
+      const codeLines = []
+      i++ // skip opening ```
+      while (i < lines.length && !lines[i].trimStart().startsWith('```')) {
+        codeLines.push(lines[i])
+        i++
+      }
+      i++ // skip closing ```
+      elements.push(
+        <pre key={`code-${i}`} className="font-mono text-[11px] text-amber bg-panel rounded px-3 py-2 overflow-x-auto my-2 whitespace-pre-wrap">
+          {codeLines.join('\n')}
+        </pre>
+      )
+    } else {
+      // Check for numbered list items (e.g. "1. Item")
+      const numMatch = lines[i].match(/^(\d+)\.\s+(.*)/)
+      if (numMatch) {
+        elements.push(
+          <li key={i} className="flex gap-2 text-text text-[13px] font-ui leading-relaxed">
+            <span className="text-muted flex-shrink-0 mt-0.5">{numMatch[1]}.</span>
+            <span>{renderInline(numMatch[2])}</span>
+          </li>
+        )
+      } else {
+        elements.push(renderBlock(lines[i], i))
+      }
+      i++
+    }
+  }
+
   return (
     <div className="bg-elevated border border-border rounded-xl px-5 py-4 max-w-2xl w-full">
       <ul className="list-none space-y-0.5">
-        {lines.map((line, i) => renderBlock(line, i))}
+        {elements}
       </ul>
     </div>
   )

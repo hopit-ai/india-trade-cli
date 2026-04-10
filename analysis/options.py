@@ -175,9 +175,9 @@ def _bs_greeks_manual(
     """Minimal Black-Scholes implementation as fallback."""
     from scipy.stats import norm
 
-    # Estimate sigma from price via Newton-Raphson
-    sigma = 0.20  # initial guess
-    for _ in range(50):
+    # Estimate sigma from price via Newton-Raphson with adaptive dampening
+    sigma = 0.30  # initial guess (slightly higher for deep ITM)
+    for _ in range(100):
         try:
             d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
             d2 = d1 - sigma * math.sqrt(T)
@@ -190,11 +190,20 @@ def _bs_greeks_manual(
                 vega = S * norm.pdf(d1) * math.sqrt(T)
                 delta = norm.cdf(d1) - 1
 
+            # Convergence check
+            if abs(theo - price) < 0.01:
+                break
+
             if abs(vega) < 1e-10:
                 break
-            sigma -= (theo - price) / vega
-            if sigma <= 0:
-                sigma = 0.001
+
+            # Adaptive step dampening to avoid overshoot
+            adjustment = (theo - price) / vega
+            adjustment = max(-0.05, min(0.05, adjustment))
+            sigma -= adjustment
+
+            # Clamp sigma to valid bounds
+            sigma = max(0.001, min(5.0, sigma))
         except Exception:
             break
 
