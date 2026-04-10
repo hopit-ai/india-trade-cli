@@ -10,7 +10,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import queue
 import tempfile
 from pathlib import Path

@@ -15,8 +15,6 @@ from __future__ import annotations
 import queue
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 # ── Helpers ──────────────────────────────────────────────────────
 
