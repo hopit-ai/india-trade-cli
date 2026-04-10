@@ -1304,8 +1304,9 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
         # Build messages: system + history + new question
         session["history"].append({"role": "user", "content": req.question})
 
-        # Direct LLM call — no tools, no TradingAgent
-        provider = get_provider()
+        # Direct LLM call — empty registry so NO tools are available
+        from agent.core import ToolRegistry
+        provider = get_provider(registry=ToolRegistry())
         messages = [
             {"role": "system", "content": session["system"]},
         ] + session["history"]
