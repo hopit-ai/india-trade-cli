@@ -1246,9 +1246,9 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
     the same session you can omit it (the agent remembers).
     """
     try:
-        from agent.core import TradingAgent
+        from agent.core import get_provider
 
-        # Unique session per symbol so the agent remembers the analysis context
+        # Unique session per symbol so the LLM remembers the analysis context
         session_key = f"followup_{req.symbol}_{req.exchange}_{req.session_id}"
 
         # If new analysis context is provided, always create a fresh session
@@ -1259,18 +1259,22 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
             or req.context.get("report")
         )
         if session_key not in _chat_sessions or has_new_context:
-            agent = TradingAgent(stream=False)
-            _chat_sessions[session_key] = agent
-
-            # Seed the session with analysis context as the first exchange
+            # Build a system message from the primed context
             analysts = req.context.get("analysts", [])
             synthesis_text = req.context.get("synthesis_text") or ""
             report = req.context.get("report") or ""
 
+            ctx_lines = [
+                f"You are a trading analysis assistant in follow-up mode for {req.symbol} ({req.exchange}).",
+                f"All follow-up questions are about {req.symbol} unless the user explicitly names another stock.",
+                f"Interpret all industry terms, product names, and business concepts in the context of {req.symbol}'s business — "
+                f"for example, 'AI deals' means {req.symbol}'s AI contracts and partnerships, not a stock ticker called AI.",
+                f"Be concise, direct, and always ground your answer in {req.symbol}'s specific situation.",
+            ]
             if analysts or synthesis_text or report:
-                ctx_lines = [
-                    f"The following multi-agent analysis was just completed for {req.symbol} ({req.exchange}):\n"
-                ]
+                ctx_lines.append(
+                    f"\nThe following multi-agent analysis was just completed for {req.symbol} ({req.exchange}):\n"
+                )
                 if analysts:
                     ctx_lines.append("Analyst verdicts:")
                     for a in analysts:
@@ -1286,21 +1290,29 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
                     ctx_lines.append(
                         f"\nFull Report:\n{report[:3000]}"
                     )  # cap to avoid token overflow
-                ctx_lines.append(
-                    f"\nYou are now in follow-up mode for {req.symbol} ({req.exchange}).\n"
-                    f"All follow-up questions are about {req.symbol} unless the user explicitly names another stock.\n"
-                    f"Interpret all industry terms, product names, and business concepts in the context of {req.symbol}'s business — "
-                    f"for example, 'AI deals' means {req.symbol}'s AI contracts and partnerships, not a stock ticker called AI.\n"
-                    f"Use the analysis above as your primary source of truth. Supplement with market tools only when you need "
-                    f"live data not covered by the analysis (e.g. current options premiums, fresh price data).\n"
-                    f"Be concise, direct, and always ground your answer in {req.symbol}'s specific situation."
-                )
-                # Prime the agent — this becomes the first user message + assistant ack
-                agent.chat("\n".join(ctx_lines))
-        else:
-            agent = _chat_sessions[session_key]
+                ctx_lines.append(f"\nUse the analysis above as your primary source of truth.")
 
-        response = agent.chat(req.question)
+            system_msg = "\n".join(ctx_lines)
+            # Store session as dict with system prompt and message history
+            _chat_sessions[session_key] = {
+                "system": system_msg,
+                "history": [],
+            }
+
+        session = _chat_sessions[session_key]
+
+        # Build messages: system + history + new question
+        session["history"].append({"role": "user", "content": req.question})
+
+        # Direct LLM call — no tools, no TradingAgent
+        provider = get_provider()
+        messages = [
+            {"role": "system", "content": session["system"]},
+        ] + session["history"]
+
+        response = provider.chat(messages=messages, stream=False)
+
+        session["history"].append({"role": "assistant", "content": response})
 
         return {
             "status": "ok",
@@ -1308,7 +1320,7 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
                 "response": response,
                 "symbol": req.symbol,
                 "session_id": session_key,
-                "history_length": len(agent._history),
+                "history_length": len(session["history"]),
             },
         }
     except Exception as e:

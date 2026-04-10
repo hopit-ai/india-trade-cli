@@ -86,7 +86,10 @@ def get_fii_dii_data(days: int = 5) -> list[FIIDIIData]:
                 by_date[dt]["dii_net"] = net_val
 
         result = []
-        for dt, vals in list(by_date.items())[:days]:
+        # Sort by date descending so [0] is always the most recent day
+        sorted_dates = sorted(by_date.keys(), reverse=True)
+        for dt in sorted_dates[:days]:
+            vals = by_date[dt]
             fii_net = vals["fii_net"]
             verdict = (
                 "FII_BUYING" if fii_net > 500 else "FII_SELLING" if fii_net < -500 else "NEUTRAL"

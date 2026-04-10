@@ -124,6 +124,44 @@ def _track_command(func):
     return wrapper
 
 
+# ── Markdown → Telegram HTML helper ────────────────────────
+
+
+def _md_to_html(text: str) -> str:
+    """Convert common markdown to Telegram-compatible HTML.
+
+    Handles: **bold**, *italic*, `code`, ```blocks```, ### headers,
+    horizontal rules (━━━ / ---), and escapes HTML special chars first.
+    """
+    import re as _re
+
+    # 1. Escape HTML special chars FIRST
+    text = text.replace("&", "&amp;")
+    text = text.replace("<", "&lt;")
+    text = text.replace(">", "&gt;")
+
+    # 2. Code blocks (``` ... ```) — must be before inline code
+    text = _re.sub(r"```(?:\w*\n)?(.*?)```", r"<pre>\1</pre>", text, flags=_re.DOTALL)
+
+    # 3. Inline code (`code`)
+    text = _re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+
+    # 4. Bold (**text**) — must be before italic
+    text = _re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+
+    # 5. Italic (*text*) — but not **
+    text = _re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<i>\1</i>", text)
+
+    # 6. Headers (###, ##, #) — convert to bold
+    text = _re.sub(r"^#{1,3}\s+(.+)$", r"<b>\1</b>", text, flags=_re.MULTILINE)
+
+    # 7. Horizontal rules
+    text = _re.sub(r"━{3,}", "—", text)
+    text = _re.sub(r"^-{3,}$", "—", text, flags=_re.MULTILINE)
+
+    return text
+
+
 # ── Lazy imports to avoid startup overhead ───────────────────
 
 
@@ -390,15 +428,13 @@ async def cmd_analyze(update, context) -> None:
         msg1, msg2, msg3 = (
             result if isinstance(result, tuple) and len(result) == 3 else (str(result), "", "")
         )
-        # Send as plain text — LLM output can contain any characters that
-        # would break Telegram's HTML/Markdown parsers.
         # Telegram limit is 4096 chars per message.
         if msg1:
-            await update.message.reply_text(msg1[:4000])
+            await update.message.reply_text(_md_to_html(msg1[:4000]), parse_mode="HTML")
         if msg2:
-            await update.message.reply_text(msg2[:4000])
+            await update.message.reply_text(_md_to_html(msg2[:4000]), parse_mode="HTML")
         if msg3:
-            await update.message.reply_text(msg3[:4000])
+            await update.message.reply_text(_md_to_html(msg3[:4000]), parse_mode="HTML")
         if not msg1:
             await update.message.reply_text("Analysis completed but produced no output.")
     except asyncio.TimeoutError:
@@ -501,11 +537,11 @@ async def cmd_deepanalyze(update, context) -> None:
             result if isinstance(result, tuple) and len(result) == 3 else (str(result), "", "")
         )
         if msg1:
-            await update.message.reply_text(msg1[:4000])
+            await update.message.reply_text(_md_to_html(msg1[:4000]), parse_mode="HTML")
         if msg2:
-            await update.message.reply_text(msg2[:4000])
+            await update.message.reply_text(_md_to_html(msg2[:4000]), parse_mode="HTML")
         if msg3:
-            await update.message.reply_text(msg3[:4000])
+            await update.message.reply_text(_md_to_html(msg3[:4000]), parse_mode="HTML")
         if not msg1:
             await update.message.reply_text("Deep analysis completed but produced no output.")
     except asyncio.TimeoutError:
@@ -542,7 +578,7 @@ async def cmd_flows(update, context) -> None:
         from market.flow_intel import get_flow_analysis
 
         a = get_flow_analysis()
-        await update.message.reply_text(
+        flow_msg = (
             f"💰 FII/DII Flows\n\n"
             f"FII today: {a.fii_net_today:+,.0f} Cr\n"
             f"DII today: {a.dii_net_today:+,.0f} Cr\n"
@@ -552,6 +588,7 @@ async def cmd_flows(update, context) -> None:
             f"\nSignal: {a.signal} ({a.confidence}%)\n"
             f"{a.signal_reason}"
         )
+        await update.message.reply_text(_md_to_html(flow_msg), parse_mode="HTML")
     except Exception as e:
         await update.message.reply_text(f"Flow data failed: {e}")
 

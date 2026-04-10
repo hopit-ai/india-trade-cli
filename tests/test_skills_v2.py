@@ -549,15 +549,14 @@ class TestProvider:
 
 
 class TestAnalyzeFollowup:
-    def _make_agent(self):
-        mock_agent = MagicMock()
-        mock_agent.chat.return_value = "The ideal entry for INFY is \u20b91,580."
-        mock_agent._history = []
-        return mock_agent
+    def _mock_provider(self):
+        mock = MagicMock()
+        mock.chat.return_value = "The ideal entry for INFY is \u20b91,580."
+        return mock
 
     def test_returns_response(self, client):
-        mock_agent = self._make_agent()
-        with patch("agent.core.TradingAgent", return_value=mock_agent):
+        mock_provider = self._mock_provider()
+        with patch("agent.core.get_provider", return_value=mock_provider):
             r = client.post(
                 "/skills/analyze/followup",
                 json={
@@ -572,10 +571,9 @@ class TestAnalyzeFollowup:
         assert "INFY" in d["symbol"]
 
     def test_seeds_context_on_first_call(self, client):
-        """On first call with context, agent.chat is called twice:
-        once to prime with context, once for the actual question."""
-        mock_agent = self._make_agent()
-        with patch("agent.core.TradingAgent", return_value=mock_agent):
+        """On first call with context, provider.chat is called with system + question."""
+        mock_provider = self._mock_provider()
+        with patch("agent.core.get_provider", return_value=mock_provider):
             r = client.post(
                 "/skills/analyze/followup",
                 json={
@@ -596,37 +594,50 @@ class TestAnalyzeFollowup:
                 },
             )
         assert r.status_code == 200
-        # First call seeds context, second call answers the question
-        assert mock_agent.chat.call_count == 2
+        # Direct LLM call with system + user messages
+        assert mock_provider.chat.call_count == 1
+        call_kwargs = mock_provider.chat.call_args
+        messages = (
+            call_kwargs.kwargs.get("messages")
+            or call_kwargs[1].get("messages")
+            or call_kwargs[0][0]
+        )
+        # Should have system message + user question
+        assert any("INFY" in str(m) for m in messages)
 
     def test_reuses_session_on_second_call(self, client):
-        """Second call with the same session_id should not instantiate a new TradingAgent."""
-        mock_agent = self._make_agent()
-
-        # Pre-populate the session store with the exact key the endpoint builds
+        """Second call reuses session history — no new context priming."""
         from web.skills import _chat_sessions
 
         session_key = "followup_MSFT_NSE_reuse-session-99"
-        _chat_sessions[session_key] = mock_agent
+        _chat_sessions[session_key] = {
+            "system": "You are analyzing MSFT.",
+            "history": [
+                {"role": "user", "content": "First question"},
+                {"role": "assistant", "content": "First answer"},
+            ],
+        }
 
-        r = client.post(
-            "/skills/analyze/followup",
-            json={
-                "symbol": "MSFT",
-                "exchange": "NSE",
-                "question": "Any updated view?",
-                "session_id": "reuse-session-99",
-            },
-        )
+        mock_provider = self._mock_provider()
+        with patch("agent.core.get_provider", return_value=mock_provider):
+            r = client.post(
+                "/skills/analyze/followup",
+                json={
+                    "symbol": "MSFT",
+                    "exchange": "NSE",
+                    "question": "Any updated view?",
+                    "session_id": "reuse-session-99",
+                },
+            )
         assert r.status_code == 200
-        # Only the direct question call — no context priming
-        mock_agent.chat.assert_called_once_with("Any updated view?")
+        # Session history should now have 4 items (2 old + 1 new question + 1 new answer)
+        assert len(_chat_sessions[session_key]["history"]) == 4
 
-    def test_500_on_agent_error(self, client):
-        mock_agent = self._make_agent()
-        mock_agent.chat.side_effect = RuntimeError("LLM timeout")
+    def test_500_on_provider_error(self, client):
+        mock_provider = self._mock_provider()
+        mock_provider.chat.side_effect = RuntimeError("LLM timeout")
 
-        with patch("agent.core.TradingAgent", return_value=mock_agent):
+        with patch("agent.core.get_provider", return_value=mock_provider):
             r = client.post(
                 "/skills/analyze/followup",
                 json={
