@@ -6,8 +6,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   /* ── Dark theme (default) ────────────────────────────── */
-  :root,
-  :root.dark {
+  :root {
     --color-surface:   #0d0d0d;
     --color-panel:     #111111;
     --color-elevated:  #161616;
@@ -23,33 +22,33 @@
   }
 
   /* ── Light theme ─────────────────────────────────────── */
-  :root.light {
+  .light {
     --color-surface:   #ffffff;
-    --color-panel:     #f8f8f8;
-    --color-elevated:  #f0f0f0;
-    --color-border:    #d4d4d4;
-    --color-text:      #171717;
+    --color-panel:     #f7f7f7;
+    --color-elevated:  #efefef;
+    --color-border:    #e0e0e0;
+    --color-text:      #1a1a1a;
     --color-muted:     #737373;
     --color-subtle:    #a3a3a3;
-    --color-amber:     #b45309;
-    --color-amber-dim: #d97706;
+    --color-amber:     #c45500;
+    --color-amber-dim: #f0a050;
     --color-green:     #16a34a;
     --color-red:       #dc2626;
     --color-blue:      #2563eb;
   }
 
-  /* Auto: system preference (only when no explicit class) */
+  /* Auto light mode from system preference */
   @media (prefers-color-scheme: light) {
-    :root:not(.dark):not(.light) {
+    :root:not(.dark) {
       --color-surface:   #ffffff;
-      --color-panel:     #f8f8f8;
-      --color-elevated:  #f0f0f0;
-      --color-border:    #d4d4d4;
-      --color-text:      #171717;
+      --color-panel:     #f7f7f7;
+      --color-elevated:  #efefef;
+      --color-border:    #e0e0e0;
+      --color-text:      #1a1a1a;
       --color-muted:     #737373;
       --color-subtle:    #a3a3a3;
-      --color-amber:     #b45309;
-      --color-amber-dim: #d97706;
+      --color-amber:     #c45500;
+      --color-amber-dim: #f0a050;
       --color-green:     #16a34a;
       --color-red:       #dc2626;
       --color-blue:      #2563eb;
@@ -64,7 +63,6 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
-    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   /* Custom scrollbar — adapts to theme */
