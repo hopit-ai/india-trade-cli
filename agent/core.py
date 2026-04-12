@@ -2196,6 +2196,124 @@ def _print_tool_call(name: str, args: dict) -> None:
     )
 
 
+# ── Dual LLM routing helpers (#91) ────────────────────────────
+
+
+def get_deep_provider(
+    registry: "ToolRegistry | None" = None,
+) -> "LLMProvider":
+    """
+    Build the deep reasoning provider.
+
+    Uses AI_DEEP_PROVIDER + AI_DEEP_MODEL env vars, falling back to
+    AI_PROVIDER + AI_MODEL if the deep-specific vars aren't set.
+
+    This provider is used for: bull/bear debate, risk debate, synthesis.
+    """
+    deep_prov = os.environ.get("AI_DEEP_PROVIDER") or os.environ.get("AI_PROVIDER", "")
+    deep_model = os.environ.get("AI_DEEP_MODEL") or os.environ.get("AI_MODEL", "")
+    # Temporarily override env for get_provider call
+    _orig_prov = os.environ.get("AI_PROVIDER")
+    _orig_model = os.environ.get("AI_MODEL")
+    try:
+        if deep_prov:
+            os.environ["AI_PROVIDER"] = deep_prov
+        if deep_model:
+            os.environ["AI_MODEL"] = deep_model
+        return get_provider(registry=registry)
+    finally:
+        if _orig_prov is not None:
+            os.environ["AI_PROVIDER"] = _orig_prov
+        elif "AI_PROVIDER" in os.environ and deep_prov:
+            os.environ.pop("AI_PROVIDER", None)
+        if _orig_model is not None:
+            os.environ["AI_MODEL"] = _orig_model
+        elif "AI_MODEL" in os.environ and deep_model:
+            os.environ.pop("AI_MODEL", None)
+
+
+def get_fast_provider(
+    registry: "ToolRegistry | None" = None,
+    deep_provider: "LLMProvider | None" = None,
+) -> "LLMProvider":
+    """
+    Build the fast extraction provider.
+
+    Uses AI_FAST_PROVIDER + AI_FAST_MODEL env vars.
+    Falls back to `deep_provider` if the fast-specific vars aren't set —
+    ensuring zero breaking change for existing callers.
+
+    This provider is used for: news sentiment classification, signal extraction.
+
+    Args:
+        registry:      ToolRegistry (built if None)
+        deep_provider: The deep provider to fall back to if fast not configured.
+                       If None, calls get_provider() as fallback.
+
+    Returns:
+        A fast LLMProvider, or deep_provider if fast not configured.
+    """
+    fast_prov = os.environ.get("AI_FAST_PROVIDER", "")
+    fast_model = os.environ.get("AI_FAST_MODEL", "")
+
+    # No fast config → return deep provider (zero cost, zero breaking change)
+    if not fast_prov and not fast_model:
+        if deep_provider is not None:
+            return deep_provider
+        return get_provider(registry=registry)
+
+    # Build fast provider with overridden env
+    reg = registry or build_registry()
+    system = build_system_prompt()
+
+    chosen_prov = fast_prov or os.environ.get("AI_PROVIDER", PROVIDER_ANTHROPIC)
+    chosen_model = fast_model or _default_model(chosen_prov)
+
+    dispatch = {
+        PROVIDER_ANTHROPIC: AnthropicProvider,
+        PROVIDER_OPENAI: OpenAIProvider,
+        PROVIDER_GEMINI: GeminiProvider,
+        PROVIDER_CLAUDE_CLI: ClaudeCLIProvider,
+        PROVIDER_GEMINI_SUB: GeminiVertexProvider,
+        PROVIDER_OLLAMA: None,
+    }
+
+    try:
+        if chosen_prov == PROVIDER_OLLAMA:
+            base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            return OpenAIProvider(chosen_model, reg, system, base_url=base, api_key="ollama")
+        prov_cls = dispatch.get(chosen_prov, AnthropicProvider)
+        return prov_cls(chosen_model, reg, system)
+    except Exception:
+        # If fast provider fails to build, fall back to deep
+        if deep_provider is not None:
+            return deep_provider
+        return get_provider(registry=registry)
+
+
+def build_provider_from_env(registry=None, system_prompt=None) -> "LLMProvider":
+    """Build a provider using current env vars. Used by QuickScanner and similar."""
+    reg = registry or build_registry()
+    sys = system_prompt or build_system_prompt()
+    chosen = os.environ.get("AI_PROVIDER", "").lower() or _auto_detect_provider()
+    model = os.environ.get("AI_MODEL", "") or _default_model(chosen)
+
+    dispatch = {
+        PROVIDER_ANTHROPIC: AnthropicProvider,
+        PROVIDER_OPENAI: OpenAIProvider,
+        PROVIDER_GEMINI: GeminiProvider,
+        PROVIDER_CLAUDE_CLI: ClaudeCLIProvider,
+        PROVIDER_GEMINI_SUB: GeminiVertexProvider,
+        PROVIDER_OLLAMA: None,
+    }
+
+    if chosen == PROVIDER_OLLAMA:
+        base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        return OpenAIProvider(model, reg, sys, base_url=base, api_key="ollama")
+    prov_cls = dispatch.get(chosen, AnthropicProvider)
+    return prov_cls(model, reg, sys)
+
+
 # ── Singleton access ───────────────────────────────────────────
 
 _agent_instance: TradingAgent | None = None
