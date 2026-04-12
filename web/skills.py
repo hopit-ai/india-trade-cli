@@ -1413,3 +1413,79 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
         }
     except Exception as e:
         raise _err(str(e))
+
+
+# ── PDF Export ────────────────────────────────────────────────
+
+
+class ExportPdfRequest(BaseModel):
+    content: str
+    title: str = "India Trade CLI Report"
+
+
+@router.post("/export-pdf")
+async def skill_export_pdf(req: ExportPdfRequest):
+    """
+    Export analysis text to a PDF and return binary download.
+    Returns 503 if fpdf2 is not installed.
+    """
+    try:
+        from engine.output import export_to_pdf
+        from fastapi.responses import Response
+
+        filepath = export_to_pdf(req.content, title=req.title)
+        if not filepath:
+            raise HTTPException(
+                status_code=503,
+                detail="fpdf2 not installed. Run: pip install fpdf2",
+            )
+
+        with open(filepath, "rb") as f:
+            pdf_bytes = f.read()
+
+        import os
+
+        filename = os.path.basename(filepath)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=f"fpdf2 not installed: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Explain / Simplify ────────────────────────────────────────
+
+
+class ExplainRequest(BaseModel):
+    content: str
+    session_id: str = "default"
+
+
+@router.post("/explain")
+async def skill_explain(req: ExplainRequest):
+    """
+    Explain complex analysis in simple, plain-English terms.
+    Uses LLM if configured; falls back to rule-based simplification.
+    """
+    try:
+        from engine.output import explain_simply
+
+        # Try to get the active LLM provider (optional — rule-based fallback if not set)
+        llm_provider = None
+        try:
+            from agent.core import ToolRegistry, get_provider
+
+            llm_provider = get_provider(registry=ToolRegistry())
+        except Exception:
+            pass  # No provider configured — fine, rule-based fallback handles it
+
+        simplified = explain_simply(req.content, llm_provider=llm_provider)
+        return _ok({"simplified": simplified})
+    except Exception as e:
+        raise _err(str(e))
