@@ -9,7 +9,7 @@ is logged in or the broker call fails.
 from __future__ import annotations
 
 from brokers.base import Quote
-from brokers.session import get_broker
+from brokers.session import get_data_broker
 
 
 def _ws_quotes(instruments: list[str]) -> dict[str, Quote]:
@@ -83,7 +83,7 @@ def get_quote(instruments: list[str]) -> dict[str, Quote]:
 
     # 2. Try broker REST API
     try:
-        broker_quotes = get_broker().get_quote(missing)
+        broker_quotes = get_data_broker().get_quote(missing)
         result.update(broker_quotes)
         missing = [i for i in instruments if i not in result]
     except (RuntimeError, Exception):
@@ -108,7 +108,7 @@ def get_ltp(instrument: str) -> float:
         Last traded price as float.
     """
     try:
-        return get_broker().get_ltp(instrument)
+        return get_data_broker().get_ltp(instrument)
     except (RuntimeError, Exception):
         quotes = _yf_fallback_quotes([instrument])
         if instrument in quotes:

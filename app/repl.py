@@ -1162,6 +1162,22 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "brokers":
                 list_connected_brokers()
 
+            elif command == "data-broker":
+                from brokers.session import set_data_broker
+
+                if not args:
+                    console.print("[red]Usage: data-broker <broker_name>[/red]")
+                else:
+                    set_data_broker(args[0])
+
+            elif command == "exec-broker":
+                from brokers.session import set_exec_broker
+
+                if not args:
+                    console.print("[red]Usage: exec-broker <broker_name>[/red]")
+                else:
+                    set_exec_broker(args[0])
+
             elif command == "logout":
                 do_logout()
                 console.print("[yellow]You have been logged out.[/yellow]")

@@ -385,6 +385,11 @@ def _cached_auth(broker_key: str, check_fn) -> bool:
     return result
 
 
+def _invalidate_auth_cache(broker_key: str) -> None:
+    """Clear cached auth result so next status poll re-checks."""
+    _auth_cache.pop(broker_key, None)
+
+
 # Zerodha
 def _has_zerodha() -> bool:
     return bool(_env("KITE_API_KEY") and _env("KITE_API_SECRET"))
@@ -671,6 +676,7 @@ async def zerodha_callback(request_token: str = "", status: str = ""):
         profile = b.complete_login(request_token=request_token)
         funds = b.get_funds()
         register_broker("zerodha", b)
+        _invalidate_auth_cache("zerodha")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -730,6 +736,7 @@ async def groww_callback(code: str = "", error: str = ""):
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
         register_broker("groww", b)
+        _invalidate_auth_cache("groww")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -782,6 +789,7 @@ async def angelone_login():
         profile = b.complete_login()
         funds = b.get_funds()
         register_broker("angelone", b)
+        _invalidate_auth_cache("angel_one")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">
           ❌ Angel One login failed: {e}<br><br>
@@ -843,6 +851,7 @@ async def upstox_callback(code: str = "", error: str = ""):
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
         register_broker("upstox", b)
+        _invalidate_auth_cache("upstox")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -909,6 +918,7 @@ async def fyers_callback(auth_code: str = "", state: str = "", s: str = ""):
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
         register_broker("fyers", b)
+        _invalidate_auth_cache("fyers")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -1022,12 +1032,34 @@ async def status_page():
 @app.get("/api/status")
 async def api_status(request: Request):
     _require_localhost(request)
+    from brokers.session import get_broker_role
+
     return {
-        "zerodha": {"configured": _has_zerodha(), "authenticated": _zerodha_auth()},
-        "groww": {"configured": _has_groww(), "authenticated": _groww_auth()},
-        "angel_one": {"configured": _has_angelone(), "authenticated": _angelone_auth()},
-        "upstox": {"configured": _has_upstox(), "authenticated": _upstox_auth()},
-        "fyers": {"configured": _has_fyers(), "authenticated": _fyers_auth()},
+        "zerodha": {
+            "configured": _has_zerodha(),
+            "authenticated": _zerodha_auth(),
+            "role": get_broker_role("zerodha"),
+        },
+        "groww": {
+            "configured": _has_groww(),
+            "authenticated": _groww_auth(),
+            "role": get_broker_role("groww"),
+        },
+        "angel_one": {
+            "configured": _has_angelone(),
+            "authenticated": _angelone_auth(),
+            "role": get_broker_role("angelone"),
+        },
+        "upstox": {
+            "configured": _has_upstox(),
+            "authenticated": _upstox_auth(),
+            "role": get_broker_role("upstox"),
+        },
+        "fyers": {
+            "configured": _has_fyers(),
+            "authenticated": _fyers_auth(),
+            "role": get_broker_role("fyers"),
+        },
     }
 
 
@@ -1385,6 +1417,43 @@ async def onboarding_complete(req: OnboardingCompleteRequest):
     return {"ok": True}
 
 
+class BrokerRoleRequest(BaseModel):
+    broker: str
+    role: str
+
+
+@app.post("/api/broker/role")
+async def set_broker_role_endpoint(req: BrokerRoleRequest, request: Request):
+    """Set the role for a connected broker (data, execution, or both)."""
+    _require_localhost(request)
+    from brokers.session import get_all_brokers, set_broker_role
+
+    # Map API key names to session key names (angel_one → angelone)
+    _API_TO_SESSION = {
+        "zerodha": "zerodha",
+        "groww": "groww",
+        "angel_one": "angelone",
+        "upstox": "upstox",
+        "fyers": "fyers",
+    }
+    session_key = _API_TO_SESSION.get(req.broker, req.broker)
+
+    if session_key not in get_all_brokers():
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail=f"Broker not connected: {req.broker}")
+
+    if req.role not in ("data", "execution", "both"):
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=400, detail=f"Invalid role: {req.role}. Must be data, execution, or both."
+        )
+
+    set_broker_role(session_key, req.role)
+    return {"ok": True, "broker": req.broker, "role": req.role}
+
+
 _BROKER_SESSION_FILES = {
     "zerodha": Path.home() / ".trading_platform" / "zerodha.json",
     "groww": Path.home() / ".trading_platform" / "groww.json",
@@ -1418,6 +1487,7 @@ async def broker_disconnect(broker_key: str, request: Request):
     }
     session_key = _SESSION_KEY_MAP.get(broker_key, broker_key)
     unregister_broker(session_key)
+    _invalidate_auth_cache(broker_key)
     return {"ok": True, "broker": broker_key}
 
 

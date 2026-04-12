@@ -5,21 +5,73 @@
 @layer base {
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* ── Dark theme (default) ────────────────────────────── */
+  :root,
+  :root.dark {
+    --color-surface:   #0d0d0d;
+    --color-panel:     #111111;
+    --color-elevated:  #161616;
+    --color-border:    #1e1e1e;
+    --color-text:      #e8e8e8;
+    --color-muted:     #666666;
+    --color-subtle:    #444444;
+    --color-amber:     #e06c00;
+    --color-amber-dim: #7a3a00;
+    --color-green:     #52e07a;
+    --color-red:       #e05252;
+    --color-blue:      #5294e0;
+  }
+
+  /* ── Light theme ─────────────────────────────────────── */
+  :root.light {
+    --color-surface:   #ffffff;
+    --color-panel:     #f8f8f8;
+    --color-elevated:  #f0f0f0;
+    --color-border:    #d4d4d4;
+    --color-text:      #171717;
+    --color-muted:     #737373;
+    --color-subtle:    #a3a3a3;
+    --color-amber:     #b45309;
+    --color-amber-dim: #d97706;
+    --color-green:     #16a34a;
+    --color-red:       #dc2626;
+    --color-blue:      #2563eb;
+  }
+
+  /* Auto: system preference (only when no explicit class) */
+  @media (prefers-color-scheme: light) {
+    :root:not(.dark):not(.light) {
+      --color-surface:   #ffffff;
+      --color-panel:     #f8f8f8;
+      --color-elevated:  #f0f0f0;
+      --color-border:    #d4d4d4;
+      --color-text:      #171717;
+      --color-muted:     #737373;
+      --color-subtle:    #a3a3a3;
+      --color-amber:     #b45309;
+      --color-amber-dim: #d97706;
+      --color-green:     #16a34a;
+      --color-red:       #dc2626;
+      --color-blue:      #2563eb;
+    }
+  }
+
   html, body, #root {
     width: 100%;
     height: 100%;
-    background: #0d0d0d;
-    color: #e8e8e8;
+    background: var(--color-surface);
+    color: var(--color-text);
     font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
-  /* Custom scrollbar */
+  /* Custom scrollbar — adapts to theme */
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #555; }
+  ::-webkit-scrollbar-thumb { background: var(--color-subtle); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
 }
 
 @layer utilities {

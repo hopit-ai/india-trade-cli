@@ -171,7 +171,7 @@ function parseCommand(input) {
     }
 
     default:
-      // Fall through to AI chat
+      // Fall through to AI chat — session_id injected in submit()
       return { endpoint: '/skills/chat', body: { message: input }, cardType: 'markdown' }
   }
 }
@@ -180,6 +180,7 @@ export default function InputBar() {
   const [value, setValue]   = useState('')
   const { call, get, ready } = useAPI()
   const port     = useChatStore((s) => s.port)
+  const activeSessionId   = useChatStore((s) => s.activeSessionId)
   const draft             = useChatStore((s) => s.draft)
   const setDraft          = useChatStore((s) => s.setDraft)
   const streamCancel      = useChatStore((s) => s.streamCancel)
@@ -323,9 +324,14 @@ export default function InputBar() {
     }
 
     try {
+      // Inject session_id for chat and follow-up endpoints
+      let body = parsed.body
+      if (parsed.endpoint === '/skills/chat' && activeSessionId) {
+        body = { ...body, session_id: activeSessionId }
+      }
       const result = parsed.method === 'GET'
         ? await get(parsed.endpoint)
-        : await call(parsed.endpoint, parsed.body)
+        : await call(parsed.endpoint, body)
       addResponse({ cardType: parsed.cardType, data: result.data ?? result })
     } catch (e) {
       addError(e.message)
@@ -378,9 +384,31 @@ export default function InputBar() {
           ↵
         </button>
       </div>
-      <p className="text-subtle text-[10px] font-ui mt-1.5 pl-1">
-        analyze INFY · oi NIFTY · greeks · scan · funds · orders · alerts · patterns · da RELIANCE · iv-smile NIFTY · gex NIFTY · delta-hedge · risk-report · walkforward NIFTY rsi · whatif nifty -5 · strategy NIFTY bullish · drift · memory · audit &lt;id&gt; · telegram · provider · pairs RELIANCE TCS
-      </p>
+      <div className="flex items-center justify-between mt-1.5 px-1">
+        <p className="text-subtle text-[10px] font-ui truncate">
+          analyze INFY · oi NIFTY · greeks · scan · funds · orders · alerts · patterns · da RELIANCE · iv-smile NIFTY · gex NIFTY · delta-hedge · risk-report · whatif nifty -5 · strategy NIFTY bullish · drift · memory
+        </p>
+        <BrokerRouting />
+      </div>
     </div>
+  )
+}
+
+function BrokerRouting() {
+  const brokerStatuses = useChatStore((s) => s.brokerStatuses)
+  const connected = Object.entries(brokerStatuses).filter(([, b]) => b.authenticated)
+  if (connected.length < 2) return null
+
+  const dataB = connected.find(([, b]) => b.role === 'data')
+  const execB = connected.find(([, b]) => b.role === 'execution')
+  if (!dataB && !execB) return null
+
+  const names = { zerodha: 'Zerodha', fyers: 'Fyers', groww: 'Groww', angel_one: 'Angel One', upstox: 'Upstox' }
+  return (
+    <span className="text-[9px] text-muted font-ui flex-shrink-0 ml-2">
+      {dataB && <><span className="text-blue">Data</span>: {names[dataB[0]] ?? dataB[0]}</>}
+      {dataB && execB && ' · '}
+      {execB && <><span className="text-amber">Exec</span>: {names[execB[0]] ?? execB[0]}</>}
+    </span>
   )
 }
