@@ -495,6 +495,52 @@ def _poll_sidecar_auth(broker_key: str, port: int, timeout: int = 180) -> dict[s
     return None
 
 
+def _is_sidecar_running(port: int) -> bool:
+    """Check if the FastAPI sidecar is already running on this port."""
+    import urllib.request
+
+    try:
+        r = urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2)
+        return r.status == 200
+    except Exception:
+        return False
+
+
+def _poll_sidecar_auth(broker_key: str, port: int, timeout: int = 180) -> dict[str, str] | None:
+    """
+    Poll the sidecar's /api/status until the broker shows authenticated.
+    Returns a sentinel dict {"_sidecar": "true"} on success, None on timeout.
+    The caller uses this to know the sidecar handled the OAuth.
+    """
+    import json
+    import time
+    import urllib.request
+
+    # Map session keys to status keys
+    _STATUS_KEYS = {
+        "fyers": "fyers",
+        "zerodha": "zerodha",
+        "groww": "groww",
+        "angelone": "angel_one",
+        "upstox": "upstox",
+    }
+    status_key = _STATUS_KEYS.get(broker_key, broker_key)
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        try:
+            r = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=3)
+            data = json.loads(r.read())
+            broker_status = data.get(status_key, {})
+            if broker_status.get("authenticated"):
+                return {"_sidecar": "true"}
+        except Exception:
+            pass
+        time.sleep(2)
+
+    return None
+
+
 def _oauth_local_server(
     port: int,
     path: str,
