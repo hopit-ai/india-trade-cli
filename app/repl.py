@@ -839,7 +839,7 @@ def _handle_whatif_command(args: list[str]) -> None:
 
 
 def _handle_memory_command(args: list[str]) -> None:
-    """Handle memory commands: memory [stats|list|<symbol>|outcome <id> <result>]"""
+    """Handle memory commands: memory [stats|list|reflect <id>|<symbol>|outcome <id> <result>]"""
     from engine.memory import trade_memory
 
     sub = args[0].lower() if args else "list"
@@ -863,6 +863,28 @@ def _handle_memory_command(args: list[str]) -> None:
             console.print(f"[green]Recorded outcome for {trade_id}: {outcome}[/green]")
         else:
             console.print(f"[red]Trade ID {trade_id} not found.[/red]")
+
+    elif sub == "reflect":
+        if len(args) < 2:
+            console.print("[red]Usage: memory reflect <trade_id>[/red]")
+            return
+        trade_id = args[1]
+        # Optionally use the active LLM provider for richer reflection
+        llm_provider = None
+        try:
+            from agent.core import ToolRegistry, get_fast_provider, get_deep_provider
+
+            llm_provider = get_fast_provider(
+                ToolRegistry(), deep_provider=get_deep_provider(ToolRegistry())
+            )
+        except Exception:
+            pass
+        console.print(f"[dim]Reflecting on trade {trade_id}...[/dim]")
+        lesson = trade_memory.reflect_and_remember(trade_id, llm_provider=llm_provider)
+        if not lesson:
+            console.print(f"[red]Trade ID {trade_id} not found.[/red]")
+        else:
+            console.print(f"\n[bold]Lesson:[/bold] {lesson}\n")
 
     elif sub == "clear":
         console.print("[yellow]This will delete all trade memory. Type 'yes' to confirm:[/yellow]")
@@ -1534,7 +1556,6 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "quick":
                 # Quick scan: single-agent, 1 LLM call, 3-5s
                 # Usage: quick SYMBOL [SYMBOL2 ...]
-                import time as _time
 
                 if not args:
                     console.print("[dim]Usage: quick <SYMBOL> [SYMBOL2 ...][/dim]")
@@ -1559,7 +1580,9 @@ def run_repl(broker: BrokerAPI) -> None:
                         if result.error:
                             console.print(f"  [red]Error:[/red] {result.error}")
                         else:
-                            v_style = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}.get(result.verdict, "white")
+                            v_style = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}.get(
+                                result.verdict, "white"
+                            )
                             console.print(
                                 f"\n  [bold]{result.symbol}[/bold] · "
                                 f"[{v_style}]{result.verdict}[/{v_style}] "
@@ -1572,8 +1595,8 @@ def run_repl(broker: BrokerAPI) -> None:
                                     f"\n  Entry: ₹{result.entry:,.2f}  "
                                     f"SL: ₹{result.sl:,.2f}  "
                                     f"Target: ₹{result.target:,.2f}"
-                                    if result.sl and result.target else
-                                    f"\n  Entry: ₹{result.entry:,.2f}"
+                                    if result.sl and result.target
+                                    else f"\n  Entry: ₹{result.entry:,.2f}"
                                 )
                             console.print(f"  [dim]⏱ {result.elapsed_ms}ms · 1 LLM call[/dim]\n")
                     else:
@@ -1589,7 +1612,9 @@ def run_repl(broker: BrokerAPI) -> None:
 
                         for sym in symbols:
                             result = scanner.scan(sym)
-                            v_style = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}.get(result.verdict, "white")
+                            v_style = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}.get(
+                                result.verdict, "white"
+                            )
                             table.add_row(
                                 result.symbol,
                                 f"₹{result.ltp:,.0f}" if result.ltp else "-",

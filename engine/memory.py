@@ -102,6 +102,9 @@ class TradeRecord:
     price_at_analysis: Optional[float] = None  # LTP at time of analysis
     synthesis_text: str = ""  # full raw LLM synthesis output
 
+    # Reflection (#92) — LLM-extracted lesson from outcome
+    lesson: str = ""
+
     # Tags for filtering
     tags: list[str] = field(default_factory=list)
 
@@ -272,6 +275,90 @@ class TradeMemory:
 
         self._save()
         return True
+
+    def reflect_and_remember(self, trade_id: str, llm_provider=None) -> str:
+        """
+        Run reflection on a closed trade and store a lesson (#92).
+
+        Uses LLM if provided; falls back to rule-based lesson extraction.
+        Returns the lesson string (or "" if trade not found).
+        """
+        record = self.get_by_id(trade_id)
+        if not record:
+            return ""
+
+        # Try LLM first
+        if llm_provider:
+            try:
+                lesson = self._llm_reflect(record, llm_provider)
+                if lesson:
+                    record.lesson = lesson
+                    self._save()
+                    return lesson
+            except Exception:
+                pass  # fall through to rule-based
+
+        # Rule-based fallback
+        lesson = self._rule_reflect(record)
+        record.lesson = lesson
+        self._save()
+        return lesson
+
+    def _llm_reflect(self, record: "TradeRecord", llm_provider) -> str:
+        """Use LLM to extract a lesson from the trade record."""
+        prompt = (
+            f"A trade on {record.symbol} ({record.exchange}) was analysed on {record.timestamp[:10]}.\n"
+            f"Verdict: {record.verdict} (confidence: {record.confidence}%)\n"
+            f"Strategy: {record.strategy or 'unspecified'}\n"
+        )
+        if record.entry_price:
+            prompt += f"Entry: {record.entry_price}, SL: {record.stop_loss}, Target: {record.target_price}\n"
+        if record.vix is not None:
+            prompt += f"VIX at analysis: {record.vix:.1f}\n"
+        if record.synthesis_text:
+            prompt += f"\nBull thesis: {record.bull_summary}\nBear thesis: {record.bear_summary}\n"
+        prompt += (
+            f"\nOutcome: {record.outcome or 'unknown'}, P&L: {record.actual_pnl:+,.0f}\n"
+            if record.actual_pnl is not None
+            else "\nOutcome: unknown\n"
+        )
+        prompt += (
+            "\nIn 1-3 sentences, what is the most important trading lesson from this trade? "
+            "Be specific: mention the signal, market conditions, and what worked or failed."
+        )
+        return llm_provider.chat(
+            messages=[{"role": "user", "content": prompt}],
+            stream=False,
+        )
+
+    @staticmethod
+    def _rule_reflect(record: "TradeRecord") -> str:
+        """Rule-based lesson extraction when no LLM is available."""
+        outcome = (record.outcome or "").upper()
+        pnl_str = (
+            f" (+{record.actual_pnl:,.0f})"
+            if record.actual_pnl and record.actual_pnl > 0
+            else (f" ({record.actual_pnl:,.0f})" if record.actual_pnl else "")
+        )
+        if outcome == "WIN":
+            return (
+                f"The {record.verdict} signal on {record.symbol} was correct{pnl_str}. "
+                f"Similar setups may work in the future."
+            )
+        elif outcome == "LOSS":
+            return (
+                f"The {record.verdict} signal on {record.symbol} was incorrect{pnl_str}. "
+                f"Review the thesis and consider tightening the stop-loss."
+            )
+        elif outcome in ("BREAKEVEN", "EXPIRED"):
+            return (
+                f"The {record.symbol} trade was a wash — "
+                f"market conditions may have changed after the {record.verdict} signal."
+            )
+        return (
+            f"Trade on {record.symbol} ({record.verdict}) — outcome not yet recorded. "
+            f"Update with result to generate a lesson."
+        )
 
     # ── Query ────────────────────────────────────────────────
 
@@ -530,6 +617,8 @@ class TradeMemory:
             if r.vix is not None:
                 line += f" | VIX={r.vix:.1f}"
             parts.append(line)
+            if getattr(r, "lesson", ""):
+                parts.append(f"    Lesson: {r.lesson}")
 
         return "\n".join(parts)
 
