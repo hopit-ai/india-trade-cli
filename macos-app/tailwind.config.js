@@ -1,21 +1,22 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./src/renderer/**/*.{js,jsx,ts,tsx,html}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        surface:  '#0d0d0d',
-        panel:    '#111111',
-        elevated: '#161616',
-        border:   '#1e1e1e',
-        text:     '#e8e8e8',
-        muted:    '#666666',
-        subtle:   '#444444',
-        amber:    '#e06c00',
-        'amber-dim': '#7a3a00',
-        green:    '#52e07a',
-        red:      '#e05252',
-        blue:     '#5294e0',
+        surface:  'var(--color-surface)',
+        panel:    'var(--color-panel)',
+        elevated: 'var(--color-elevated)',
+        border:   'var(--color-border)',
+        text:     'var(--color-text)',
+        muted:    'var(--color-muted)',
+        subtle:   'var(--color-subtle)',
+        amber:    'var(--color-amber)',
+        'amber-dim': 'var(--color-amber-dim)',
+        green:    'var(--color-green)',
+        red:      'var(--color-red)',
+        blue:     'var(--color-blue)',
       },
       fontFamily: {
         mono: ['"JetBrains Mono"', '"Fira Code"', 'Menlo', 'monospace'],

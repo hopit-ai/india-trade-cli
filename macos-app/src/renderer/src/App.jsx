@@ -7,10 +7,29 @@ import InputBar from './components/Input/InputBar'
 import SetupScreen from './components/SetupScreen'
 import OnboardingWizard from './components/Onboarding/OnboardingWizard'
 
+function useTheme() {
+  const [theme, setThemeState] = useState(() => {
+    try { return localStorage.getItem('vt-theme') || 'system' } catch { return 'system' }
+  })
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.remove('dark', 'light')
+    if (theme === 'dark') root.classList.add('dark')
+    else if (theme === 'light') root.classList.add('light')
+    // 'system' — no class, CSS @media handles it
+    try { localStorage.setItem('vt-theme', theme) } catch {}
+  }, [theme])
+
+  const cycle = () => setThemeState((t) => t === 'system' ? 'light' : t === 'light' ? 'dark' : 'system')
+  return { theme, cycle }
+}
+
 export default function App() {
   const { setPort, setSidecarError, setBrokerStatuses } = useChatStore()
   const createSession = useChatStore((s) => s.createSession)
   const port = useChatStore((s) => s.port)
+  const { theme, cycle: cycleTheme } = useTheme()
 
   // Setup phase state machine
   const [setupPhase, setSetupPhase] = useState('initializing')
@@ -150,6 +169,7 @@ export default function App() {
         </div>
         <div className="no-drag flex items-center gap-3 pr-4">
           <MarketBadge />
+          <ThemeToggle theme={theme} cycle={cycleTheme} />
           <StatusDot />
         </div>
       </div>
@@ -183,6 +203,20 @@ function MarketBadge() {
         {nifty ? `N ${nifty}` : cfg.label}
       </span>
     </div>
+  )
+}
+
+function ThemeToggle({ theme, cycle }) {
+  const icon = theme === 'dark' ? '🌙' : theme === 'light' ? '☀️' : '🖥'
+  const label = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto'
+  return (
+    <button
+      onClick={cycle}
+      className="flex items-center gap-1 text-[11px] text-muted font-ui hover:text-text transition-colors cursor-pointer"
+      title={`Theme: ${label} (click to cycle)`}
+    >
+      <span className="text-[12px]">{icon}</span>
+    </button>
   )
 }
 
