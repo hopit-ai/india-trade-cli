@@ -38,6 +38,91 @@ from brokers.base import BrokerAPI, OrderRequest
 console = Console()
 
 
+# ── Position sizing utilities ─────────────────────────────────
+
+
+def get_trading_capital() -> float:
+    """Read TRADING_CAPITAL from env. Default ₹1,00,000."""
+    return float(os.environ.get("TRADING_CAPITAL", "100000"))
+
+
+def parse_qty_or_pct(arg: str) -> tuple[float, bool]:
+    """
+    Parse a buy/sell quantity argument.
+
+    Returns:
+        (value, is_pct) where is_pct=True means value is a percentage (0–100),
+        is_pct=False means value is a fixed quantity.
+
+    Examples:
+        "5%"  → (5.0, True)
+        "100" → (100.0, False)
+        "2.5%"→ (2.5, True)
+
+    Raises:
+        ValueError: if percentage is <= 0 or not a valid number
+    """
+    arg = arg.strip()
+    if arg.endswith("%"):
+        raw = float(arg[:-1])
+        if raw <= 0:
+            raise ValueError(f"Percentage must be > 0, got '{arg}'")
+        return raw, True
+    return float(arg), False
+
+
+def size_by_pct(
+    symbol: str,
+    pct: float,
+    capital: float,
+    limit_price: float | None = None,
+) -> int:
+    """
+    Compute share quantity from a percentage of capital.
+
+    Args:
+        symbol:      Stock symbol (used to fetch LTP if no limit_price)
+        pct:         Percentage of capital (0.0–100.0)
+        capital:     Total capital in INR
+        limit_price: Price to size against. If None, fetches live LTP.
+
+    Returns:
+        Integer quantity (≥ 1)
+
+    Raises:
+        ValueError: if resulting quantity is 0 or pct exceeds MAX_POSITION_PCT
+    """
+    max_pct = float(os.environ.get("MAX_POSITION_PCT", "100"))
+    if pct > max_pct:
+        raise ValueError(
+            f"Position size {pct:.1f}% exceeds MAX_POSITION_PCT={max_pct:.0f}%. "
+            f"Set MAX_POSITION_PCT env var to allow larger positions."
+        )
+
+    if limit_price is None or limit_price <= 0:
+        try:
+            from market.quotes import get_ltp
+
+            limit_price = get_ltp(f"NSE:{symbol.upper()}")
+        except Exception:
+            limit_price = None
+
+    if not limit_price or limit_price <= 0:
+        raise ValueError(f"Cannot compute quantity — no price available for {symbol}")
+
+    allocation = capital * pct / 100.0
+    qty = int(allocation / limit_price)
+
+    if qty <= 0:
+        raise ValueError(
+            f"Position size too small: {pct:.1f}% of ₹{capital:,.0f} = ₹{allocation:,.0f} "
+            f"is not enough to buy 1 share of {symbol} at ₹{limit_price:,.2f}. "
+            f"Increase capital or reduce percentage."
+        )
+
+    return qty
+
+
 # ── Mode detection ────────────────────────────────────────────
 
 

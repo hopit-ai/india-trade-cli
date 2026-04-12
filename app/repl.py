@@ -1910,20 +1910,46 @@ def run_repl(broker: BrokerAPI) -> None:
                         console.print(f"[red]Error:[/red] {e}")
 
             elif command in ("buy", "sell"):
-                # Quick order: buy YESBANK 1 15 | sell RELIANCE 5
-                # Format: buy SYMBOL QTY [LIMIT_PRICE]
+                # Quick order: buy YESBANK 1 15 | sell RELIANCE 5 | buy INFY 5% | buy INFY 5% 1400
+                # Format: buy SYMBOL QTY|PCT% [LIMIT_PRICE]
                 import os as _os
 
                 if not args:
                     console.print(f"[dim]Usage: {command} SYMBOL QTY [LIMIT_PRICE][/dim]")
                     console.print(f"[dim]  {command} YESBANK 1 15   → limit order at ₹15[/dim]")
                     console.print(f"[dim]  {command} YESBANK 1      → market order[/dim]")
+                    console.print(
+                        f"[dim]  {command} INFY 5%        → 5% of capital at market[/dim]"
+                    )
+                    console.print(
+                        f"[dim]  {command} INFY 5% 1400   → 5% of capital, limit ₹1400[/dim]"
+                    )
                 elif not broker:
                     console.print("[red]No broker connected. Run: broker connect[/red]")
                 else:
                     _sym = args[0].upper()
-                    _qty = int(args[1]) if len(args) > 1 else 1
+                    _raw_qty = args[1] if len(args) > 1 else "1"
                     _limit = float(args[2]) if len(args) > 2 else None
+                    # Resolve percentage sizing
+                    try:
+                        from engine.trade_executor import (
+                            parse_qty_or_pct,
+                            size_by_pct,
+                            get_trading_capital,
+                        )
+
+                        _qty_val, _is_pct = parse_qty_or_pct(_raw_qty)
+                        if _is_pct:
+                            _capital = get_trading_capital()
+                            _qty = size_by_pct(_sym, _qty_val, _capital, limit_price=_limit)
+                            console.print(
+                                f"  [dim]{_qty_val:.1f}% of ₹{_capital:,.0f} → [bold]{_qty}[/bold] shares[/dim]"
+                            )
+                        else:
+                            _qty = int(_qty_val)
+                    except ValueError as _e:
+                        console.print(f"[red]Sizing error:[/red] {_e}")
+                        continue
                     _mode = _os.environ.get("TRADING_MODE", "PAPER")
                     _side = "BUY" if command == "buy" else "SELL"
                     _otype = "LIMIT" if _limit else "MARKET"
