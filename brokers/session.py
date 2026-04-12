@@ -43,7 +43,9 @@ from rich.text import Text
 from .base import BrokerAPI
 from .mock import MockBrokerAPI
 
-# Lazy-import broker modules and credentials — SDKs are optional and may not be installed.
+# Lazy-import broker modules — their SDKs (kiteconnect, smartapi-python)
+# are optional and may not be installed.  Imported on first use in _get_broker_class().
+from config.credentials import get_credential
 
 console = Console()
 
@@ -70,16 +72,15 @@ _BROKER_NAMES = {
     "mock": "mock",
     "1": "zerodha",
     "zerodha": "zerodha",
-    "2": "fyers",
-    "fyers": "fyers",
-    # Legacy numeric aliases — kept for programmatic callers; not shown in menu
+    "2": "groww",
+    "groww": "groww",
     "3": "angelone",
     "angelone": "angelone",
     "angel": "angelone",
     "4": "upstox",
     "upstox": "upstox",
-    "5": "groww",
-    "groww": "groww",
+    "5": "fyers",
+    "fyers": "fyers",
 }
 
 _BROKER_LABELS = {
@@ -91,27 +92,18 @@ _BROKER_LABELS = {
     "fyers": "[blue]Fyers[/blue]",
 }
 
-# Brokers that are fully supported in the menu
-_SUPPORTED_BROKERS = {"mock", "zerodha", "fyers"}
-
 # Brokers that use TOTP auto-login (no browser redirect)
 _TOTP_BROKERS = {"angelone"}
 
 # Broker menu display items (number, label, description)
-# Only Demo, Zerodha, and Fyers are shown — others are coming soon
 _BROKER_MENU = [
     ("0", "Demo", "mock data, no credentials needed"),
     ("1", "Zerodha", "Kite Connect — redirect login"),
-    ("2", "Fyers", "API v3 — free real-time data, redirect login"),
+    ("2", "Groww", "OAuth2 — redirect login"),
+    ("3", "Angel One", "SmartAPI — free, TOTP auto-login"),
+    ("4", "Upstox", "API v3 — redirect login"),
+    ("5", "Fyers", "API v3 — redirect login"),
 ]
-
-# Brokers not yet in the menu and what to say about them
-_UNSUPPORTED_BROKER_MSG = {
-    "groww": "Groww integration is coming soon.",
-    "angelone": "Angel One integration is coming soon.",
-    "upstox": "Upstox integration is coming soon.",
-    "dhan": "Dhan integration is coming soon.",
-}
 
 
 # ── Public accessors ──────────────────────────────────────────
@@ -273,8 +265,7 @@ def list_connected_brokers() -> None:
 
 
 def set_data_broker(key: str) -> None:
-    """Set a broker as the data source. Only one data broker allowed.
-    Auto-login if not connected."""
+    """Set a broker as the data source. Auto-login if not connected."""
     key = _BROKER_NAMES.get(key.lower(), key.lower())
     if key not in _brokers:
         console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
@@ -282,19 +273,16 @@ def set_data_broker(key: str) -> None:
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
-    # Remove data role from any other broker
-    for k in list(_broker_roles):
-        if k != key and _broker_roles.get(k) == "data":
-            del _broker_roles[k]
-        elif k != key and _broker_roles.get(k) == "both":
-            _broker_roles[k] = "execution"
+    # Clear any existing data role
+    for k, r in list(_broker_roles.items()):
+        if r == "data":
+            _broker_roles[k] = "execution" if k != key else "data"
     set_broker_role(key, "data")
     console.print(f"[green]✓ Data broker set to {key.title()}[/green]")
 
 
 def set_exec_broker(key: str) -> None:
-    """Set a broker as the execution target. Only one execution broker allowed.
-    Auto-login if not connected."""
+    """Set a broker as the execution target. Auto-login if not connected."""
     key = _BROKER_NAMES.get(key.lower(), key.lower())
     if key not in _brokers:
         console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
@@ -302,111 +290,15 @@ def set_exec_broker(key: str) -> None:
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
-    # Remove execution role from any other broker
-    for k in list(_broker_roles):
-        if k != key and _broker_roles.get(k) == "execution":
-            del _broker_roles[k]
-        elif k != key and _broker_roles.get(k) == "both":
-            _broker_roles[k] = "data"
+    # Clear any existing execution role
+    for k, r in list(_broker_roles.items()):
+        if r == "execution":
+            _broker_roles[k] = "data" if k != key else "execution"
     set_broker_role(key, "execution")
     console.print(f"[green]✓ Execution broker set to {key.title()}[/green]")
 
 
 # ── Internal helpers ──────────────────────────────────────────
-
-
-def _guided_zerodha_setup() -> tuple[str, str]:
-    """
-    Show setup instructions for Zerodha and prompt for credentials if not set.
-    Returns (api_key, api_secret) — already saved to keychain.
-    """
-    from config.credentials import _kr_get, _kr_set
-
-    api_key = _kr_get("KITE_API_KEY") or os.environ.get("KITE_API_KEY", "")
-    api_secret = _kr_get("KITE_API_SECRET") or os.environ.get("KITE_API_SECRET", "")
-
-    if api_key and api_secret:
-        return api_key, api_secret
-
-    console.print()
-    console.print(
-        Panel(
-            "\n"
-            "  You need a [bold]Kite Connect[/bold] developer app from Zerodha.\n\n"
-            "  [bold cyan]Steps:[/bold cyan]\n"
-            "  1. Go to [link]https://developers.zerodha.com[/link]\n"
-            "  2. Create a new app — select type [bold]Connect[/bold]\n"
-            "  3. Set the redirect URL to:\n"
-            "     [bold]http://127.0.0.1:8765/zerodha/callback[/bold]\n"
-            "  4. Copy your [bold]API Key[/bold] and [bold]API Secret[/bold] below\n\n"
-            "  [dim]Credentials are saved to your OS keychain — one-time setup.[/dim]\n",
-            title="[bold cyan]🔑  Zerodha Setup[/bold cyan]",
-            border_style="cyan",
-            padding=(0, 2),
-        )
-    )
-
-    if not api_key:
-        api_key = Prompt.ask("  [bold]API Key[/bold]").strip()
-        if api_key:
-            _kr_set("KITE_API_KEY", api_key)
-            os.environ["KITE_API_KEY"] = api_key
-
-    if not api_secret:
-        api_secret = Prompt.ask("  [bold]API Secret[/bold]", password=True).strip()
-        if api_secret:
-            _kr_set("KITE_API_SECRET", api_secret)
-            os.environ["KITE_API_SECRET"] = api_secret
-
-    return api_key, api_secret
-
-
-def _guided_fyers_setup() -> tuple[str, str]:
-    """
-    Show setup instructions for Fyers and prompt for credentials if not set.
-    Returns (app_id, secret_key) — already saved to keychain.
-    """
-    from config.credentials import _kr_get, _kr_set
-
-    app_id = _kr_get("FYERS_APP_ID") or os.environ.get("FYERS_APP_ID", "")
-    secret_key = _kr_get("FYERS_SECRET_KEY") or os.environ.get("FYERS_SECRET_KEY", "")
-
-    if app_id and secret_key:
-        return app_id, secret_key
-
-    console.print()
-    console.print(
-        Panel(
-            "\n"
-            "  You need a [bold]Fyers API v3[/bold] app.\n\n"
-            "  [bold cyan]Why Fyers?[/bold cyan]  Free real-time NSE/BSE/F&O data\n"
-            "  with generous rate limits — ideal for market data and options analytics.\n\n"
-            "  [bold cyan]Steps:[/bold cyan]\n"
-            "  1. Go to [link]https://myapi.fyers.in[/link]\n"
-            "  2. Create a new app\n"
-            "  3. Set the redirect URL to:\n"
-            "     [bold]http://127.0.0.1:8765/fyers/callback[/bold]\n"
-            "  4. Copy your [bold]App ID[/bold] (format: XXXX-100) and [bold]Secret Key[/bold] below\n\n"
-            "  [dim]Credentials are saved to your OS keychain — one-time setup.[/dim]\n",
-            title="[bold blue]🔑  Fyers Setup[/bold blue]",
-            border_style="blue",
-            padding=(0, 2),
-        )
-    )
-
-    if not app_id:
-        app_id = Prompt.ask("  [bold]App ID[/bold] [dim](e.g. ABCD-100)[/dim]").strip()
-        if app_id:
-            _kr_set("FYERS_APP_ID", app_id)
-            os.environ["FYERS_APP_ID"] = app_id
-
-    if not secret_key:
-        secret_key = Prompt.ask("  [bold]Secret Key[/bold]", password=True).strip()
-        if secret_key:
-            _kr_set("FYERS_SECRET_KEY", secret_key)
-            os.environ["FYERS_SECRET_KEY"] = secret_key
-
-    return app_id, secret_key
 
 
 def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
@@ -424,75 +316,65 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
     elif key == "zerodha":
         from .zerodha import ZerodhaAPI
 
-        api_key, api_secret = _guided_zerodha_setup()
+        api_key = get_credential("KITE_API_KEY", "Zerodha API Key", secret=False)
+        api_secret = get_credential("KITE_API_SECRET", "Zerodha API Secret", secret=True)
         return key, ZerodhaAPI(api_key=api_key, api_secret=api_secret)
 
-    elif key == "fyers":
+    elif key == "groww":
+        from .groww import GrowwAPI
+
+        client_id = get_credential("GROWW_CLIENT_ID", "Groww Client ID", secret=False)
+        client_secret = get_credential("GROWW_CLIENT_SECRET", "Groww Client Secret", secret=True)
+        redirect_uri = os.environ.get("GROWW_REDIRECT_URL", "http://localhost:8765/groww/callback")
+        return key, GrowwAPI(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+        )
+
+    elif key == "angelone":
+        from .angelone import AngelOneAPI
+
+        api_key = get_credential("ANGEL_API_KEY", "Angel One API Key", secret=False)
+        client_code = get_credential(
+            "ANGEL_CLIENT_CODE", "Angel One Client Code (Login ID)", secret=False
+        )
+        password = get_credential("ANGEL_PASSWORD", "Angel One Trading Password", secret=True)
+        totp_secret = get_credential(
+            "ANGEL_TOTP_SECRET", "Angel One TOTP Secret", secret=True, required=False
+        )
+        return key, AngelOneAPI(
+            api_key=api_key,
+            client_code=client_code,
+            password=password,
+            totp_secret=totp_secret,
+        )
+
+    elif key == "upstox":
+        from .upstox import UpstoxAPI
+
+        api_key = get_credential("UPSTOX_API_KEY", "Upstox API Key", secret=False)
+        api_secret = get_credential("UPSTOX_API_SECRET", "Upstox API Secret", secret=True)
+        redirect_uri = os.environ.get(
+            "UPSTOX_REDIRECT_URL", "http://localhost:8765/upstox/callback"
+        )
+        return key, UpstoxAPI(
+            api_key=api_key,
+            api_secret=api_secret,
+            redirect_uri=redirect_uri,
+        )
+
+    else:  # fyers
         from .fyers import FyersAPI
 
-        app_id, secret_key = _guided_fyers_setup()
+        app_id = get_credential("FYERS_APP_ID", "Fyers App ID", secret=False)
+        secret_key = get_credential("FYERS_SECRET_KEY", "Fyers Secret Key", secret=True)
         redirect_uri = os.environ.get("FYERS_REDIRECT_URL", "http://127.0.0.1:8765/fyers/callback")
         return key, FyersAPI(
             app_id=app_id,
             secret_key=secret_key,
             redirect_uri=redirect_uri,
         )
-
-    else:
-        # Unsupported broker — give a helpful message instead of crashing
-        msg = _UNSUPPORTED_BROKER_MSG.get(key, f"{key.title()} is not yet supported.")
-        console.print(
-            f"\n[yellow]{msg}[/yellow]\n"
-            "[dim]Currently supported brokers: [bold]Zerodha[/bold] and [bold]Fyers[/bold].[/dim]\n"
-            "[dim]Choose option [bold]1[/bold] (Zerodha) or [bold]2[/bold] (Fyers) to continue.[/dim]\n"
-        )
-        raise ValueError(f"Broker {key!r} is not yet supported.")
-
-
-def _is_sidecar_running(port: int) -> bool:
-    """Check if the FastAPI sidecar is already running on this port."""
-    import urllib.request
-
-    try:
-        r = urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2)
-        return r.status == 200
-    except Exception:
-        return False
-
-
-def _poll_sidecar_auth(broker_key: str, port: int, timeout: int = 180) -> dict[str, str] | None:
-    """
-    Poll the sidecar's /api/status until the broker shows authenticated.
-    Returns a sentinel dict {"_sidecar": "true"} on success, None on timeout.
-    The caller uses this to know the sidecar handled the OAuth.
-    """
-    import json
-    import time
-    import urllib.request
-
-    # Map session keys to status keys
-    _STATUS_KEYS = {
-        "fyers": "fyers",
-        "zerodha": "zerodha",
-        "groww": "groww",
-        "angelone": "angel_one",
-        "upstox": "upstox",
-    }
-    status_key = _STATUS_KEYS.get(broker_key, broker_key)
-    deadline = time.time() + timeout
-
-    while time.time() < deadline:
-        try:
-            r = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=3)
-            data = json.loads(r.read())
-            broker_status = data.get(status_key, {})
-            if broker_status.get("authenticated"):
-                return {"_sidecar": "true"}
-        except Exception:
-            pass
-        time.sleep(2)
-
-    return None
 
 
 def _is_sidecar_running(port: int) -> bool:
@@ -799,7 +681,8 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
     key it will be replaced.
 
     Args:
-        choice: "0"/"demo", "1"/"zerodha", "2"/"fyers". If None, the user is prompted.
+        choice: "0"/"demo", "1"/"zerodha", "2"/"groww", "3"/"angelone",
+                "4"/"upstox", "5"/"fyers". If None, the user is prompted.
 
     Returns:
         Authenticated BrokerAPI instance.
@@ -807,7 +690,7 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
     global _brokers, _primary_key
 
     if choice is None:
-        console.print("\n[bold]Choose your broker:[/bold]")
+        console.print("\n[bold]Choose your primary broker:[/bold]")
         for num, name, desc in _BROKER_MENU:
             console.print(f"  [cyan][{num}][/cyan] {name:12s}  [dim]{desc}[/dim]")
         choice = Prompt.ask(
@@ -815,12 +698,7 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
             choices=[num for num, _, _ in _BROKER_MENU],
         )
 
-    # Catch unsupported brokers and loop back to the menu
-    try:
-        key, broker = _make_broker(choice)
-    except ValueError:
-        # _make_broker already printed the helpful message; re-show the menu
-        return login()
+    key, broker = _make_broker(choice)
 
     if key == "mock":
         _brokers[key] = broker
