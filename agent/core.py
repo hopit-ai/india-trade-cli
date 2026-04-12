@@ -1190,55 +1190,59 @@ class ClaudeCLIProvider(LLMProvider):
 
 class OpenAISubscriptionProvider(LLMProvider):
     """
-    Uses an OpenAI session token (from your logged-in ChatGPT Plus/Team browser)
-    to make requests to the ChatGPT backend.
+    ⛔  DEPRECATED — non-functional as of 2025.
 
-    This is for users who have a ChatGPT Plus/Team **subscription** but do NOT
-    have a separate OpenAI API key.
+    This provider used an unofficial ChatGPT web API which:
+      - Does NOT support tool calling (the platform requires it for analysis)
+      - Violates OpenAI's Terms of Service for automated use
+      - Has been broken by OpenAI web app updates
 
-    How to get OPENAI_SESSION_TOKEN:
-      1. Log into chatgpt.com in Chrome/Firefox
-      2. Open DevTools → Application → Cookies
-      3. Copy the value of `__Secure-next-auth.session-token`
-      4. Set it in .env: OPENAI_SESSION_TOKEN=<value>
+    ─── MIGRATION ────────────────────────────────────────────────────────────
+    To use OpenAI models, choose one of these working alternatives:
 
-    ⚠️  WARNING:
-      - This uses an unofficial/undocumented ChatGPT API endpoint
-      - May break if OpenAI updates their web app
-      - Against OpenAI's Terms of Service for automated use
-      - For development / personal use only
-      - Token expires; you'll need to refresh it periodically
+    Option A — OpenAI API key (pay-as-you-go):
+      AI_PROVIDER=openai
+      OPENAI_API_KEY=sk-...            (from platform.openai.com)
+      OPENAI_MODEL=gpt-4o
 
-    For production or reliable use, get an API key at platform.openai.com.
+    Option B — OpenRouter (free tier available, full tool calling):
+      AI_PROVIDER=openai
+      OPENAI_BASE_URL=https://openrouter.ai/api/v1
+      OPENAI_API_KEY=sk-or-...         (from openrouter.ai)
+      OPENAI_MODEL=openai/gpt-4o
 
-    Set AI_PROVIDER=openai_subscription in .env
+    Option C — Groq (free tier, very fast, tool calling):
+      AI_PROVIDER=openai
+      OPENAI_BASE_URL=https://api.groq.com/openai/v1
+      OPENAI_API_KEY=gsk_...           (from console.groq.com)
+      OPENAI_MODEL=llama-3.3-70b-versatile
+    ──────────────────────────────────────────────────────────────────────────
     """
+
+    _DEPRECATION_MSG = (
+        "openai_subscription is no longer functional.\n\n"
+        "This provider used an unofficial ChatGPT web API that does not support\n"
+        "tool calling (required by the analysis pipeline) and violates OpenAI ToS.\n\n"
+        "Alternatives:\n"
+        "  • OpenRouter (free tier, full tool calling):\n"
+        "      AI_PROVIDER=openai\n"
+        "      OPENAI_BASE_URL=https://openrouter.ai/api/v1\n"
+        "      OPENAI_API_KEY=<key from openrouter.ai>\n"
+        "      OPENAI_MODEL=openai/gpt-4o\n\n"
+        "  • Groq (free, fast):\n"
+        "      AI_PROVIDER=openai\n"
+        "      OPENAI_BASE_URL=https://api.groq.com/openai/v1\n"
+        "      OPENAI_API_KEY=<key from console.groq.com>\n"
+        "      OPENAI_MODEL=llama-3.3-70b-versatile\n\n"
+        "  • OpenAI API key: AI_PROVIDER=openai, OPENAI_API_KEY=sk-...\n"
+        "    (platform.openai.com → usage-based billing)\n"
+    )
 
     BACKEND_URL = "https://chat.openai.com/backend-api/conversation"
     AUTH_URL = "https://chat.openai.com/api/auth/session"
 
     def __init__(self, model: str, registry: ToolRegistry, system_prompt: str) -> None:
-        super().__init__(model, registry, system_prompt)
-        try:
-            import httpx
-
-            self._httpx = httpx
-        except ImportError:
-            raise RuntimeError("httpx not installed. Run: pip install httpx")
-
-        self._session_token = get_credential(
-            "OPENAI_SESSION_TOKEN",
-            "OpenAI Session Token (ChatGPT Plus)",
-            secret=True,
-            required=False,
-        )
-        if not self._session_token:
-            raise RuntimeError(
-                "OPENAI_SESSION_TOKEN not set.\n"
-                "See .env.example for instructions on getting your session token.\n"
-                "Or use AI_PROVIDER=openai with an API key instead."
-            )
-        self._access_token = self._get_access_token()
+        raise RuntimeError(self._DEPRECATION_MSG)
 
     @property
     def provider_name(self) -> str:
