@@ -1558,3 +1558,62 @@ async def skill_settings_post(req: SettingsUpdateRequest):
         updated.append(key)
 
     return _ok({"updated": updated})
+
+
+# ── Backtest Report ───────────────────────────────────────────
+
+
+class BacktestReportRequest(BaseModel):
+    symbol: str
+    strategies: list[str] = ["rsi"]
+    period: str = "1y"
+    exchange: str = "NSE"
+
+
+@router.post("/backtest_report")
+async def skill_backtest_report(req: BacktestReportRequest):
+    """
+    Run multiple strategies and return a self-contained HTML comparison report.
+    Response includes the HTML inline in data.html and the saved file path.
+    """
+    try:
+        from engine.backtest import run_backtest
+        from engine.backtest_report import generate_html_report
+        import tempfile
+
+        symbol = req.symbol.upper()
+        results = []
+        errors = []
+        for strat in req.strategies:
+            try:
+                r = run_backtest(
+                    symbol=symbol,
+                    strategy_name=strat.lower(),
+                    period=req.period,
+                )
+                results.append(r)
+            except Exception as e:
+                errors.append({"strategy": strat, "error": str(e)})
+
+        if not results:
+            raise HTTPException(status_code=500, detail=f"All strategies failed: {errors}")
+
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False, prefix=f"bt_{symbol}_") as f:
+            tmp_path = f.name
+
+        report_path = generate_html_report(results, output_path=tmp_path)
+        html_content = open(report_path).read()
+
+        return _ok(
+            {
+                "symbol": symbol,
+                "strategies_run": [r.strategy_name for r in results],
+                "errors": errors,
+                "report_path": report_path,
+                "html": html_content,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _err(str(e))

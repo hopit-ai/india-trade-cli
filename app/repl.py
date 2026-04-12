@@ -715,17 +715,22 @@ def cmd_help() -> None:
 
 
 def _handle_backtest_command(args: list[str]) -> None:
-    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain]"""
+    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain] [--html] [--compare]"""
     from engine.output import parse_output_flags, handle_output_flags
 
-    clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
+    wants_html = "--html" in args
+    wants_compare = "--compare" in args
+    clean_args, wants_pdf, wants_explain, _ = parse_output_flags(
+        [a for a in args if a not in ("--html", "--compare")]
+    )
     if not clean_args:
         console.print(
-            "[red]Usage: backtest SYMBOL [strategy] [--pdf] [--explain][/red]\n"
+            "[red]Usage: backtest SYMBOL [strategy] [--pdf] [--explain] [--html] [--compare][/red]\n"
             "[dim]  backtest RELIANCE rsi              RSI(30/70) strategy\n"
             "  backtest RELIANCE ma 20 50          EMA crossover\n"
             "  backtest RELIANCE macd --pdf         Export to PDF\n"
             "  backtest RELIANCE bb --explain       Add simple explanation\n"
+            "  backtest RELIANCE rsi macd bb --compare --html  Compare + HTML report\n"
             "  Strategies: rsi, ma, ema, macd, bb/bollinger[/dim]"
         )
         return
@@ -752,6 +757,31 @@ def _handle_backtest_command(args: list[str]) -> None:
             except ValueError:
                 pass
             strategy_args = [a for a in strategy_args if a not in ("--trades", clean_args[idx + 1])]
+
+    # ── Multi-strategy compare mode ──────────────────────────
+    if wants_compare or (wants_html and len(clean_args) > 2):
+        # All positional args after the symbol are strategy names
+        strategies = [a for a in clean_args[1:] if not a.startswith("--")] or ["rsi"]
+        all_results = []
+        for strat in strategies:
+            console.print(f"[dim]Running {strat} on {symbol} ({period})...[/dim]")
+            try:
+                r = run_backtest(symbol=symbol, strategy_name=strat, period=period)
+                all_results.append(r)
+                ret_color = "green" if r.total_return >= 0 else "red"
+                console.print(
+                    f"  [bold]{strat:12s}[/bold] [{ret_color}]{r.total_return:+.2f}%[/{ret_color}]"
+                    f"  Sharpe {r.sharpe_ratio:.2f}"
+                )
+            except Exception as e:
+                console.print(f"  [red]{strat}[/red] failed: {e}")
+
+        if all_results and wants_html:
+            from engine.backtest_report import generate_html_report
+
+            report_path = generate_html_report(all_results)
+            console.print(f"\n[green]HTML report saved:[/green] {report_path}")
+        return
 
     console.print(f"\n[dim]Running backtest: {symbol} / {strategy_name} / {period}...[/dim]")
 
@@ -785,6 +815,11 @@ def _handle_backtest_command(args: list[str]) -> None:
         _bt_summary = "\n".join(lines)
         _last_output = _bt_summary
         _last_command = f"Backtest {symbol} {strategy_name}"
+        if wants_html:
+            from engine.backtest_report import generate_html_report
+
+            report_path = generate_html_report([result])
+            console.print(f"\n[green]HTML report saved:[/green] {report_path}")
         if wants_pdf or wants_explain:
             handle_output_flags(
                 _bt_summary, f"Backtest {symbol} {strategy_name}", wants_pdf, wants_explain
