@@ -171,7 +171,7 @@ function parseCommand(input) {
     }
 
     default:
-      // Fall through to AI chat
+      // Fall through to AI chat — session_id injected in submit()
       return { endpoint: '/skills/chat', body: { message: input }, cardType: 'markdown' }
   }
 }
@@ -180,6 +180,7 @@ export default function InputBar() {
   const [value, setValue]   = useState('')
   const { call, get, ready } = useAPI()
   const port     = useChatStore((s) => s.port)
+  const activeSessionId   = useChatStore((s) => s.activeSessionId)
   const draft             = useChatStore((s) => s.draft)
   const setDraft          = useChatStore((s) => s.setDraft)
   const streamCancel      = useChatStore((s) => s.streamCancel)
@@ -323,9 +324,14 @@ export default function InputBar() {
     }
 
     try {
+      // Inject session_id for chat and follow-up endpoints
+      let body = parsed.body
+      if (parsed.endpoint === '/skills/chat' && activeSessionId) {
+        body = { ...body, session_id: activeSessionId }
+      }
       const result = parsed.method === 'GET'
         ? await get(parsed.endpoint)
-        : await call(parsed.endpoint, parsed.body)
+        : await call(parsed.endpoint, body)
       addResponse({ cardType: parsed.cardType, data: result.data ?? result })
     } catch (e) {
       addError(e.message)

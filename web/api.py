@@ -1022,12 +1022,34 @@ async def status_page():
 @app.get("/api/status")
 async def api_status(request: Request):
     _require_localhost(request)
+    from brokers.session import get_broker_role
+
     return {
-        "zerodha": {"configured": _has_zerodha(), "authenticated": _zerodha_auth()},
-        "groww": {"configured": _has_groww(), "authenticated": _groww_auth()},
-        "angel_one": {"configured": _has_angelone(), "authenticated": _angelone_auth()},
-        "upstox": {"configured": _has_upstox(), "authenticated": _upstox_auth()},
-        "fyers": {"configured": _has_fyers(), "authenticated": _fyers_auth()},
+        "zerodha": {
+            "configured": _has_zerodha(),
+            "authenticated": _zerodha_auth(),
+            "role": get_broker_role("zerodha"),
+        },
+        "groww": {
+            "configured": _has_groww(),
+            "authenticated": _groww_auth(),
+            "role": get_broker_role("groww"),
+        },
+        "angel_one": {
+            "configured": _has_angelone(),
+            "authenticated": _angelone_auth(),
+            "role": get_broker_role("angelone"),
+        },
+        "upstox": {
+            "configured": _has_upstox(),
+            "authenticated": _upstox_auth(),
+            "role": get_broker_role("upstox"),
+        },
+        "fyers": {
+            "configured": _has_fyers(),
+            "authenticated": _fyers_auth(),
+            "role": get_broker_role("fyers"),
+        },
     }
 
 
@@ -1383,6 +1405,43 @@ async def onboarding_complete(req: OnboardingCompleteRequest):
     env_path.write_text("\n".join(lines) + "\n")
 
     return {"ok": True}
+
+
+class BrokerRoleRequest(BaseModel):
+    broker: str
+    role: str
+
+
+@app.post("/api/broker/role")
+async def set_broker_role_endpoint(req: BrokerRoleRequest, request: Request):
+    """Set the role for a connected broker (data, execution, or both)."""
+    _require_localhost(request)
+    from brokers.session import get_all_brokers, set_broker_role
+
+    # Map API key names to session key names (angel_one → angelone)
+    _API_TO_SESSION = {
+        "zerodha": "zerodha",
+        "groww": "groww",
+        "angel_one": "angelone",
+        "upstox": "upstox",
+        "fyers": "fyers",
+    }
+    session_key = _API_TO_SESSION.get(req.broker, req.broker)
+
+    if session_key not in get_all_brokers():
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail=f"Broker not connected: {req.broker}")
+
+    if req.role not in ("data", "execution", "both"):
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=400, detail=f"Invalid role: {req.role}. Must be data, execution, or both."
+        )
+
+    set_broker_role(session_key, req.role)
+    return {"ok": True, "broker": req.broker, "role": req.role}
 
 
 _BROKER_SESSION_FILES = {

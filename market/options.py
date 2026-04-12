@@ -11,7 +11,7 @@ from typing import Optional
 import pandas as pd
 
 from brokers.base import OptionsContract
-from brokers.session import get_broker
+from brokers.session import get_data_broker
 
 
 def get_options_chain(
@@ -28,7 +28,7 @@ def get_options_chain(
     Returns:
         List of OptionsContract sorted by strike then type (CE/PE).
     """
-    return get_broker().get_options_chain(underlying, expiry)
+    return get_data_broker().get_options_chain(underlying, expiry)
 
 
 def get_expiries(underlying: str) -> list[str]:
@@ -36,7 +36,7 @@ def get_expiries(underlying: str) -> list[str]:
     All available expiry dates for an underlying (sorted ascending).
     Returns dates as "YYYY-MM-DD" strings.
     """
-    chain = get_broker().get_options_chain(underlying)
+    chain = get_data_broker().get_options_chain(underlying)
     dates = sorted({c.expiry for c in chain})
     return dates
 
@@ -94,7 +94,7 @@ def get_atm_strike(underlying: str, spot: float) -> float:
     """
     Return the at-the-money strike closest to spot price.
     """
-    chain = get_broker().get_options_chain(underlying)
+    chain = get_data_broker().get_options_chain(underlying)
     strikes = sorted({c.strike for c in chain})
     if not strikes:
         return round(spot / 50) * 50  # fallback
@@ -106,7 +106,7 @@ def get_pcr(underlying: str, expiry: Optional[str] = None) -> float:
     Put-Call Ratio by Open Interest for the given expiry.
     PCR > 1.2 → bearish sentiment; PCR < 0.8 → bullish.
     """
-    chain = get_broker().get_options_chain(underlying, expiry)
+    chain = get_data_broker().get_options_chain(underlying, expiry)
     ce_oi = sum(c.oi for c in chain if c.option_type == "CE")
     pe_oi = sum(c.oi for c in chain if c.option_type == "PE")
     if ce_oi == 0:
@@ -121,7 +121,7 @@ def get_max_pain(underlying: str, expiry: Optional[str] = None) -> float:
 
     Calculated by summing ITM losses across all strikes for CE + PE.
     """
-    chain = get_broker().get_options_chain(underlying, expiry)
+    chain = get_data_broker().get_options_chain(underlying, expiry)
     strikes = sorted({c.strike for c in chain})
     if not strikes:
         return 0.0

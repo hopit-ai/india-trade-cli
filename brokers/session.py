@@ -56,6 +56,15 @@ _brokers: dict[str, BrokerAPI] = {}
 # The "primary" broker — used by get_broker() for single-broker commands
 _primary_key: str = ""
 
+# Role-based routing: key → "data" | "execution" | "both"
+_broker_roles: dict[str, str] = {}
+
+# Default role auto-assignment when registering known brokers
+_DEFAULT_ROLES: dict[str, str] = {
+    "fyers": "data",
+    "zerodha": "execution",
+}
+
 # Human-readable names for display
 _BROKER_NAMES = {
     "0": "mock",
@@ -100,17 +109,32 @@ _BROKER_MENU = [
 # ── Public accessors ──────────────────────────────────────────
 
 
-def register_broker(key: str, broker: BrokerAPI, *, primary: bool = False) -> None:
+def register_broker(
+    key: str, broker: BrokerAPI, *, primary: bool = False, role: str | None = None
+) -> None:
     """
     Register an externally-created broker instance.
 
     Used by --no-broker mode to inject a MockBrokerAPI without going
     through the interactive login flow.
+
+    Args:
+        key:     Broker name (lowercase), e.g. "fyers", "zerodha".
+        broker:  Authenticated BrokerAPI instance.
+        primary: If True, set as the primary broker.
+        role:    Optional role: "data", "execution", or "both".
+                 If not provided, auto-assigns from _DEFAULT_ROLES
+                 (fyers→data, zerodha→execution) or leaves unset.
     """
     global _brokers, _primary_key
     _brokers[key] = broker
     if primary or not _primary_key:
         _primary_key = key
+    # Auto-assign role
+    if role:
+        _broker_roles[key] = role
+    elif key in _DEFAULT_ROLES and key not in _broker_roles:
+        _broker_roles[key] = _DEFAULT_ROLES[key]
 
 
 def unregister_broker(key: str) -> None:
@@ -123,6 +147,7 @@ def unregister_broker(key: str) -> None:
     """
     global _brokers, _primary_key
     _brokers.pop(key, None)
+    _broker_roles.pop(key, None)
     if _primary_key == key:
         _primary_key = next(iter(_brokers), "")
 
@@ -144,6 +169,41 @@ def get_all_brokers() -> dict[str, BrokerAPI]:
 def is_multi_broker() -> bool:
     """True if more than one broker is currently connected."""
     return len(_brokers) > 1
+
+
+# ── Role-based routing ───────────────────────────────────────────
+
+_VALID_ROLES = {"data", "execution", "both"}
+
+
+def set_broker_role(key: str, role: str) -> None:
+    """Set broker role. role must be 'data', 'execution', or 'both'."""
+    if role not in _VALID_ROLES:
+        raise ValueError(f"Invalid role {role!r}. Must be one of {_VALID_ROLES}")
+    _broker_roles[key] = role
+
+
+def get_broker_role(key: str) -> str:
+    """Get role for a broker. Returns 'both' if not explicitly set."""
+    return _broker_roles.get(key, "both")
+
+
+def get_data_broker() -> BrokerAPI:
+    """Return broker with role='data' or 'both'. Falls back to primary."""
+    for key, role in _broker_roles.items():
+        if role in ("data", "both") and key in _brokers:
+            return _brokers[key]
+    # Fallback to primary
+    return get_broker()
+
+
+def get_execution_broker() -> BrokerAPI:
+    """Return broker with role='execution' or 'both'. Falls back to primary."""
+    for key, role in _broker_roles.items():
+        if role in ("execution", "both") and key in _brokers:
+            return _brokers[key]
+    # Fallback to primary
+    return get_broker()
 
 
 def list_connected_brokers() -> None:

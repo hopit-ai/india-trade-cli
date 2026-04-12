@@ -25,10 +25,18 @@ const QUICK_COMMANDS = [
   { label: 'Memory',         icon: '🧠',  command: 'memory' },
 ]
 
+const ROLE_LABELS = { data: 'DATA', execution: 'EXEC', both: '' }
+
 export default function Sidebar() {
-  const { addUserMessage, addResponse, addError, isLoading, brokerStatus, port } = useChatStore()
+  const { addUserMessage, addResponse, addError, isLoading, brokerStatus, brokerStatuses, port } = useChatStore()
+  const sessions = useChatStore((s) => s.sessions)
+  const activeSessionId = useChatStore((s) => s.activeSessionId)
+  const createSession = useChatStore((s) => s.createSession)
+  const switchSession = useChatStore((s) => s.switchSession)
   const { call, ready } = useAPI()
   const [showBrokerPanel, setShowBrokerPanel] = useState(false)
+
+  const sessionList = Object.values(sessions).sort((a, b) => b.createdAt - a.createdAt)
 
   async function runCommand(command) {
     if (!ready || isLoading) return
@@ -53,22 +61,67 @@ export default function Sidebar() {
         onClick={() => setShowBrokerPanel(true)}
       >
         <p className="text-muted text-[10px] uppercase tracking-widest mb-2 font-ui">Broker</p>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 transition-all ${
-              brokerStatus.connected
-                ? 'bg-green shadow-[0_0_6px_rgba(82,224,122,0.4)]'
-                : 'bg-subtle'
-            }`} />
-            <span className="text-text text-[12px] font-ui truncate">
-              {brokerStatus.connected
-                ? brokerStatus.broker
-                : port ? 'Not connected' : 'Starting…'}
-            </span>
-          </div>
-          <span className="text-subtle text-[10px] font-ui opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1">
-            {brokerStatus.connected ? 'manage' : 'connect'}
-          </span>
+        {(() => {
+          const connectedBrokers = Object.entries(brokerStatuses).filter(([, b]) => b.authenticated)
+          if (connectedBrokers.length === 0) {
+            return (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0 bg-subtle" />
+                  <span className="text-text text-[12px] font-ui truncate">
+                    {port ? 'Not connected' : 'Starting...'}
+                  </span>
+                </div>
+                <span className="text-subtle text-[10px] font-ui opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1">
+                  connect
+                </span>
+              </div>
+            )
+          }
+          return (
+            <div className="flex flex-col gap-1">
+              {connectedBrokers.map(([key, status]) => {
+                const name = { zerodha: 'Zerodha', groww: 'Groww', angel_one: 'Angel One', upstox: 'Upstox', fyers: 'Fyers' }[key] ?? key
+                const roleLabel = ROLE_LABELS[status.role] || ''
+                return (
+                  <div key={key} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green shadow-[0_0_6px_rgba(82,224,122,0.4)]" />
+                      <span className="text-text text-[12px] font-ui truncate">{name}</span>
+                    </div>
+                    {roleLabel && (
+                      <span className={`text-[9px] font-ui font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                        status.role === 'data' ? 'bg-blue/15 text-blue' : 'bg-amber/15 text-amber'
+                      }`}>{roleLabel}</span>
+                    )}
+                  </div>
+                )
+              })}
+              <span className="text-subtle text-[10px] font-ui opacity-0 group-hover:opacity-100 transition-opacity">
+                manage
+              </span>
+            </div>
+          )
+        })()}
+      </div>
+
+      {/* Sessions */}
+      <div className="px-3 py-2 border-b border-border">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <p className="text-muted text-[10px] uppercase tracking-widest font-ui">Sessions</p>
+          <button onClick={createSession} className="text-blue text-[11px] font-ui hover:underline cursor-pointer">+ New</button>
+        </div>
+        <div className="flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
+          {sessionList.map(s => (
+            <button
+              key={s.id}
+              onClick={() => switchSession(s.id)}
+              className={`text-left px-2 py-1.5 rounded text-[12px] font-ui truncate cursor-pointer
+                ${s.id === activeSessionId ? 'bg-elevated text-text' : 'text-muted hover:bg-elevated/50'}`}
+            >
+              {s.title}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -94,7 +147,7 @@ export default function Sidebar() {
 
       {/* Version */}
       <div className="px-4 py-3 border-t border-border">
-        <p className="text-subtle text-[10px] font-ui">India Trade v0.2</p>
+        <p className="text-subtle text-[10px] font-ui">Vibe Trading v0.2</p>
       </div>
     </div>
   )

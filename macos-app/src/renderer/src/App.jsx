@@ -9,6 +9,7 @@ import OnboardingWizard from './components/Onboarding/OnboardingWizard'
 
 export default function App() {
   const { setPort, setSidecarError, setBrokerStatuses } = useChatStore()
+  const createSession = useChatStore((s) => s.createSession)
   const port = useChatStore((s) => s.port)
 
   // Setup phase state machine
@@ -113,6 +114,18 @@ export default function App() {
     return () => clearInterval(t)
   }, [port])
 
+  // Cmd+N / Ctrl+N — new session
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault()
+        createSession()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [createSession])
+
   // Show onboarding wizard for first-launch setup
   if (setupPhase === 'onboarding') {
     return <OnboardingWizard port={port} onComplete={() => setSetupPhase('ready')} />
@@ -132,7 +145,7 @@ export default function App() {
         <div className="flex-1 flex items-center justify-center gap-2 pointer-events-none">
           <span className="text-amber text-[15px]">◆</span>
           <span className="text-text text-[13px] font-semibold tracking-wide font-ui">
-            India Trade
+            Vibe Trading
           </span>
         </div>
         <div className="no-drag flex items-center gap-3 pr-4">
