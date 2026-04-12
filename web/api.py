@@ -385,6 +385,11 @@ def _cached_auth(broker_key: str, check_fn) -> bool:
     return result
 
 
+def _invalidate_auth_cache(broker_key: str) -> None:
+    """Clear cached auth result so next status poll re-checks."""
+    _auth_cache.pop(broker_key, None)
+
+
 # Zerodha
 def _has_zerodha() -> bool:
     return bool(_env("KITE_API_KEY") and _env("KITE_API_SECRET"))
@@ -671,6 +676,7 @@ async def zerodha_callback(request_token: str = "", status: str = ""):
         profile = b.complete_login(request_token=request_token)
         funds = b.get_funds()
         register_broker("zerodha", b)
+        _invalidate_auth_cache("zerodha")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -730,6 +736,7 @@ async def groww_callback(code: str = "", error: str = ""):
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
         register_broker("groww", b)
+        _invalidate_auth_cache("groww")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -782,6 +789,7 @@ async def angelone_login():
         profile = b.complete_login()
         funds = b.get_funds()
         register_broker("angelone", b)
+        _invalidate_auth_cache("angel_one")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">
           ❌ Angel One login failed: {e}<br><br>
@@ -843,6 +851,7 @@ async def upstox_callback(code: str = "", error: str = ""):
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
         register_broker("upstox", b)
+        _invalidate_auth_cache("upstox")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
@@ -909,6 +918,7 @@ async def fyers_callback(auth_code: str = "", state: str = "", s: str = ""):
         profile = b.complete_login(auth_code=code)
         funds = b.get_funds()
         register_broker("fyers", b)
+        _invalidate_auth_cache("fyers")
     except Exception as e:
         body = f"""<div class="card"><div class="err-box">❌ {e}</div>
         <a href="/" class="btn btn-back">← Try again</a></div>"""
