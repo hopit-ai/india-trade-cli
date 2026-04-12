@@ -66,6 +66,7 @@ COMMANDS = [
     "orders",
     "morning-brief",
     "analyze",
+    "quick",
     "trade",
     "portfolio",
     "paper",
@@ -1529,6 +1530,76 @@ def run_repl(broker: BrokerAPI) -> None:
                         )
                         console.print("[dim]Falling back to standard analysis...[/dim]")
                         agent.run_multi_agent_analysis(symbol)
+
+            elif command == "quick":
+                # Quick scan: single-agent, 1 LLM call, 3-5s
+                # Usage: quick SYMBOL [SYMBOL2 ...]
+                import time as _time
+
+                if not args:
+                    console.print("[dim]Usage: quick <SYMBOL> [SYMBOL2 ...][/dim]")
+                    console.print("[dim]  quick INFY          → fast BUY/SELL/HOLD[/dim]")
+                    console.print("[dim]  quick INFY TCS HDFC → scan multiple symbols[/dim]")
+                else:
+                    from agent.quick_scan import QuickScanner
+                    from rich.table import Table
+
+                    agent = get_agent()
+                    scanner = QuickScanner(
+                        provider=getattr(agent, "_provider", None),
+                        registry=getattr(agent, "_registry", None),
+                    )
+
+                    symbols = [a.upper() for a in args if not a.startswith("-")]
+                    if len(symbols) == 1:
+                        # Single symbol — rich output
+                        sym = symbols[0]
+                        console.print(f"\n  [dim]Scanning {sym}...[/dim]")
+                        result = scanner.scan(sym)
+                        if result.error:
+                            console.print(f"  [red]Error:[/red] {result.error}")
+                        else:
+                            v_style = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}.get(result.verdict, "white")
+                            console.print(
+                                f"\n  [bold]{result.symbol}[/bold] · "
+                                f"[{v_style}]{result.verdict}[/{v_style}] "
+                                f"({result.confidence}%) · ₹{result.ltp:,.2f}"
+                            )
+                            for reason in result.reasons:
+                                console.print(f"    • {reason}")
+                            if result.entry:
+                                console.print(
+                                    f"\n  Entry: ₹{result.entry:,.2f}  "
+                                    f"SL: ₹{result.sl:,.2f}  "
+                                    f"Target: ₹{result.target:,.2f}"
+                                    if result.sl and result.target else
+                                    f"\n  Entry: ₹{result.entry:,.2f}"
+                                )
+                            console.print(f"  [dim]⏱ {result.elapsed_ms}ms · 1 LLM call[/dim]\n")
+                    else:
+                        # Multi-symbol — table output
+                        console.print(f"\n  [dim]Quick-scanning {len(symbols)} symbols...[/dim]")
+                        table = Table(show_header=True, header_style="bold cyan", box=None)
+                        table.add_column("Symbol", style="bold", width=10)
+                        table.add_column("Price", justify="right", width=10)
+                        table.add_column("Verdict", width=8)
+                        table.add_column("Conf", justify="right", width=6)
+                        table.add_column("Top Reason", width=50)
+                        table.add_column("⏱", justify="right", width=6)
+
+                        for sym in symbols:
+                            result = scanner.scan(sym)
+                            v_style = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}.get(result.verdict, "white")
+                            table.add_row(
+                                result.symbol,
+                                f"₹{result.ltp:,.0f}" if result.ltp else "-",
+                                f"[{v_style}]{result.verdict}[/{v_style}]",
+                                f"{result.confidence}%",
+                                result.reasons[0] if result.reasons else "-",
+                                f"{result.elapsed_ms}ms",
+                            )
+                        console.print(table)
+                        console.print()
 
             elif command == "telegram":
                 sub = args[0].lower() if args else ""

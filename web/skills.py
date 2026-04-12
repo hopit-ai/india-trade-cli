@@ -1176,6 +1176,44 @@ async def skill_audit(req: AuditRequest):
         raise _err(str(e))
 
 
+# ── Quick Analyze (#153) ─────────────────────────────────────
+
+
+class QuickAnalyzeRequest(BaseModel):
+    symbol: str
+    exchange: str = "NSE"
+
+
+@router.post("/quick_analyze")
+async def skill_quick_analyze(req: QuickAnalyzeRequest):
+    """
+    Fast single-agent analysis — 1 LLM call, 3-5 seconds.
+    Returns verdict, confidence, reasons, entry/SL/target.
+    """
+    try:
+        from agent.quick_scan import QuickScanner
+
+        scanner = QuickScanner()
+        result = scanner.scan(req.symbol.upper(), req.exchange.upper())
+        return {
+            "status": "ok",
+            "data": {
+                "symbol": result.symbol,
+                "verdict": result.verdict,
+                "confidence": result.confidence,
+                "reasons": result.reasons,
+                "entry": result.entry,
+                "sl": result.sl,
+                "target": result.target,
+                "ltp": result.ltp,
+                "elapsed_ms": result.elapsed_ms,
+                "error": result.error,
+            },
+        }
+    except Exception as e:
+        raise _err(str(e))
+
+
 # ── Telegram ──────────────────────────────────────────────────
 
 
