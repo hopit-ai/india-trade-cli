@@ -4,6 +4,11 @@ Tests for dual-broker role-based routing (#129).
 
 from __future__ import annotations
 
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
 import pytest
 
 from brokers.mock import MockBrokerAPI
@@ -57,9 +62,18 @@ def test_get_broker_role_default():
     from brokers.session import register_broker, get_broker_role
 
     b = _make_mock()
+    register_broker("mock", b)
+    # Non-default broker with no explicit role — should return "both"
+    assert get_broker_role("mock") == "both"
+
+
+def test_get_broker_role_fyers_auto_assigns_data():
+    from brokers.session import register_broker, get_broker_role
+
+    b = _make_mock()
     register_broker("fyers", b)
-    # No explicit role set — should return "both"
-    assert get_broker_role("fyers") == "both"
+    # fyers auto-assigns to "data"
+    assert get_broker_role("fyers") == "data"
 
 
 def test_get_data_broker_returns_data_role():
@@ -163,13 +177,19 @@ def test_invalid_role_raises():
 # ── API tests ────────────────────────────────────────────────────
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def client():
-    """FastAPI TestClient with clean broker state."""
-    from fastapi.testclient import TestClient
-    from web.api import app
+    """FastAPI TestClient with auth suppressed."""
+    os.environ["DEPLOY_MODE"] = "self-hosted"
+    os.environ["AUTH_DB_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
+    with (
+        patch("config.credentials.load_all", return_value=None),
+        patch("dotenv.load_dotenv", return_value=None),
+    ):
+        from web.api import app
+        from fastapi.testclient import TestClient
 
-    return TestClient(app)
+        yield TestClient(app)
 
 
 def test_status_includes_roles(client):
@@ -179,7 +199,8 @@ def test_status_includes_roles(client):
     register_broker("fyers", b)
     set_broker_role("fyers", "data")
 
-    resp = client.get("/api/status")
+    with patch("web.api._require_localhost"):
+        resp = client.get("/api/status")
     assert resp.status_code == 200
     data = resp.json()
     assert "fyers" in data
@@ -192,19 +213,21 @@ def test_role_endpoint(client):
     b = _make_mock()
     register_broker("fyers", b)
 
-    resp = client.post(
-        "/api/broker/role",
-        json={"broker": "fyers", "role": "execution"},
-    )
+    with patch("web.api._require_localhost"):
+        resp = client.post(
+            "/api/broker/role",
+            json={"broker": "fyers", "role": "execution"},
+        )
     assert resp.status_code == 200
     assert get_broker_role("fyers") == "execution"
 
 
 def test_role_endpoint_invalid_broker(client):
-    resp = client.post(
-        "/api/broker/role",
-        json={"broker": "nonexistent", "role": "data"},
-    )
+    with patch("web.api._require_localhost"):
+        resp = client.post(
+            "/api/broker/role",
+            json={"broker": "nonexistent", "role": "data"},
+        )
     assert resp.status_code == 404
 
 
@@ -214,8 +237,9 @@ def test_role_endpoint_invalid_role(client):
     b = _make_mock()
     register_broker("fyers", b)
 
-    resp = client.post(
-        "/api/broker/role",
-        json={"broker": "fyers", "role": "invalid"},
-    )
+    with patch("web.api._require_localhost"):
+        resp = client.post(
+            "/api/broker/role",
+            json={"broker": "fyers", "role": "invalid"},
+        )
     assert resp.status_code == 400
