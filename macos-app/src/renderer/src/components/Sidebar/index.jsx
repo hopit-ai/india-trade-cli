@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useChatStore } from '../../store/chatStore'
 import { useAPI } from '../../hooks/useAPI'
 import BrokerPanel from './BrokerPanel'
+import SettingsPanel from './SettingsPanel'
 
 const ROLE_LABELS = { data: 'DATA', execution: 'EXEC', both: '' }
 
@@ -34,6 +35,7 @@ export default function Sidebar() {
   const switchSession = useChatStore((s) => s.switchSession)
   const deleteSession = useChatStore((s) => s.deleteSession)
   const [showBrokerPanel, setShowBrokerPanel] = useState(false)
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false)
   const [hoveredSession, setHoveredSession] = useState(null)
 
   const sessionList = Object.values(sessions).sort((a, b) => b.createdAt - a.createdAt)
@@ -44,6 +46,9 @@ export default function Sidebar() {
 
       {/* Broker panel overlay */}
       {showBrokerPanel && <BrokerPanel onClose={() => setShowBrokerPanel(false)} />}
+
+      {/* Settings panel overlay */}
+      {showSettingsPanel && <SettingsPanel onClose={() => setShowSettingsPanel(false)} />}
 
       {/* New session button */}
       <div className="px-3 pt-3 pb-2">
@@ -94,9 +99,23 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Bottom bar — broker status + settings gear */}
+      <div className="border-t border-border flex items-stretch">
+        {/* Settings gear */}
+        <button
+          onClick={() => setShowSettingsPanel(true)}
+          className="px-3 py-3 text-subtle hover:text-text transition-colors cursor-pointer flex-shrink-0"
+          title="Settings"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+
       {/* Broker status — compact, at bottom */}
       <div
-        className="px-3 py-3 border-t border-border cursor-pointer hover:bg-elevated/50 transition-colors"
+        className="flex-1 px-3 py-3 cursor-pointer hover:bg-elevated/50 transition-colors"
         onClick={() => setShowBrokerPanel(true)}
       >
         {connectedBrokers.length === 0 ? (
@@ -125,6 +144,7 @@ export default function Sidebar() {
             })}
           </div>
         )}
+      </div>
       </div>
     </div>
   )

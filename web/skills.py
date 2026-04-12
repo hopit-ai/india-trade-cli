@@ -1489,3 +1489,72 @@ async def skill_explain(req: ExplainRequest):
         return _ok({"simplified": simplified})
     except Exception as e:
         raise _err(str(e))
+
+
+# ── Settings ──────────────────────────────────────────────────
+
+# Keys that can be read/written via the settings endpoints.
+# Secrets are masked on GET; all can be written via POST.
+_SETTINGS_READABLE: list[tuple[str, bool]] = [
+    # (env_key, is_secret)
+    ("AI_PROVIDER", False),
+    ("AI_MODEL", False),
+    ("AI_FAST_PROVIDER", False),
+    ("AI_FAST_MODEL", False),
+    ("ANTHROPIC_API_KEY", True),
+    ("OPENAI_API_KEY", True),
+    ("OPENAI_BASE_URL", False),
+    ("OPENAI_MODEL", False),
+    ("GEMINI_API_KEY", True),
+    ("TRADING_MODE", False),
+    ("TRADING_CAPITAL", False),
+    ("DEFAULT_RISK_PCT", False),
+    ("NEWSAPI_KEY", True),
+    ("TELEGRAM_BOT_TOKEN", True),
+]
+
+_SETTINGS_ALLOWED_WRITE: set[str] = {k for k, _ in _SETTINGS_READABLE}
+
+
+class SettingsUpdateRequest(BaseModel):
+    settings: dict[str, str]
+
+
+@router.get("/settings")
+async def skill_settings_get():
+    """Return current app configuration. Secrets are masked."""
+    import os
+
+    result: dict[str, object] = {}
+    for key, is_secret in _SETTINGS_READABLE:
+        val = os.environ.get(key, "")
+        if is_secret:
+            # Expose a boolean presence flag, not the value
+            result[key.lower() + "_set"] = bool(val)
+        else:
+            result[key.lower()] = val
+
+    return _ok(result)
+
+
+@router.post("/settings")
+async def skill_settings_post(req: SettingsUpdateRequest):
+    """Update app settings. Writes to os.environ + keychain."""
+    import os
+
+    disallowed = [k for k in req.settings if k not in _SETTINGS_ALLOWED_WRITE]
+    if disallowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown or disallowed setting key(s): {disallowed}",
+        )
+
+    from config.credentials import set_credential
+
+    updated = []
+    for key, value in req.settings.items():
+        set_credential(key, value)
+        os.environ[key] = value
+        updated.append(key)
+
+    return _ok({"updated": updated})
