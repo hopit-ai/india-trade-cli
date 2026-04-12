@@ -265,7 +265,8 @@ def list_connected_brokers() -> None:
 
 
 def set_data_broker(key: str) -> None:
-    """Set a broker as the data source. Auto-login if not connected."""
+    """Set a broker as the data source. Only one data broker allowed.
+    Auto-login if not connected."""
     key = _BROKER_NAMES.get(key.lower(), key.lower())
     if key not in _brokers:
         console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
@@ -273,16 +274,19 @@ def set_data_broker(key: str) -> None:
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
-    # Clear any existing data role
-    for k, r in list(_broker_roles.items()):
-        if r == "data":
-            _broker_roles[k] = "execution" if k != key else "data"
+    # Remove data role from any other broker
+    for k in list(_broker_roles):
+        if k != key and _broker_roles.get(k) == "data":
+            del _broker_roles[k]
+        elif k != key and _broker_roles.get(k) == "both":
+            _broker_roles[k] = "execution"
     set_broker_role(key, "data")
     console.print(f"[green]✓ Data broker set to {key.title()}[/green]")
 
 
 def set_exec_broker(key: str) -> None:
-    """Set a broker as the execution target. Auto-login if not connected."""
+    """Set a broker as the execution target. Only one execution broker allowed.
+    Auto-login if not connected."""
     key = _BROKER_NAMES.get(key.lower(), key.lower())
     if key not in _brokers:
         console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
@@ -290,10 +294,12 @@ def set_exec_broker(key: str) -> None:
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
-    # Clear any existing execution role
-    for k, r in list(_broker_roles.items()):
-        if r == "execution":
-            _broker_roles[k] = "data" if k != key else "execution"
+    # Remove execution role from any other broker
+    for k in list(_broker_roles):
+        if k != key and _broker_roles.get(k) == "execution":
+            del _broker_roles[k]
+        elif k != key and _broker_roles.get(k) == "both":
+            _broker_roles[k] = "data"
     set_broker_role(key, "execution")
     console.print(f"[green]✓ Execution broker set to {key.title()}[/green]")
 
