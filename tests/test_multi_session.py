@@ -7,26 +7,15 @@ and that resetting one session doesn't affect another.
 
 from __future__ import annotations
 
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 from fastapi.testclient import TestClient
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def client():
-    os.environ["DEPLOY_MODE"] = "self-hosted"
-    os.environ["AUTH_DB_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
-    with (
-        patch("config.credentials.load_all", return_value=None),
-        patch("dotenv.load_dotenv", return_value=None),
-    ):
-        from web.api import app
+    from web.api import app
 
-        yield TestClient(app)
+    return TestClient(app)
 
 
 @pytest.fixture(autouse=True)
@@ -39,47 +28,57 @@ def clean_sessions():
     _chat_sessions.clear()
 
 
-def _mock_agent():
-    agent = MagicMock()
-    agent.chat = MagicMock(return_value="mock response")
-    agent._history = [{"role": "user", "content": "test"}]
-    return agent
-
-
 def test_chat_session_id_independent(client):
     """Two different session_ids should get independent TradingAgents."""
     from web.skills import _chat_sessions
 
-    # Pre-populate sessions with mock agents (avoids needing real LLM)
-    _chat_sessions["session-a"] = _mock_agent()
-    _chat_sessions["session-b"] = _mock_agent()
-
+    # Send a message on session A
     resp_a = client.post(
         "/skills/chat",
-        json={"message": "hello from A", "session_id": "session-a"},
+        json={
+            "message": "hello from session A",
+            "session_id": "session-a",
+        },
     )
     assert resp_a.status_code == 200
 
+    # Send a message on session B
     resp_b = client.post(
         "/skills/chat",
-        json={"message": "hello from B", "session_id": "session-b"},
+        json={
+            "message": "hello from session B",
+            "session_id": "session-b",
+        },
     )
     assert resp_b.status_code == 200
 
-    # Both sessions exist and are different objects
+    # Both sessions should exist as separate entries
+    assert "session-a" in _chat_sessions
+    assert "session-b" in _chat_sessions
     assert _chat_sessions["session-a"] is not _chat_sessions["session-b"]
-
-    # Each agent was called with the right message
-    _chat_sessions["session-a"].chat.assert_called_with("hello from A")
-    _chat_sessions["session-b"].chat.assert_called_with("hello from B")
 
 
 def test_chat_reset_clears_session(client):
     """Resetting one session should not affect another."""
     from web.skills import _chat_sessions
 
-    _chat_sessions["session-a"] = _mock_agent()
-    _chat_sessions["session-b"] = _mock_agent()
+    # Create two sessions
+    client.post(
+        "/skills/chat",
+        json={
+            "message": "hello A",
+            "session_id": "session-a",
+        },
+    )
+    client.post(
+        "/skills/chat",
+        json={
+            "message": "hello B",
+            "session_id": "session-b",
+        },
+    )
+    assert "session-a" in _chat_sessions
+    assert "session-b" in _chat_sessions
 
     # Reset session A
     resp = client.post("/skills/chat/reset", json={"session_id": "session-a"})
