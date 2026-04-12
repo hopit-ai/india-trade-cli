@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -97,6 +98,10 @@ class TradeRecord:
     hold_days: Optional[int] = None
     outcome_notes: str = ""
 
+    # Analysis snapshot (#122)
+    price_at_analysis: Optional[float] = None  # LTP at time of analysis
+    synthesis_text: str = ""  # full raw LLM synthesis output
+
     # Tags for filtering
     tags: list[str] = field(default_factory=list)
 
@@ -134,6 +139,8 @@ class TradeMemory:
         bear_summary: str = "",
         tags: Optional[list[str]] = None,
         raw_synthesis: str = "",
+        price_at_analysis: Optional[float] = None,
+        synthesis_text: str = "",
     ) -> TradeRecord:
         """Store a new analysis/recommendation."""
         record = TradeRecord(
@@ -157,6 +164,8 @@ class TradeMemory:
             bull_summary=bull_summary,
             bear_summary=bear_summary,
             tags=tags or [],
+            price_at_analysis=price_at_analysis,
+            synthesis_text=synthesis_text or raw_synthesis,
         )
 
         self._records.append(record)
@@ -175,6 +184,7 @@ class TradeMemory:
         analyst_reports: list,  # list of AnalystReport
         debate: Any,  # DebateResult
         synthesis: str,  # raw LLM output
+        price: Optional[float] = None,  # spot price at time of analysis (#122)
     ) -> TradeRecord:
         """
         Store a record directly from multi-agent pipeline output.
@@ -227,7 +237,8 @@ class TradeMemory:
             debate_winner=debate_winner,
             bull_summary=bull_summary,
             bear_summary=bear_summary,
-            raw_synthesis=synthesis,
+            synthesis_text=synthesis,
+            price_at_analysis=price,
         )
 
     # ── Record Outcome ───────────────────────────────────────
@@ -381,12 +392,27 @@ class TradeMemory:
         # Average confidence
         avg_confidence = sum(r.confidence for r in self._records) / total if total else 0
 
+        # Win rate: only meaningful with ≥5 outcomes (#123)
+        _min_outcomes_for_rate = 5
+        _tracked = len(with_outcome)
+        if _tracked >= _min_outcomes_for_rate:
+            win_rate: Optional[float] = round(len(wins) / _tracked * 100, 1)
+            win_rate_label = f"{len(wins)}/{_tracked} tracked ({win_rate:.0f}%)"
+        elif _tracked > 0:
+            win_rate = None
+            win_rate_label = f"{len(wins)}/{_tracked} tracked (insufficient data)"
+        else:
+            win_rate = None
+            win_rate_label = "No outcomes recorded"
+
         return {
             "total_analyses": total,
-            "with_outcome": len(with_outcome),
+            "with_outcome": _tracked,
             "wins": len(wins),
             "losses": len(losses),
-            "win_rate": round(len(wins) / len(with_outcome) * 100, 1) if with_outcome else 0,
+            "win_rate": win_rate,
+            "win_rate_label": win_rate_label,
+            "win_rate_insufficient": _tracked < _min_outcomes_for_rate,
             "total_pnl": round(total_pnl, 2),
             "avg_pnl": round(avg_pnl, 2),
             "avg_confidence": round(avg_confidence, 1),
@@ -545,7 +571,16 @@ class TradeMemory:
         try:
             if MEMORY_FILE.exists():
                 data = json.loads(MEMORY_FILE.read_text())
-                self._records = [TradeRecord(**d) for d in data]
+                # Backward compat: strip unknown keys, fill missing with defaults
+                valid_fields = set(TradeRecord.__dataclass_fields__.keys())
+                records = []
+                for d in data:
+                    filtered = {k: v for k, v in d.items() if k in valid_fields}
+                    try:
+                        records.append(TradeRecord(**filtered))
+                    except Exception:
+                        pass  # skip corrupt records
+                self._records = records
         except Exception:
             self._records = []
 
@@ -554,29 +589,46 @@ class TradeMemory:
 
 
 def _parse_synthesis(text: str) -> tuple[str, int, str]:
-    """Extract verdict, confidence, and strategy from synthesis LLM output."""
+    """
+    Extract verdict, confidence, and strategy from synthesis LLM output.
+
+    Handles various LLM formatting styles:
+      - Plain:    VERDICT: BUY
+      - Markdown: **VERDICT: BUY**
+      - Mixed:    Final VERDICT: STRONG_SELL
+      - Any case: Verdict: sell
+    """
     verdict = "HOLD"
     confidence = 50
     strategy = ""
 
-    for line in text.splitlines():
-        upper = line.strip().upper()
+    # ── Verdict: robust regex, case-insensitive, strips markdown ──
+    verdict_match = re.search(
+        r"verdict\s*[:\s]\s*\*{0,2}([A-Z_a-z ]+?)\*{0,2}(?:\s|$|[,.\n])",
+        text,
+        re.IGNORECASE,
+    )
+    if verdict_match:
+        raw = verdict_match.group(1).strip().upper().replace(" ", "_").strip("_")
+        # Check longest matches first to avoid "BUY" matching before "STRONG_BUY"
+        for v in ("STRONG_BUY", "STRONG_SELL", "BUY", "SELL", "HOLD"):
+            # Exact match first; then check if verdict token starts with v
+            if raw == v or raw.startswith(v) or raw.endswith(v):
+                verdict = v
+                break
 
-        if upper.startswith("VERDICT:"):
-            val = line.split(":", 1)[1].strip().upper()
-            for v in ("STRONG_BUY", "STRONG_SELL", "BUY", "SELL", "HOLD"):
-                if v in val:
-                    verdict = v
-                    break
+    # ── Confidence: extract number after CONFIDENCE: ──────────────
+    conf_match = re.search(r"confidence\s*[:\s]\s*\*{0,2}(\d+)\s*%?\*{0,2}", text, re.IGNORECASE)
+    if conf_match:
+        try:
+            confidence = int(conf_match.group(1))
+        except ValueError:
+            pass
 
-        elif upper.startswith("CONFIDENCE:"):
-            try:
-                confidence = int(line.split(":", 1)[1].strip().rstrip("%"))
-            except (ValueError, IndexError):
-                pass
-
-        elif upper.startswith("STRATEGY"):
-            strategy = line.split(":", 1)[1].strip() if ":" in line else ""
+    # ── Strategy: first line starting with strategy ───────────────
+    strategy_match = re.search(r"strategy\s*[:\s]\s*(.+?)(?:\n|$)", text, re.IGNORECASE)
+    if strategy_match:
+        strategy = strategy_match.group(1).strip().strip("*").strip()
 
     return verdict, confidence, strategy
 
