@@ -5,7 +5,6 @@ Tests for broker routing visibility and CLI commands (#159).
 from __future__ import annotations
 
 import pytest
-from unittest.mock import patch
 
 from brokers.mock import MockBrokerAPI
 
