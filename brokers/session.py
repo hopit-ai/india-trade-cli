@@ -207,10 +207,16 @@ def get_execution_broker() -> BrokerAPI:
 
 
 def list_connected_brokers() -> None:
-    """Pretty-print a table of all connected brokers."""
+    """Pretty-print a table of all connected brokers with role routing."""
     if not _brokers:
-        console.print("[dim]No brokers connected.[/dim]")
+        console.print("[dim]No brokers connected. Run 'login' to connect.[/dim]")
         return
+
+    _ROLE_STYLES = {
+        "data": "[bold blue]DATA[/bold blue]",
+        "execution": "[bold amber]EXEC[/bold amber]",
+        "both": "[bold green]BOTH[/bold green]",
+    }
 
     t = Table(title="Connected Brokers", show_header=True, header_style="bold cyan")
     t.add_column("Broker", style="bold")
@@ -219,27 +225,77 @@ def list_connected_brokers() -> None:
     t.add_column("Cash", justify="right")
 
     for key, broker in _brokers.items():
+        role = get_broker_role(key)
+        role_display = _ROLE_STYLES.get(role, role)
         try:
             profile = broker.get_profile()
             funds = broker.get_funds()
-            role = "[bold green]Primary[/bold green]" if key == _primary_key else "Connected"
             t.add_row(
                 _BROKER_LABELS.get(key, key.title()),
-                role,
+                role_display,
                 f"{profile.name} ({profile.user_id})",
                 f"[green]₹{funds.available_cash:,.0f}[/green]",
             )
         except Exception as e:
             t.add_row(
                 _BROKER_LABELS.get(key, key.title()),
-                "[red]Error[/red]",
+                role_display,
                 str(e)[:40],
                 "—",
             )
 
     console.print()
     console.print(t)
+
+    # Show routing summary
+    data_key = None
+    exec_key = None
+    for key in _brokers:
+        role = get_broker_role(key)
+        if role in ("data", "both") and data_key is None:
+            data_key = key
+        if role in ("execution", "both") and exec_key is None:
+            exec_key = key
+    if data_key or exec_key:
+        console.print(
+            f"  [dim]Data:[/dim] [bold]{(data_key or 'none').title()}[/bold]"
+            f"  [dim]Execution:[/dim] [bold]{(exec_key or 'none').title()}[/bold]"
+        )
     console.print()
+
+
+def set_data_broker(key: str) -> None:
+    """Set a broker as the data source. Auto-login if not connected."""
+    key = _BROKER_NAMES.get(key.lower(), key.lower())
+    if key not in _brokers:
+        console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
+        login(key)
+    if key not in _brokers:
+        console.print(f"[red]Could not connect {key.title()}.[/red]")
+        return
+    # Clear any existing data role
+    for k, r in list(_broker_roles.items()):
+        if r == "data":
+            _broker_roles[k] = "execution" if k != key else "data"
+    set_broker_role(key, "data")
+    console.print(f"[green]✓ Data broker set to {key.title()}[/green]")
+
+
+def set_exec_broker(key: str) -> None:
+    """Set a broker as the execution target. Auto-login if not connected."""
+    key = _BROKER_NAMES.get(key.lower(), key.lower())
+    if key not in _brokers:
+        console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
+        login(key)
+    if key not in _brokers:
+        console.print(f"[red]Could not connect {key.title()}.[/red]")
+        return
+    # Clear any existing execution role
+    for k, r in list(_broker_roles.items()):
+        if r == "execution":
+            _broker_roles[k] = "data" if k != key else "execution"
+    set_broker_role(key, "execution")
+    console.print(f"[green]✓ Execution broker set to {key.title()}[/green]")
 
 
 # ── Internal helpers ──────────────────────────────────────────
