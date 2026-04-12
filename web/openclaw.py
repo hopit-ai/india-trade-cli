@@ -363,5 +363,362 @@ MANIFEST: dict = {
                 "market_breadth, upcoming_events — all as structured JSON."
             ),
         },
+        # ── Skills added post v1.0 (#125) ─────────────────────────────
+        {
+            "name": "iv_smile",
+            "path": "/skills/iv_smile",
+            "method": "POST",
+            "description": (
+                "Implied volatility smile curve across all strikes for a given expiry. "
+                "Shows how IV varies by strike (skew). "
+                "Fast — uses live options chain data, no LLM calls."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Underlying symbol, e.g. NIFTY or RELIANCE",
+                    },
+                    "expiry": {
+                        "type": "string",
+                        "description": "Expiry date in YYYY-MM-DD format. Omit for nearest expiry.",
+                    },
+                },
+                "required": ["symbol"],
+            },
+            "output_description": (
+                "rows: list of {strike, call_iv, put_iv, mid_iv} sorted by strike. "
+                "symbol, expiry echoed back."
+            ),
+        },
+        {
+            "name": "gex",
+            "path": "/skills/gex",
+            "method": "POST",
+            "description": (
+                "Gamma Exposure (GEX) heatmap for an underlying (NIFTY, BANKNIFTY, or stocks). "
+                "GEX shows where market makers must buy/sell to stay delta-neutral — "
+                "high positive GEX = price magnet / dampener; high negative GEX = accelerant. "
+                "Fast — no LLM calls."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Underlying symbol, e.g. NIFTY or BANKNIFTY",
+                    },
+                    "expiry": {
+                        "type": "string",
+                        "description": "Expiry date YYYY-MM-DD. Omit for nearest expiry.",
+                    },
+                },
+                "required": ["symbol"],
+            },
+            "output_description": (
+                "flip_point (price where GEX changes sign), "
+                "gex_by_strike (list of {strike, gex}), "
+                "total_gex, largest_call_wall, largest_put_wall."
+            ),
+        },
+        {
+            "name": "risk_report",
+            "path": "/skills/risk_report",
+            "method": "POST",
+            "description": (
+                "Full portfolio risk report: VaR (Value at Risk), volatility, "
+                "concentration risk, sector exposure, and risk score. "
+                "Requires a connected broker. Returns demo data if no broker connected."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+            "output_description": (
+                "var_1d (1-day Value at Risk), var_5d, portfolio_volatility, "
+                "concentration_score, sector_weights, risk_score (0-100), "
+                "recommendations list."
+            ),
+        },
+        {
+            "name": "strategy",
+            "path": "/skills/strategy",
+            "method": "POST",
+            "description": (
+                "Recommend ranked options strategies for a symbol and directional view. "
+                "Returns strategies ranked by risk/reward, with entry, cost, max profit/loss. "
+                "Requires live spot price — broker connection recommended."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Stock or index symbol, e.g. RELIANCE or NIFTY",
+                    },
+                    "view": {
+                        "type": "string",
+                        "description": "Directional view: BULLISH, BEARISH, or NEUTRAL",
+                        "enum": ["BULLISH", "BEARISH", "NEUTRAL"],
+                    },
+                    "dte": {
+                        "type": "integer",
+                        "description": "Days to expiry preference (default: 30)",
+                        "default": 30,
+                    },
+                    "capital": {
+                        "type": "number",
+                        "description": "Available capital in INR for sizing (optional)",
+                    },
+                },
+                "required": ["symbol", "view"],
+            },
+            "output_description": (
+                "strategies: list of {name, legs, max_profit, max_loss, breakeven, "
+                "risk_reward, recommendation_score}. Sorted best-fit first."
+            ),
+        },
+        {
+            "name": "whatif",
+            "path": "/skills/whatif",
+            "method": "POST",
+            "description": (
+                "What-if scenario analysis on your live portfolio. "
+                "Shows P&L impact of hypothetical market moves. "
+                "Requires connected broker. Returns demo zeros if no broker."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "scenario": {
+                        "type": "string",
+                        "description": "Scenario type: 'market' (NIFTY move), 'stock' (single stock), 'custom' (multi-stock)",
+                        "enum": ["market", "stock", "custom"],
+                        "default": "market",
+                    },
+                    "symbol": {
+                        "type": "string",
+                        "description": "Stock symbol for 'stock' scenario",
+                    },
+                    "nifty_change": {
+                        "type": "number",
+                        "description": "NIFTY % change for 'market' scenario, e.g. -5.0",
+                    },
+                    "stock_change": {
+                        "type": "number",
+                        "description": "Stock % change for 'stock' scenario",
+                    },
+                    "custom_moves": {
+                        "type": "object",
+                        "description": "Dict of {SYMBOL: change_pct} for 'custom' scenario",
+                    },
+                },
+                "required": [],
+            },
+            "output_description": (
+                "For single scenario: pnl_impact, pct_change, positions_affected. "
+                "If no scenario params, returns 3 standard scenarios: -5%, 0%, +5% NIFTY."
+            ),
+        },
+        {
+            "name": "greeks",
+            "path": "/skills/greeks",
+            "method": "POST",
+            "description": (
+                "Aggregated portfolio Greeks from live options positions: "
+                "net delta, theta, vega, gamma — plus per-position breakdown. "
+                "Requires broker connection. Returns zeros in demo mode."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Filter to a specific underlying (optional)",
+                    },
+                    "exchange": {"type": "string", "default": "NSE"},
+                },
+                "required": [],
+            },
+            "output_description": (
+                "net: {delta, theta, vega, gamma}, "
+                "positions_with_greeks: per-position breakdown, "
+                "by_underlying: aggregated by index/stock."
+            ),
+        },
+        {
+            "name": "oi",
+            "path": "/skills/oi_profile",
+            "method": "POST",
+            "description": (
+                "Open Interest profile for an underlying: per-strike call/put OI, "
+                "PCR (Put-Call Ratio), max pain strike, resistance (max call OI), "
+                "support (max put OI). Fast — no LLM calls."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Underlying symbol, e.g. NIFTY or BANKNIFTY",
+                    },
+                },
+                "required": ["symbol"],
+            },
+            "output_description": (
+                "pcr, max_pain, resistance_level, support_level, "
+                "strikes: list of {strike, call_oi, put_oi, call_oi_change, put_oi_change}."
+            ),
+        },
+        {
+            "name": "scan",
+            "path": "/skills/scan",
+            "method": "POST",
+            "description": (
+                "Options market scanner across the F&O universe. "
+                "Returns: high_iv stocks (IV rank > 60), unusual_oi strikes (OI change > 100%), "
+                "high_put_writing stocks (PCR > 1.0). "
+                "Pass filters.quick=true for faster scan on a smaller universe."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "scan_type": {
+                        "type": "string",
+                        "description": "Scan type — currently 'options' is supported",
+                        "default": "options",
+                    },
+                    "filters": {
+                        "type": "object",
+                        "description": "Optional filters: {symbols: [...], quick: true}",
+                    },
+                },
+                "required": [],
+            },
+            "output_description": (
+                "high_iv: list of {symbol, iv_rank, iv_pct}, "
+                "unusual_oi: list of {symbol, strike, oi_change_pct}, "
+                "high_put_writing: list of {symbol, pcr}, "
+                "summary: plain-text summary."
+            ),
+        },
+        {
+            "name": "patterns",
+            "path": "/skills/patterns",
+            "method": "POST",
+            "description": (
+                "Active India-specific market patterns (seasonal, calendar, event-driven). "
+                "Each pattern has name, impact (BULLISH/BEARISH/VOLATILE/NEUTRAL), "
+                "confidence %, description, and suggested action. No LLM calls."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Reserved for future per-symbol filtering (optional)",
+                    },
+                },
+                "required": [],
+            },
+            "output_description": (
+                "List of Pattern with name, impact, confidence, description, "
+                "action, start_date, end_date (if seasonal)."
+            ),
+        },
+        {
+            "name": "delta_hedge",
+            "path": "/skills/delta_hedge",
+            "method": "POST",
+            "description": (
+                "Delta hedging suggestions for the current portfolio. "
+                "Computes net portfolio delta and recommends futures/options positions "
+                "to bring delta to neutral (zero). "
+                "Requires broker connection."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+            "output_description": (
+                "current_delta, target_delta, gap, "
+                "suggestions: list of {action, instrument, quantity, rationale}."
+            ),
+        },
+        {
+            "name": "drift",
+            "path": "/skills/drift",
+            "method": "POST",
+            "description": (
+                "Detect analyst accuracy drift over time from trade memory. "
+                "Shows which analysts have been consistently right or wrong recently "
+                "vs their historical average — useful for detecting when market regime changes."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+            "output_description": (
+                "overall_drift_score, analyst_drift: dict of {analyst_name: drift_pct}, "
+                "regime_shift_detected (bool), recommendations."
+            ),
+        },
+        {
+            "name": "memory",
+            "path": "/skills/memory",
+            "method": "POST",
+            "description": (
+                "Trade memory stats and recent analyses. "
+                "Shows all past analyses stored by the platform: symbol, verdict, "
+                "confidence, outcome (if tracked), P&L."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+            "output_description": (
+                "stats: {total_analyses, win_rate, avg_confidence, by_verdict}, "
+                "records: list of TradeRecord (symbol, verdict, confidence, outcome, pnl, timestamp)."
+            ),
+        },
+        {
+            "name": "memory_query",
+            "path": "/skills/memory/query",
+            "method": "POST",
+            "description": (
+                "Query trade memory with filters. "
+                "Filter by symbol, verdict (BUY/SELL/HOLD), days_back, or limit. "
+                "Useful for retrieving past analyses before making a new decision."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Filter to a specific symbol, e.g. INFY",
+                    },
+                    "verdict": {
+                        "type": "string",
+                        "description": "Filter by verdict: BUY, SELL, HOLD, STRONG_BUY, STRONG_SELL",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max records to return (default: 20)",
+                        "default": 20,
+                    },
+                    "days_back": {
+                        "type": "integer",
+                        "description": "Only return analyses from the last N days",
+                    },
+                },
+                "required": [],
+            },
+            "output_description": ("records: list of TradeRecord filtered by the given criteria."),
+        },
     ],
 }
