@@ -321,6 +321,52 @@ def _make_broker(choice: str) -> tuple[str, BrokerAPI]:
         )
 
 
+def _is_sidecar_running(port: int) -> bool:
+    """Check if the FastAPI sidecar is already running on this port."""
+    import urllib.request
+
+    try:
+        r = urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2)
+        return r.status == 200
+    except Exception:
+        return False
+
+
+def _poll_sidecar_auth(broker_key: str, port: int, timeout: int = 180) -> dict[str, str] | None:
+    """
+    Poll the sidecar's /api/status until the broker shows authenticated.
+    Returns a sentinel dict {"_sidecar": "true"} on success, None on timeout.
+    The caller uses this to know the sidecar handled the OAuth.
+    """
+    import json
+    import time
+    import urllib.request
+
+    # Map session keys to status keys
+    _STATUS_KEYS = {
+        "fyers": "fyers",
+        "zerodha": "zerodha",
+        "groww": "groww",
+        "angelone": "angel_one",
+        "upstox": "upstox",
+    }
+    status_key = _STATUS_KEYS.get(broker_key, broker_key)
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        try:
+            r = urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=3)
+            data = json.loads(r.read())
+            broker_status = data.get(status_key, {})
+            if broker_status.get("authenticated"):
+                return {"_sidecar": "true"}
+        except Exception:
+            pass
+        time.sleep(2)
+
+    return None
+
+
 def _oauth_local_server(
     port: int,
     path: str,
@@ -398,15 +444,44 @@ def _oauth_local_server(
         return None
 
 
-def _do_auth(key: str, broker: BrokerAPI) -> None:
-    """Run the auth flow for a broker. TOTP brokers auto-login; others use browser redirect."""
+def _recreate_broker_from_token(key: str):
+    """Re-create a broker instance from its saved token file (after sidecar OAuth)."""
+    try:
+        if key == "fyers":
+            from brokers.fyers import FyersAPI, TOKEN_FILE
+
+            if TOKEN_FILE.exists():
+                b = FyersAPI(
+                    os.environ.get("FYERS_APP_ID", ""),
+                    os.environ.get("FYERS_SECRET_KEY", ""),
+                )
+                if b.is_authenticated():
+                    return b
+        elif key == "zerodha":
+            from brokers.zerodha import ZerodhaAPI, TOKEN_FILE
+
+            if TOKEN_FILE.exists():
+                b = ZerodhaAPI(
+                    os.environ.get("KITE_API_KEY", ""),
+                    os.environ.get("KITE_API_SECRET", ""),
+                )
+                if b.is_authenticated():
+                    return b
+    except Exception:
+        pass
+    return None
+
+
+def _do_auth(key: str, broker: BrokerAPI) -> BrokerAPI:
+    """Run the auth flow for a broker. TOTP brokers auto-login; others use browser redirect.
+    Returns the (possibly recreated) broker instance."""
     from urllib.parse import urlparse
 
     # Angel One: fully automated TOTP login — no browser redirect needed
     if key in _TOTP_BROKERS:
         console.print(f"\n[bold cyan]🔐 Logging in to {key.title()} via TOTP…[/bold cyan]")
         broker.complete_login()
-        return
+        return broker
 
     login_url = broker.get_login_url()
     console.print(f"\n[bold cyan]🌐 Opening login page for {key.title()}…[/bold cyan]")
@@ -436,12 +511,28 @@ def _do_auth(key: str, broker: BrokerAPI) -> None:
 
     # Start local callback listener BEFORE opening the browser so we never
     # miss the redirect even on very fast connections.
+    # If the sidecar is already running on the same port, the local server
+    # can't bind — use the sidecar's callback instead (poll /api/status).
     console.print("[dim]  Waiting for browser login (up to 3 minutes)…[/dim]")
     webbrowser.open(login_url)
 
     captured = _oauth_local_server(_port, _path, *_params, timeout=180)
 
-    if captured:
+    # If local server failed (port busy = sidecar running), poll the sidecar
+    if captured is None and _is_sidecar_running(_port):
+        console.print("[dim]  Sidecar detected — waiting for OAuth via sidecar…[/dim]")
+        captured = _poll_sidecar_auth(key, _port, timeout=180)
+
+    if captured and "_sidecar" in captured:
+        # ── Sidecar handled OAuth — token file saved, re-init broker ──
+        console.print("[green]  ✓ Broker authenticated via sidecar.[/green]")
+        # Re-create the broker from the saved token file
+        new_broker = _recreate_broker_from_token(key)
+        if new_broker is None:
+            console.print("[yellow]  Token file not found — try again.[/yellow]")
+            return broker
+        return new_broker
+    elif captured:
         # ── Auto-captured ─────────────────────────────────────────
         console.print("[dim]  Auth code received automatically.[/dim]")
         if key == "fyers":
@@ -472,6 +563,8 @@ def _do_auth(key: str, broker: BrokerAPI) -> None:
             console.print(f"[dim]  {redirect}?[bold]code=XXXXXX[/bold][/dim]\n")
             code = Prompt.ask("[bold]Paste the [cyan]auth_code[/cyan] here[/bold]")
             broker.complete_login(auth_code=code)
+
+    return broker
 
 
 def _start_websocket(broker: BrokerAPI) -> None:
@@ -563,7 +656,7 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
         # Don't verify with API call — trust token age (instant)
         # If token is actually invalid, first command will trigger re-login
     else:
-        _do_auth(key, broker)
+        broker = _do_auth(key, broker)
 
     _brokers[key] = broker
     _primary_key = key
