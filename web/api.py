@@ -1487,6 +1487,7 @@ async def broker_disconnect(broker_key: str, request: Request):
     }
     session_key = _SESSION_KEY_MAP.get(broker_key, broker_key)
     unregister_broker(session_key)
+    _invalidate_auth_cache(broker_key)
     return {"ok": True, "broker": broker_key}
 
 
