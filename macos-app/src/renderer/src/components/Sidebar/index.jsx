@@ -3,158 +3,135 @@ import { useChatStore } from '../../store/chatStore'
 import { useAPI } from '../../hooks/useAPI'
 import BrokerPanel from './BrokerPanel'
 
-const QUICK_COMMANDS = [
-  { label: 'Morning Brief',  icon: '☀️',  command: 'morning-brief' },
-  { label: 'Holdings',       icon: '📊',  command: 'holdings' },
-  { label: 'Positions',      icon: '📈',  command: 'positions' },
-  { label: 'Orders',         icon: '📋',  command: 'orders' },
-  { label: 'Funds',          icon: '💰',  command: 'funds' },
-  { label: 'Alerts',         icon: '🔔',  command: 'alerts' },
-  { label: 'FII/DII Flows',  icon: '🌊',  command: 'flows' },
-  { label: 'Patterns',       icon: '🔍',  command: 'patterns' },
-  { label: 'Scan',           icon: '📡',  command: 'scan' },
-  // ── Analysis ──────────────────────────────────────────────
-  { label: 'GEX',            icon: '⚡',  command: 'gex NIFTY' },
-  { label: 'IV Smile',       icon: '📉',  command: 'iv-smile NIFTY' },
-  { label: 'Risk Report',    icon: '🛡',  command: 'risk-report' },
-  { label: 'Strategy',       icon: '🎯',  command: 'strategy NIFTY bullish' },
-  // ── Portfolio ─────────────────────────────────────────────
-  { label: 'Delta Hedge',    icon: '⚖️',  command: 'delta-hedge' },
-  { label: 'What-If',        icon: '🔮',  command: 'whatif' },
-  { label: 'Drift',          icon: '📐',  command: 'drift' },
-  { label: 'Memory',         icon: '🧠',  command: 'memory' },
-]
-
 const ROLE_LABELS = { data: 'DATA', execution: 'EXEC', both: '' }
 
+// Quick commands kept for routing — used by InputBar command chips, not displayed in sidebar
+export const QUICK_COMMANDS = [
+  { label: 'Morning Brief',  command: 'morning-brief' },
+  { label: 'Holdings',       command: 'holdings' },
+  { label: 'Positions',      command: 'positions' },
+  { label: 'Orders',         command: 'orders' },
+  { label: 'Funds',          command: 'funds' },
+  { label: 'Alerts',         command: 'alerts' },
+  { label: 'FII/DII Flows',  command: 'flows' },
+  { label: 'Patterns',       command: 'patterns' },
+  { label: 'Scan',           command: 'scan' },
+  { label: 'GEX',            command: 'gex NIFTY' },
+  { label: 'IV Smile',       command: 'iv-smile NIFTY' },
+  { label: 'Risk Report',    command: 'risk-report' },
+  { label: 'Strategy',       command: 'strategy NIFTY bullish' },
+  { label: 'Delta Hedge',    command: 'delta-hedge' },
+  { label: 'What-If',        command: 'whatif' },
+  { label: 'Drift',          command: 'drift' },
+  { label: 'Memory',         command: 'memory' },
+]
+
 export default function Sidebar() {
-  const { addUserMessage, addResponse, addError, isLoading, brokerStatus, brokerStatuses, port } = useChatStore()
+  const { isLoading, brokerStatuses, port } = useChatStore()
   const sessions = useChatStore((s) => s.sessions)
   const activeSessionId = useChatStore((s) => s.activeSessionId)
   const createSession = useChatStore((s) => s.createSession)
   const switchSession = useChatStore((s) => s.switchSession)
-  const { call, ready } = useAPI()
+  const deleteSession = useChatStore((s) => s.deleteSession)
   const [showBrokerPanel, setShowBrokerPanel] = useState(false)
+  const [hoveredSession, setHoveredSession] = useState(null)
 
   const sessionList = Object.values(sessions).sort((a, b) => b.createdAt - a.createdAt)
-
-  async function runCommand(command) {
-    if (!ready || isLoading) return
-    addUserMessage(command)
-    try {
-      const data = await routeCommand(call, command)
-      addResponse(data)
-    } catch (e) {
-      addError(e.message)
-    }
-  }
+  const connectedBrokers = Object.entries(brokerStatuses).filter(([, b]) => b.authenticated)
 
   return (
-    <div className="w-56 flex-shrink-0 bg-panel border-r border-border flex flex-col relative">
+    <div className="w-60 flex-shrink-0 bg-panel border-r border-border flex flex-col relative">
 
       {/* Broker panel overlay */}
       {showBrokerPanel && <BrokerPanel onClose={() => setShowBrokerPanel(false)} />}
 
-      {/* Broker status — click to open broker panel */}
+      {/* New session button */}
+      <div className="px-3 pt-3 pb-2">
+        <button
+          onClick={createSession}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border
+                     text-[12px] font-ui text-muted hover:text-text hover:bg-elevated
+                     transition-colors cursor-pointer"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          New session
+          <span className="ml-auto text-[10px] text-subtle font-ui">⌘N</span>
+        </button>
+      </div>
+
+      {/* Session list — primary content */}
+      <div className="flex-1 overflow-y-auto px-2">
+        <div className="flex flex-col gap-0.5 py-1">
+          {sessionList.map(s => (
+            <div
+              key={s.id}
+              onMouseEnter={() => setHoveredSession(s.id)}
+              onMouseLeave={() => setHoveredSession(null)}
+              className={`group flex items-center rounded-lg cursor-pointer transition-colors
+                ${s.id === activeSessionId
+                  ? 'bg-elevated text-text'
+                  : 'text-muted hover:bg-elevated/50 hover:text-text'}`}
+            >
+              <button
+                onClick={() => switchSession(s.id)}
+                className="flex-1 text-left px-3 py-2 text-[12px] font-ui truncate cursor-pointer"
+              >
+                {s.title}
+              </button>
+              {hoveredSession === s.id && sessionList.length > 1 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteSession(s.id) }}
+                  className="pr-2 text-subtle hover:text-red text-[11px] cursor-pointer transition-colors"
+                  title="Delete session"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Broker status — compact, at bottom */}
       <div
-        className="px-4 py-3 border-b border-border cursor-pointer hover:bg-elevated transition-colors group"
+        className="px-3 py-3 border-t border-border cursor-pointer hover:bg-elevated/50 transition-colors"
         onClick={() => setShowBrokerPanel(true)}
       >
-        <p className="text-muted text-[10px] uppercase tracking-widest mb-2 font-ui">Broker</p>
-        {(() => {
-          const connectedBrokers = Object.entries(brokerStatuses).filter(([, b]) => b.authenticated)
-          if (connectedBrokers.length === 0) {
-            return (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0 bg-subtle" />
-                  <span className="text-text text-[12px] font-ui truncate">
-                    {port ? 'Not connected' : 'Starting...'}
-                  </span>
+        {connectedBrokers.length === 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-subtle flex-shrink-0" />
+            <span className="text-[11px] text-muted font-ui">
+              {port ? 'No broker connected' : 'Starting...'}
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {connectedBrokers.map(([key, status]) => {
+              const name = { zerodha: 'Zerodha', groww: 'Groww', angel_one: 'Angel One', upstox: 'Upstox', fyers: 'Fyers' }[key] ?? key
+              const roleLabel = ROLE_LABELS[status.role] || ''
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green flex-shrink-0" />
+                  <span className="text-[11px] text-text font-ui">{name}</span>
+                  {roleLabel && (
+                    <span className={`text-[8px] font-ui font-bold uppercase tracking-wider px-1 py-0.5 rounded flex-shrink-0 ${
+                      status.role === 'data' ? 'bg-blue/10 text-blue' : 'bg-amber/10 text-amber'
+                    }`}>{roleLabel}</span>
+                  )}
                 </div>
-                <span className="text-subtle text-[10px] font-ui opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1">
-                  connect
-                </span>
-              </div>
-            )
-          }
-          return (
-            <div className="flex flex-col gap-1">
-              {connectedBrokers.map(([key, status]) => {
-                const name = { zerodha: 'Zerodha', groww: 'Groww', angel_one: 'Angel One', upstox: 'Upstox', fyers: 'Fyers' }[key] ?? key
-                const roleLabel = ROLE_LABELS[status.role] || ''
-                return (
-                  <div key={key} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0 bg-green shadow-[0_0_6px_rgba(82,224,122,0.4)]" />
-                      <span className="text-text text-[12px] font-ui truncate">{name}</span>
-                    </div>
-                    {roleLabel && (
-                      <span className={`text-[9px] font-ui font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                        status.role === 'data' ? 'bg-blue/15 text-blue' : 'bg-amber/15 text-amber'
-                      }`}>{roleLabel}</span>
-                    )}
-                  </div>
-                )
-              })}
-              <span className="text-subtle text-[10px] font-ui opacity-0 group-hover:opacity-100 transition-opacity">
-                manage
-              </span>
-            </div>
-          )
-        })()}
-      </div>
-
-      {/* Sessions */}
-      <div className="px-3 py-2 border-b border-border">
-        <div className="flex items-center justify-between mb-2 px-1">
-          <p className="text-muted text-[10px] uppercase tracking-widest font-ui">Sessions</p>
-          <button onClick={createSession} className="text-blue text-[11px] font-ui hover:underline cursor-pointer">+ New</button>
-        </div>
-        <div className="flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
-          {sessionList.map(s => (
-            <button
-              key={s.id}
-              onClick={() => switchSession(s.id)}
-              className={`text-left px-2 py-1.5 rounded text-[12px] font-ui truncate cursor-pointer
-                ${s.id === activeSessionId ? 'bg-elevated text-text' : 'text-muted hover:bg-elevated/50'}`}
-            >
-              {s.title}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick commands */}
-      <div className="px-3 py-3 flex-1">
-        <p className="text-muted text-[10px] uppercase tracking-widest mb-2 px-1 font-ui">Quick</p>
-        <div className="flex flex-col gap-1">
-          {QUICK_COMMANDS.map((q) => (
-            <button
-              key={q.command}
-              onClick={() => runCommand(q.command)}
-              disabled={!ready || isLoading}
-              className="flex items-center gap-2 px-2 py-1.5 rounded text-[12px] text-text
-                         hover:bg-elevated transition-colors disabled:opacity-40
-                         text-left font-ui"
-            >
-              <span>{q.icon}</span>
-              <span>{q.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Version */}
-      <div className="px-4 py-3 border-t border-border">
-        <p className="text-subtle text-[10px] font-ui">Vibe Trading v0.2</p>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// Route sidebar quick commands to API endpoints
-async function routeCommand(call, command) {
+// Route sidebar quick commands to API endpoints (used by InputBar chips)
+export async function routeCommand(call, command) {
   const unwrap = (res) => res.data ?? res
   switch (command) {
     case 'morning-brief':
@@ -177,7 +154,6 @@ async function routeCommand(call, command) {
       return { cardType: 'patterns', data: unwrap(await call('/skills/patterns', {})) }
     case 'scan':
       return { cardType: 'scan',     data: unwrap(await call('/skills/scan',     { scan_type: 'options', filters: {} })) }
-    // ── Analysis ──────────────────────────────────────────────
     case 'gex NIFTY':
       return { cardType: 'gex',         data: unwrap(await call('/skills/gex',         { symbol: 'NIFTY', expiry: null })) }
     case 'iv-smile NIFTY':
@@ -186,7 +162,6 @@ async function routeCommand(call, command) {
       return { cardType: 'risk_report', data: unwrap(await call('/skills/risk_report', {})) }
     case 'strategy NIFTY bullish':
       return { cardType: 'strategy',    data: unwrap(await call('/skills/strategy',    { symbol: 'NIFTY', view: 'BULLISH', dte: 30 })) }
-    // ── Portfolio ─────────────────────────────────────────────
     case 'delta-hedge':
       return { cardType: 'delta_hedge', data: unwrap(await call('/skills/delta_hedge', {})) }
     case 'whatif':
