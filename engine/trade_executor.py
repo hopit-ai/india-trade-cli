@@ -271,6 +271,30 @@ def execute_trade_plan(
     results = []
     for i, leg in enumerate(plan.entry_orders, 1):
         try:
+            # ── Hard risk limit check ─────────────────────────
+            try:
+                from engine.risk_limits import risk_limits, RiskLimitError as _RLE
+
+                risk_limits.check(
+                    symbol=leg.instrument.split()[0],
+                    action=leg.action,
+                    quantity=leg.quantity,
+                    price=leg.price or 0.0,
+                )
+            except _RLE as _rle:
+                console.print(f"\n  [bold red]🛑 RISK LIMIT BLOCKED:[/bold red] {_rle}")
+                results.append(
+                    {
+                        "symbol": leg.instrument,
+                        "action": leg.action,
+                        "quantity": leg.quantity,
+                        "status": "BLOCKED",
+                        "message": str(_rle),
+                        "mode": mode_label,
+                    }
+                )
+                continue
+
             order_req = OrderRequest(
                 symbol=leg.instrument.split()[0],
                 exchange=leg.exchange,
@@ -284,6 +308,18 @@ def execute_trade_plan(
             )
 
             response = broker.place_order(order_req)
+            # Record trade for risk tracking
+            try:
+                from engine.risk_limits import risk_limits as _rl
+
+                _rl.record_trade(
+                    symbol=leg.instrument.split()[0],
+                    action=leg.action,
+                    quantity=leg.quantity,
+                    price=leg.price or 0.0,
+                )
+            except Exception:
+                pass
             status_style = "green" if response.status in ("COMPLETE", "OPEN") else "red"
 
             console.print(
