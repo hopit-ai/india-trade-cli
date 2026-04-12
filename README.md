@@ -1,19 +1,19 @@
-# India Trade CLI
+# Vibe Trading
 
-Open-source terminal + macOS app for trading Indian stocks and derivatives (NSE / BSE / NFO). Runs AI analyst agents, backtests quant strategies, places live orders, pushes Telegram alerts, and exposes everything as HTTP skills.
+**Agentic trading platform for Indian markets** -- 7 AI analyst agents analyze stocks in parallel, debate bull vs bear, and deliver trade plans with entry, stop, and targets. Open-source LLM trader for NSE, BSE, and NFO.
 
-> Every trade must be justified. Analyze first, debate second, execute third.
+> An agentic quantitative researcher that runs multi-agent AI analysis, backtests quant strategies, places live orders via Indian brokers, and pushes Telegram alerts -- all from a terminal CLI, macOS app, or web interface.
 
 [![CI](https://github.com/hopit-ai/india-trade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/hopit-ai/india-trade-cli/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/images/app-analysis.png" alt="India Trade — streaming multi-agent analysis" width="800" />
+  <img src="docs/images/app-analysis.png" alt="Vibe Trading — agentic AI trading platform for Indian stocks with multi-agent analysis" width="800" />
 </p>
 
 <p align="center">
-  <em>7 AI analysts run in parallel, debate bull vs bear, and deliver a trade plan with entry, stop, and targets.</em>
+  <em>7 AI analyst agents run in parallel, debate bull vs bear, and deliver a trade plan with entry, stop, and targets.</em>
 </p>
 
 <details>
@@ -32,12 +32,25 @@ Open-source terminal + macOS app for trading Indian stocks and derivatives (NSE 
 
 ---
 
+## What is Vibe Trading?
+
+Vibe Trading is an **agentic AI trading system** built for Indian stock markets (NSE/BSE/NFO). It uses multiple LLM-powered agents working together -- a technical analyst, fundamental analyst, options analyst, news/macro analyst, sentiment analyst, sector rotation analyst, and risk manager -- to produce institutional-grade research from a single command.
+
+**Key differentiators:**
+- **Agentic architecture** -- not a chatbot wrapping an API. Seven autonomous agents gather data, analyze independently, then debate and synthesize
+- **Multi-agent debate** -- bull and bear researchers argue in multiple rounds before a fund manager synthesizes the final verdict
+- **LLM-agnostic** -- works with Gemini (free), Claude, OpenAI, Ollama (local), or any OpenAI-compatible API
+- **Live trading** -- connects to Indian brokers (Fyers, Zerodha) for real order placement, not just analysis
+- **Open source** -- MIT licensed, fully transparent, no black-box signals
+
+---
+
 ## How it works
 
 ```
 analyze RELIANCE
         |
-  7 Analyst Agents  (parallel, pure Python)
+  7 AI Analyst Agents  (parallel, agentic)
   Technical . Fundamental . Options . News . Sentiment . Sector . Risk
         |
   Weighted Scorecard + Conflict Detection
@@ -61,7 +74,7 @@ Standard `analyze`: 8 LLM calls. `deep-analyze`: 11 calls, every analyst fully A
 ### Prerequisites
 
 - **Python 3.11+** ([download](https://www.python.org/downloads/))
-- **Node.js 18+** ([download](https://nodejs.org/)) — only needed for the macOS app
+- **Node.js 18+** ([download](https://nodejs.org/)) -- only needed for the macOS app
 - **Git** ([download](https://git-scm.com/))
 
 ### Step 1: Clone and install
@@ -84,18 +97,18 @@ cp .env.example .env
 Edit `.env` and set your AI provider (pick one):
 
 ```bash
-# Free option — Google Gemini
+# Free option -- Google Gemini
 AI_PROVIDER=gemini
 GEMINI_API_KEY=your_key_from_aistudio.google.com
 
-# Or — Claude (with Pro/Max subscription, no API key needed)
+# Or -- Claude (with Pro/Max subscription, no API key needed)
 AI_PROVIDER=claude_subscription
 
-# Or — OpenAI
+# Or -- OpenAI
 AI_PROVIDER=openai
 OPENAI_API_KEY=your_key
 
-# Or — Ollama (free, local, no key needed)
+# Or -- Ollama (free, local, no key needed)
 AI_PROVIDER=ollama
 ```
 
@@ -195,12 +208,12 @@ Since April 2026, all API orders must be placed from a registered static IP. Che
 
 **[Full command reference ->](docs/commands.md)**
 
-### Analysis
-- **`analyze RELIANCE`** -- 7 AI analysts, bull-bear debate, three trade plans
-- **`deep-analyze INFY`** -- every analyst uses AI (11 LLM calls, 3-8 min)
+### AI-powered analysis
+- **`analyze RELIANCE`** -- 7 AI analyst agents, bull-bear debate, three trade plans
+- **`deep-analyze INFY`** -- every agent uses AI (11 LLM calls, 3-8 min)
 - **`morning-brief`** -- daily market brief with FII/DII, breadth, news
 
-### Trading
+### Live trading
 - **`buy YESBANK 1 17`** -- quick limit buy (1 share at Rs 17)
 - **`sell RELIANCE 5`** -- market sell
 - **`cancel`** -- interactive order cancellation
@@ -237,7 +250,8 @@ Since April 2026, all API orders must be placed from a registered static IP. Che
 ## macOS app features
 
 - Dark theme React UI with Tailwind CSS
-- **Streaming analysis** -- analysts appear live as they complete, debate streams in real-time
+- **Streaming analysis** -- AI analyst agents appear live as they complete, debate streams in real-time
+- **Mid-stream context injection** -- type "focus on AI deals" while analysis runs, and the synthesis adapts
 - **25+ card types** -- Quote, Analysis, GEX, IV Smile, Strategy, Holdings, Funds, Orders, Memory, Morning Brief, Alerts, Risk Report, Delta Hedge, and more
 - **Contextual action chips** -- data-aware follow-up questions on every card (e.g. "Put skew +26% at 22,100 -- why?")
 - **Broker panel** -- connect Fyers/Zerodha via OAuth from the sidebar
@@ -322,11 +336,11 @@ Setup: create a bot via @BotFather, add `TELEGRAM_BOT_TOKEN` to `.env`, run `tel
 
 ---
 
-## Project structure
+## Architecture
 
 ```
-agent/      AI layer -- LLM providers, analyst agents, debate, synthesis
-brokers/    Broker integrations -- Fyers, Zerodha, Angel One, Upstox, mock
+agent/      AI agent layer -- LLM providers, analyst agents, multi-agent debate, synthesis
+brokers/    Indian broker integrations -- Fyers, Zerodha, Angel One, Upstox, mock
 market/     Market data -- quotes, WebSocket, options chain, news, FII/DII
 analysis/   Technical, fundamental, options Greeks, GEX, IV smile, multi-timeframe
 engine/     Backtester, 58-strategy library, risk metrics, alerts, trade executor
@@ -340,11 +354,11 @@ macos-app/  Electron + React macOS app with streaming UI
 
 ## Roadmap
 
-**Shipped:** 7 analyst agents . scorecard . debate . 3 risk personas . trade memory . backtesting . walk-forward . what-if . FII/DII flows . event strategies . options analytics . VaR/CVaR . DCF valuation . model drift . pair trading . Telegram bot . Fyers WebSocket . paper trading . live trading (Zerodha) . PDF export . OpenClaw skills . 58-strategy library . backtest cache . macOS Electron app . streaming analysis . GEX . IV smile . contextual action chips . buy/sell/cancel CLI . mode toggle
+**Shipped:** 7 AI analyst agents . scorecard . multi-round debate . 3 risk personas . trade memory . backtesting . walk-forward . what-if . FII/DII flows . event strategies . options analytics . VaR/CVaR . DCF valuation . model drift . pair trading . Telegram bot . Fyers WebSocket . paper trading . live trading (Zerodha) . PDF export . OpenClaw skills . 58-strategy library . backtest cache . macOS Electron app . streaming analysis . GEX . IV smile . contextual action chips . buy/sell/cancel CLI . mode toggle . mid-stream context injection
 
-**In progress:** multi-session UI ([#110](https://github.com/hopit-ai/india-trade-cli/issues/110)) . dual-broker mode ([#129](https://github.com/hopit-ai/india-trade-cli/issues/129)) . portfolio-aware personalisation ([#118](https://github.com/hopit-ai/india-trade-cli/issues/118), [#119](https://github.com/hopit-ai/india-trade-cli/issues/119), [#121](https://github.com/hopit-ai/india-trade-cli/issues/121))
+**In progress:** multi-session UI ([#110](https://github.com/hopit-ai/india-trade-cli/issues/110)) . dual-broker mode ([#129](https://github.com/hopit-ai/india-trade-cli/issues/129)) . portfolio-aware personalisation ([#118](https://github.com/hopit-ai/india-trade-cli/issues/118), [#119](https://github.com/hopit-ai/india-trade-cli/issues/119), [#121](https://github.com/hopit-ai/india-trade-cli/issues/121)) . web search for agents ([#149](https://github.com/hopit-ai/india-trade-cli/issues/149))
 
-**Planned:** app order placement UI ([#130](https://github.com/hopit-ai/india-trade-cli/issues/130)) . TradingView webhooks . SEBI compliance layer . memory improvements ([#122](https://github.com/hopit-ai/india-trade-cli/issues/122))
+**Planned:** app order placement UI ([#130](https://github.com/hopit-ai/india-trade-cli/issues/130)) . ML prediction analyst ([#145](https://github.com/hopit-ai/india-trade-cli/issues/145)) . ensemble meta-model ([#146](https://github.com/hopit-ai/india-trade-cli/issues/146)) . TradingView webhooks . SEBI compliance layer . memory improvements ([#122](https://github.com/hopit-ai/india-trade-cli/issues/122))
 
 See [open issues](https://github.com/hopit-ai/india-trade-cli/issues).
 
@@ -378,6 +392,25 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Most wanted: broker integrations ([#80](
 
 ---
 
-**Disclaimer:** For educational purposes only. Not financial advice. Trading involves substantial risk of loss. The authors are not responsible for financial losses.
+## FAQ
+
+**What is agentic trading?**
+Agentic trading uses autonomous AI agents that independently gather data, analyze markets, and make trading decisions -- rather than a single LLM answering questions. Vibe Trading runs 7 specialized agents (technical, fundamental, options, news, sentiment, sector, risk) that work in parallel, then debate before producing a final recommendation.
+
+**How is this different from a trading chatbot?**
+Trading chatbots take your question and return an answer. Vibe Trading's agents proactively gather data using tools (live quotes, options chains, FII/DII flows, news), analyze it independently, then engage in structured multi-round debate. The architecture mirrors how an institutional research desk operates -- multiple analysts with different specializations feeding into a portfolio manager.
+
+**Can I use this for live trading?**
+Yes. Connect Zerodha or Fyers for live order placement on NSE/BSE/NFO. Use `mode paper` for paper trading and `mode live` for real orders. Always start with paper trading.
+
+**What LLMs does it support?**
+Any LLM: Gemini (free), Claude (subscription or API), OpenAI, Ollama (local models like Llama), or any OpenAI-compatible endpoint (OpenRouter, Groq, Together, etc.).
+
+**Is this financial advice?**
+No. Vibe Trading is an open-source research tool. All trading decisions are yours. See disclaimer below.
+
+---
+
+**Disclaimer:** For educational and research purposes only. Not financial advice. Trading involves substantial risk of loss. The authors are not responsible for financial losses.
 
 MIT -- see [LICENSE](LICENSE).

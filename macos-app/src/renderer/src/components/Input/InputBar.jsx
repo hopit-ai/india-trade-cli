@@ -183,11 +183,12 @@ export default function InputBar() {
   const draft             = useChatStore((s) => s.draft)
   const setDraft          = useChatStore((s) => s.setDraft)
   const streamCancel      = useChatStore((s) => s.streamCancel)
+  const activeStreamId    = useChatStore((s) => s.activeStreamId)
   const setPendingContext = useChatStore((s) => s.setPendingContext)
   const {
     addUserMessage, addResponse, addError, isLoading,
     startStreamingMessage, updateStreamingMessage, finalizeStreamingMessage,
-    setStreamCancel,
+    setStreamCancel, setActiveStreamId,
   } = useChatStore()
 
   // True when an analysis is actively streaming — input stays active in "context mode"
@@ -213,6 +214,20 @@ export default function InputBar() {
     function applyEvent(event) {
       if (event.type === 'started') {
         updateStreamingMessage(msgId, (d) => ({ ...d, phase: 'started' }))
+        // Track stream_id for mid-stream context injection (#113)
+        if (event.stream_id) setActiveStreamId(event.stream_id)
+      } else if (event.type === 'hint_ack') {
+        // User hint was received — show confirmation in the card
+        updateStreamingMessage(msgId, (d) => ({
+          ...d,
+          hint_ack: event.hint,
+        }))
+      } else if (event.type === 'hint_applied') {
+        // User hint was injected into synthesis
+        updateStreamingMessage(msgId, (d) => ({
+          ...d,
+          hint_applied: event.hint_text,
+        }))
       } else if (event.type === 'analyst') {
         updateStreamingMessage(msgId, (d) => ({
           ...d,
@@ -267,12 +282,25 @@ export default function InputBar() {
     const text = value.trim()
     if (!text || !ready) return
 
-    // #102 — context injection: if analysis is streaming, queue as pending context
+    // #113 — mid-stream context injection: POST hint to running analysis
     if (isStreaming) {
       setValue('')
-      setPendingContext(text)
-      // Show as a user bubble so the user can see it was received
       addUserMessage(text)
+      if (activeStreamId) {
+        fetch(`${getBaseUrl(port)}/skills/analyze/hint`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stream_id: activeStreamId, hint: text }),
+        })
+          .then((r) => r.json())
+          .then((res) => {
+            // If synthesis already started or stream gone, fall back to follow-up
+            if (res.status === 'expired') setPendingContext(text)
+          })
+          .catch(() => setPendingContext(text))
+      } else {
+        setPendingContext(text) // fallback if no stream_id yet
+      }
       return
     }
 
@@ -314,17 +342,17 @@ export default function InputBar() {
   const placeholder = !ready
     ? 'Starting API…'
     : isStreaming
-    ? 'Analysis in progress — type to add context…'
+    ? 'Type to add context for synthesis…'
     : 'analyze INFY · gex NIFTY · strategy NIFTY bullish · whatif nifty -5 · …'
 
   return (
     <div className="flex-shrink-0 border-t border-border bg-panel px-4 py-3">
-      {/* #102 banner — visible while streaming */}
+      {/* #113 banner — visible while streaming */}
       {isStreaming && (
         <div className="mb-2 px-1 flex items-center gap-2">
-          <span className="text-[10px] animate-pulse text-amber font-ui">◆</span>
+          <span className="text-[10px] animate-pulse text-blue font-ui">◆</span>
           <span className="text-[10px] text-muted font-ui">
-            Analysis running — add context to inject into the follow-up
+            Analysis running — type to shape the synthesis
           </span>
         </div>
       )}
