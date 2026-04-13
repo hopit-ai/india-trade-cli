@@ -715,18 +715,20 @@ def cmd_help() -> None:
 
 
 def _handle_backtest_command(args: list[str]) -> None:
-    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain] [--html] [--compare]"""
+    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain] [--html] [--compare] [--fast]"""
     from engine.output import parse_output_flags, handle_output_flags
 
     wants_html = "--html" in args
     wants_compare = "--compare" in args
+    wants_fast = "--fast" in args
     clean_args, wants_pdf, wants_explain, _ = parse_output_flags(
-        [a for a in args if a not in ("--html", "--compare")]
+        [a for a in args if a not in ("--html", "--compare", "--fast")]
     )
     if not clean_args:
         console.print(
-            "[red]Usage: backtest SYMBOL [strategy] [--pdf] [--explain] [--html] [--compare][/red]\n"
-            "[dim]  backtest RELIANCE rsi              RSI(30/70) strategy\n"
+            "[red]Usage: backtest SYMBOL [strategy] [--pdf] [--explain] [--html] [--compare] [--fast][/red]\n"
+            "[dim]  backtest RELIANCE rsi              RSI(30/70) strategy (event-driven)\n"
+            "  backtest RELIANCE rsi --fast        Vectorized, <1s (no slippage sim)\n"
             "  backtest RELIANCE ma 20 50          EMA crossover\n"
             "  backtest RELIANCE macd --pdf         Export to PDF\n"
             "  backtest RELIANCE bb --explain       Add simple explanation\n"
@@ -735,7 +737,10 @@ def _handle_backtest_command(args: list[str]) -> None:
         )
         return
 
-    from engine.backtest import run_backtest
+    if wants_fast:
+        from engine.backtest_vectorized import run_vectorized_backtest as run_backtest
+    else:
+        from engine.backtest import run_backtest
 
     symbol = clean_args[0].upper()
     strategy_name = clean_args[1].lower() if len(clean_args) > 1 else "rsi"

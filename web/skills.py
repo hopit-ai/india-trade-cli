@@ -78,6 +78,7 @@ class BacktestRequest(BaseModel):
     strategy: str = "rsi"
     period: str = "1y"
     exchange: str = "NSE"
+    fast: bool = False  # True → vectorized engine (<1s, no slippage sim)
 
 
 class PairsRequest(BaseModel):
@@ -234,9 +235,16 @@ async def skill_backtest(req: BacktestRequest):
     Strategies: rsi, ma, ema, macd, bb (Bollinger Bands)
     """
     try:
-        from engine.backtest import run_backtest
+        if req.fast:
+            from engine.backtest_vectorized import run_vectorized_backtest
 
-        result = run_backtest(req.symbol.upper(), req.strategy, period=req.period)
+            result = run_vectorized_backtest(
+                req.symbol.upper(), req.strategy, period=req.period, exchange=req.exchange
+            )
+        else:
+            from engine.backtest import run_backtest
+
+            result = run_backtest(req.symbol.upper(), req.strategy, period=req.period)
         return _ok(result)
     except Exception as e:
         raise _err(str(e))
