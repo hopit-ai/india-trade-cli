@@ -37,7 +37,6 @@ class TestSizeByPct:
 
     def test_exceeds_max_position_pct_raises(self, monkeypatch):
         from engine.trade_executor import size_by_pct
-        import os
 
         monkeypatch.setenv("MAX_POSITION_PCT", "20")
         with pytest.raises(ValueError, match="exceeds"):
@@ -45,7 +44,6 @@ class TestSizeByPct:
 
     def test_exactly_at_max_position_pct_ok(self, monkeypatch):
         from engine.trade_executor import size_by_pct
-        import os
 
         monkeypatch.setenv("MAX_POSITION_PCT", "20")
         # 20% of ₹1,00,000 at ₹1,000 = 20 shares
