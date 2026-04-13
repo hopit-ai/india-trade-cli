@@ -4,14 +4,13 @@ Tests for dual LLM routing — deep + fast model (#91).
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
 
 
 class TestGetFastProvider:
     def test_returns_deep_when_fast_not_configured(self, monkeypatch):
         """When AI_FAST_* not set, fast provider == deep provider (same object)."""
-        from agent.core import get_deep_provider, get_fast_provider, ToolRegistry
+        from agent.core import get_fast_provider, ToolRegistry
 
         registry = ToolRegistry()
         deep = MagicMock()
@@ -35,8 +34,8 @@ class TestGetFastProvider:
 
         # Should try to build a new provider (may fail in test if no real key, but shouldn't return deep)
         try:
-            fast = get_fast_provider(registry, deep_provider=deep)
-            # If it succeeds, fast should be a different object or different model
+            get_fast_provider(registry, deep_provider=deep)
+            # If it succeeds, the provider was built without error
         except Exception:
             pass  # OK in test environment without real keys
 
@@ -88,9 +87,7 @@ class TestMultiAgentAnalyzerDualRouting:
         analyzer = MultiAgentAnalyzer(registry, deep_llm, fast_llm_provider=fast_llm)
 
         # Find the NewsMacroAnalyst in analysts list
-        news_analyst = next(
-            (a for a in analyzer.analysts if isinstance(a, NewsMacroAnalyst)), None
-        )
+        news_analyst = next((a for a in analyzer.analysts if isinstance(a, NewsMacroAnalyst)), None)
         assert news_analyst is not None
         assert news_analyst._llm is fast_llm
 
@@ -112,7 +109,6 @@ class TestEnvVarConfig:
     def test_ai_fast_model_env_documented(self):
         """AI_FAST_MODEL and AI_FAST_PROVIDER env vars are recognized."""
         from agent.core import get_fast_provider
-        import inspect
 
         # Just verify the function exists and can be called
         assert callable(get_fast_provider)
@@ -120,6 +116,5 @@ class TestEnvVarConfig:
     def test_ai_deep_model_env_documented(self):
         """AI_DEEP_MODEL and AI_DEEP_PROVIDER env vars are recognized."""
         from agent.core import get_deep_provider
-        import inspect
 
         assert callable(get_deep_provider)

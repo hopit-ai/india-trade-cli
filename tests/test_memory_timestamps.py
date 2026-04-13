@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import pytest
-from pathlib import Path
 
 
 @pytest.fixture(autouse=True)
@@ -15,6 +14,7 @@ def temp_memory(tmp_path, monkeypatch):
     monkeypatch.setattr("engine.memory.MEMORY_FILE", tmp_path / "trade_memory.json")
     # Re-init singleton for each test
     import engine.memory as mem_mod
+
     mem_mod.trade_memory = mem_mod.TradeMemory()
     yield
     mem_mod.trade_memory = mem_mod.TradeMemory()
@@ -40,14 +40,18 @@ class TestTimestampAlwaysSet:
     def test_price_at_analysis_stored(self):
         from engine.memory import trade_memory
 
-        record = trade_memory.store(symbol="RELIANCE", verdict="BUY", confidence=72, price_at_analysis=2950.0)
+        record = trade_memory.store(
+            symbol="RELIANCE", verdict="BUY", confidence=72, price_at_analysis=2950.0
+        )
         assert record.price_at_analysis == 2950.0
 
     def test_synthesis_text_stored(self):
         from engine.memory import trade_memory
 
         synth = "VERDICT: BUY\nCONFIDENCE: 72%\nStrategy: Delivery Buy"
-        record = trade_memory.store(symbol="INFY", verdict="BUY", confidence=72, synthesis_text=synth)
+        record = trade_memory.store(
+            symbol="INFY", verdict="BUY", confidence=72, synthesis_text=synth
+        )
         assert record.synthesis_text == synth
 
 
@@ -146,7 +150,9 @@ class TestParseSynthesisFixed:
     def test_verdict_in_middle_of_text(self):
         from engine.memory import _parse_synthesis
 
-        text = "Based on analysis...\nFinal VERDICT: BUY\nCONFIDENCE: 68%\nStrategy: Iron Bull Spread"
+        text = (
+            "Based on analysis...\nFinal VERDICT: BUY\nCONFIDENCE: 68%\nStrategy: Iron Bull Spread"
+        )
         verdict, conf, strategy = _parse_synthesis(text)
         assert verdict == "BUY"
         assert conf == 68

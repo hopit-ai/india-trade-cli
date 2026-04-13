@@ -5,7 +5,6 @@ Tests for multi-strategy HTML backtest report generation (#156).
 from __future__ import annotations
 
 import pytest
-from dataclasses import dataclass, field
 
 
 def _make_result(symbol="INFY", strategy="RSI", total_return=15.0, sharpe=1.2):
@@ -132,4 +131,5 @@ class TestGenerateHtmlReport:
         path = generate_html_report([result])
         assert path.startswith(str(tmp_path))
         import os
+
         assert os.path.exists(path)

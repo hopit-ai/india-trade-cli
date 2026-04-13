@@ -5,8 +5,6 @@ Validates that docker-compose files and Dockerfile are well-formed.
 
 from __future__ import annotations
 
-import os
-import pytest
 from pathlib import Path
 
 DOCKER_DIR = Path(__file__).parent.parent / "docker"

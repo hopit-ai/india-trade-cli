@@ -5,7 +5,7 @@ Tests for quick scan mode (#153).
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 class TestQuickScanResult:
@@ -51,7 +51,9 @@ class TestParseQuickResponse:
     def test_parse_verdict_buy(self):
         from agent.quick_scan import _parse_quick_response
 
-        text = "VERDICT: BUY\nCONFIDENCE: 72\nREASON: RSI neutral\nENTRY: 1410\nSL: 1370\nTARGET: 1480"
+        text = (
+            "VERDICT: BUY\nCONFIDENCE: 72\nREASON: RSI neutral\nENTRY: 1410\nSL: 1370\nTARGET: 1480"
+        )
         result = _parse_quick_response(text)
         assert result["verdict"] == "BUY"
         assert result["confidence"] == 72
@@ -159,6 +161,7 @@ class TestQuickScanEndpoint:
 
         # Mock the quick scanner to return a valid result
         from agent.quick_scan import QuickScanResult
+
         mock_result = QuickScanResult(
             symbol="INFY",
             verdict="BUY",

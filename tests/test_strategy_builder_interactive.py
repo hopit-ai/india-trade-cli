@@ -4,9 +4,6 @@ Tests for interactive strategy builder session (#44).
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock
-
 
 class TestStrategyBuilderSessionExists:
     def test_class_importable(self):
@@ -48,7 +45,7 @@ class TestStrategyBuilderSession:
         from engine.strategy_builder import StrategyBuilderSession
 
         session = StrategyBuilderSession()
-        questions = session.start("Buy INFY on RSI < 30")
+        session.start("Buy INFY on RSI < 30")
         q_key = "entry_conditions"
         session.answer(q_key, "RSI 14 below 30")
         assert session.answers.get(q_key) == "RSI 14 below 30"

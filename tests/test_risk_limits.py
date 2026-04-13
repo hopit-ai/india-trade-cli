@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import os
 import pytest
-from datetime import date
 
 
 @pytest.fixture(autouse=True)
@@ -18,7 +17,6 @@ def temp_risk_db(tmp_path, monkeypatch):
 
 def _fresh_limits(**env_overrides):
     """Create a fresh RiskLimits instance with optional env overrides."""
-    import importlib
     import engine.risk_limits as rl_mod
 
     # Patch env before importing
@@ -162,8 +160,7 @@ class TestNoPyramiding:
         # Trying to add more INFY = pyramiding into loser
         with pytest.raises(RiskLimitError, match="pyramid|losing"):
             rl.check(
-                "INFY", "BUY", 10, 1300.0,
-                current_position={"avg_price": 1400.0, "quantity": 50}
+                "INFY", "BUY", 10, 1300.0, current_position={"avg_price": 1400.0, "quantity": 50}
             )
 
     def test_allows_buying_into_winning_long(self, monkeypatch):
@@ -172,8 +169,7 @@ class TestNoPyramiding:
         rl = RiskLimits()
         # Held INFY avg 1200, current price 1400 (winning) — ok to add more
         rl.check(
-            "INFY", "BUY", 10, 1400.0,
-            current_position={"avg_price": 1200.0, "quantity": 50}
+            "INFY", "BUY", 10, 1400.0, current_position={"avg_price": 1200.0, "quantity": 50}
         )  # should not raise
 
     def test_allows_closing_losing_position(self, monkeypatch):
@@ -182,8 +178,7 @@ class TestNoPyramiding:
         rl = RiskLimits()
         # SELL of a losing long = closing/reducing, not pyramiding — should be allowed
         rl.check(
-            "INFY", "SELL", 10, 1300.0,
-            current_position={"avg_price": 1400.0, "quantity": 50}
+            "INFY", "SELL", 10, 1300.0, current_position={"avg_price": 1400.0, "quantity": 50}
         )  # should not raise
 
     def test_no_position_allows_new_buy(self):

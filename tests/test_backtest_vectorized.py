@@ -7,7 +7,6 @@ from __future__ import annotations
 import pytest
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
 
 
 def _make_ohlcv(n=252, seed=42) -> pd.DataFrame:
@@ -94,6 +93,7 @@ class TestVectorizedEngine:
         df = _make_ohlcv()
         result = vectorized_backtest(df, strategy_name="rsi", symbol="TEST")
         import math
+
         assert math.isfinite(result.sharpe_ratio)
 
     def test_win_rate_between_0_and_100(self):

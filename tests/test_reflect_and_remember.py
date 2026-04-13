@@ -91,7 +91,9 @@ class TestReflectRuleBasedFallback:
 class TestReflectWithLLM:
     def test_llm_lesson_is_used_when_provided(self, memory):
         mock_provider = MagicMock()
-        mock_provider.chat.return_value = "The RSI oversold entry on INFY was correct — hold similar setups."
+        mock_provider.chat.return_value = (
+            "The RSI oversold entry on INFY was correct — hold similar setups."
+        )
 
         trade_id = _make_record(memory, symbol="INFY", verdict="BUY", outcome="WIN", pnl=2000.0)
         lesson = memory.reflect_and_remember(trade_id, llm_provider=mock_provider)
