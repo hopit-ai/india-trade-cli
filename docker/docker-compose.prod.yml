@@ -1,0 +1,34 @@
+# Production overlay — adds Caddy HTTPS reverse proxy
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+#   1. Set DOMAIN=yourdomain.com in .env
+#   2. Ensure port 80 and 443 are open
+#   3. DNS A record pointing to this server
+
+version: '3.9'
+
+services:
+  app:
+    ports: []  # Remove direct 8765 exposure — traffic goes through Caddy
+    environment:
+      - DEPLOY_MODE=cloud
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: india-trade-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:
