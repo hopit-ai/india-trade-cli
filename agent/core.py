@@ -2332,3 +2332,16 @@ def get_agent(
     if _agent_instance is None or force_new:
         _agent_instance = TradingAgent(provider=provider, model=model)
     return _agent_instance
+
+
+def ensure_ai_provider_configured() -> None:
+    """
+    Check whether an AI provider is already configured; if not, run the
+    first-time setup wizard immediately.
+
+    Called at startup (before the REPL) so the user is prompted once, cleanly,
+    rather than mid-session when they first type `analyze`.
+    """
+    chosen = os.environ.get("AI_PROVIDER", "").lower() or _auto_detect_provider()
+    if chosen == PROVIDER_ANTHROPIC and not _has_anthropic_key():
+        _first_time_provider_setup()

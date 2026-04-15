@@ -102,6 +102,11 @@ def main() -> None:
             register_broker("mock", mock, primary=True)
             broker = mock
 
+    # ── AI provider setup (runs once if not yet configured) ──────
+    from agent.core import ensure_ai_provider_configured
+
+    ensure_ai_provider_configured()
+
     if use_tui:
         # Launch Textual TUI
         from ui.app import run_tui
