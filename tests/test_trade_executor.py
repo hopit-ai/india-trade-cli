@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from brokers.base import OrderResponse, UserProfile
 from engine.trade_executor import (
     _is_paper,
@@ -13,6 +15,18 @@ from engine.trade_executor import (
     is_live_execution_allowed,
 )
 from engine.trader import ExitPlan, OrderLeg, TradePlan
+
+
+@pytest.fixture(autouse=True)
+def bypass_risk_limits(tmp_path, monkeypatch):
+    """Isolate risk limits to a fresh temp DB for trade executor tests."""
+    monkeypatch.setenv("RISK_DB_PATH", str(tmp_path / "risk_test.db"))
+    # Reset the module-level singleton so it picks up the temp DB
+    import engine.risk_limits as rl_mod
+
+    rl_mod.risk_limits = rl_mod.RiskLimits()
+    yield
+    rl_mod.risk_limits = rl_mod.RiskLimits()
 
 
 # ── Helpers ───────────────────────────────────────────────────

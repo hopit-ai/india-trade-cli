@@ -78,6 +78,7 @@ class BacktestRequest(BaseModel):
     strategy: str = "rsi"
     period: str = "1y"
     exchange: str = "NSE"
+    fast: bool = False  # True → vectorized engine (<1s, no slippage sim)
 
 
 class PairsRequest(BaseModel):
@@ -234,9 +235,16 @@ async def skill_backtest(req: BacktestRequest):
     Strategies: rsi, ma, ema, macd, bb (Bollinger Bands)
     """
     try:
-        from engine.backtest import run_backtest
+        if req.fast:
+            from engine.backtest_vectorized import run_vectorized_backtest
 
-        result = run_backtest(req.symbol.upper(), req.strategy, period=req.period)
+            result = run_vectorized_backtest(
+                req.symbol.upper(), req.strategy, period=req.period, exchange=req.exchange
+            )
+        else:
+            from engine.backtest import run_backtest
+
+            result = run_backtest(req.symbol.upper(), req.strategy, period=req.period)
         return _ok(result)
     except Exception as e:
         raise _err(str(e))
@@ -1176,6 +1184,44 @@ async def skill_audit(req: AuditRequest):
         raise _err(str(e))
 
 
+# ── Quick Analyze (#153) ─────────────────────────────────────
+
+
+class QuickAnalyzeRequest(BaseModel):
+    symbol: str
+    exchange: str = "NSE"
+
+
+@router.post("/quick_analyze")
+async def skill_quick_analyze(req: QuickAnalyzeRequest):
+    """
+    Fast single-agent analysis — 1 LLM call, 3-5 seconds.
+    Returns verdict, confidence, reasons, entry/SL/target.
+    """
+    try:
+        from agent.quick_scan import QuickScanner
+
+        scanner = QuickScanner()
+        result = scanner.scan(req.symbol.upper(), req.exchange.upper())
+        return {
+            "status": "ok",
+            "data": {
+                "symbol": result.symbol,
+                "verdict": result.verdict,
+                "confidence": result.confidence,
+                "reasons": result.reasons,
+                "entry": result.entry,
+                "sl": result.sl,
+                "target": result.target,
+                "ltp": result.ltp,
+                "elapsed_ms": result.elapsed_ms,
+                "error": result.error,
+            },
+        }
+    except Exception as e:
+        raise _err(str(e))
+
+
 # ── Telegram ──────────────────────────────────────────────────
 
 
@@ -1373,5 +1419,209 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
                 "history_length": len(session["history"]),
             },
         }
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── PDF Export ────────────────────────────────────────────────
+
+
+class ExportPdfRequest(BaseModel):
+    content: str
+    title: str = "India Trade CLI Report"
+
+
+@router.post("/export-pdf")
+async def skill_export_pdf(req: ExportPdfRequest):
+    """
+    Export analysis text to a PDF and return binary download.
+    Returns 503 if fpdf2 is not installed.
+    """
+    try:
+        from engine.output import export_to_pdf
+        from fastapi.responses import Response
+
+        filepath = export_to_pdf(req.content, title=req.title)
+        if not filepath:
+            raise HTTPException(
+                status_code=503,
+                detail="fpdf2 not installed. Run: pip install fpdf2",
+            )
+
+        with open(filepath, "rb") as f:
+            pdf_bytes = f.read()
+
+        import os
+
+        filename = os.path.basename(filepath)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except ImportError as e:
+        raise HTTPException(status_code=503, detail=f"fpdf2 not installed: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Explain / Simplify ────────────────────────────────────────
+
+
+class ExplainRequest(BaseModel):
+    content: str
+    session_id: str = "default"
+
+
+@router.post("/explain")
+async def skill_explain(req: ExplainRequest):
+    """
+    Explain complex analysis in simple, plain-English terms.
+    Uses LLM if configured; falls back to rule-based simplification.
+    """
+    try:
+        from engine.output import explain_simply
+
+        # Try to get the active LLM provider (optional — rule-based fallback if not set)
+        llm_provider = None
+        try:
+            from agent.core import ToolRegistry, get_provider
+
+            llm_provider = get_provider(registry=ToolRegistry())
+        except Exception:
+            pass  # No provider configured — fine, rule-based fallback handles it
+
+        simplified = explain_simply(req.content, llm_provider=llm_provider)
+        return _ok({"simplified": simplified})
+    except Exception as e:
+        raise _err(str(e))
+
+
+# ── Settings ──────────────────────────────────────────────────
+
+# Keys that can be read/written via the settings endpoints.
+# Secrets are masked on GET; all can be written via POST.
+_SETTINGS_READABLE: list[tuple[str, bool]] = [
+    # (env_key, is_secret)
+    ("AI_PROVIDER", False),
+    ("AI_MODEL", False),
+    ("AI_FAST_PROVIDER", False),
+    ("AI_FAST_MODEL", False),
+    ("ANTHROPIC_API_KEY", True),
+    ("OPENAI_API_KEY", True),
+    ("OPENAI_BASE_URL", False),
+    ("OPENAI_MODEL", False),
+    ("GEMINI_API_KEY", True),
+    ("TRADING_MODE", False),
+    ("TRADING_CAPITAL", False),
+    ("DEFAULT_RISK_PCT", False),
+    ("NEWSAPI_KEY", True),
+    ("TELEGRAM_BOT_TOKEN", True),
+]
+
+_SETTINGS_ALLOWED_WRITE: set[str] = {k for k, _ in _SETTINGS_READABLE}
+
+
+class SettingsUpdateRequest(BaseModel):
+    settings: dict[str, str]
+
+
+@router.get("/settings")
+async def skill_settings_get():
+    """Return current app configuration. Secrets are masked."""
+    import os
+
+    result: dict[str, object] = {}
+    for key, is_secret in _SETTINGS_READABLE:
+        val = os.environ.get(key, "")
+        if is_secret:
+            # Expose a boolean presence flag, not the value
+            result[key.lower() + "_set"] = bool(val)
+        else:
+            result[key.lower()] = val
+
+    return _ok(result)
+
+
+@router.post("/settings")
+async def skill_settings_post(req: SettingsUpdateRequest):
+    """Update app settings. Writes to os.environ + keychain."""
+    import os
+
+    disallowed = [k for k in req.settings if k not in _SETTINGS_ALLOWED_WRITE]
+    if disallowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown or disallowed setting key(s): {disallowed}",
+        )
+
+    from config.credentials import set_credential
+
+    updated = []
+    for key, value in req.settings.items():
+        set_credential(key, value)
+        os.environ[key] = value
+        updated.append(key)
+
+    return _ok({"updated": updated})
+
+
+# ── Backtest Report ───────────────────────────────────────────
+
+
+class BacktestReportRequest(BaseModel):
+    symbol: str
+    strategies: list[str] = ["rsi"]
+    period: str = "1y"
+    exchange: str = "NSE"
+
+
+@router.post("/backtest_report")
+async def skill_backtest_report(req: BacktestReportRequest):
+    """
+    Run multiple strategies and return a self-contained HTML comparison report.
+    Response includes the HTML inline in data.html and the saved file path.
+    """
+    try:
+        from engine.backtest import run_backtest
+        from engine.backtest_report import generate_html_report
+        import tempfile
+
+        symbol = req.symbol.upper()
+        results = []
+        errors = []
+        for strat in req.strategies:
+            try:
+                r = run_backtest(
+                    symbol=symbol,
+                    strategy_name=strat.lower(),
+                    period=req.period,
+                )
+                results.append(r)
+            except Exception as e:
+                errors.append({"strategy": strat, "error": str(e)})
+
+        if not results:
+            raise HTTPException(status_code=500, detail=f"All strategies failed: {errors}")
+
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False, prefix=f"bt_{symbol}_") as f:
+            tmp_path = f.name
+
+        report_path = generate_html_report(results, output_path=tmp_path)
+        html_content = open(report_path).read()
+
+        return _ok(
+            {
+                "symbol": symbol,
+                "strategies_run": [r.strategy_name for r in results],
+                "errors": errors,
+                "report_path": report_path,
+                "html": html_content,
+            }
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise _err(str(e))

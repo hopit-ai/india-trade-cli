@@ -367,7 +367,7 @@ def _wizard_ai_provider(items: list[tuple[str, str, bool]]) -> None:
         "  [cyan][1][/cyan] [bold]Claude (Anthropic)[/bold] — API key  [dim](pay per token)[/dim]\n"
         "  [cyan][2][/cyan] [bold]Claude Pro / Max subscription[/bold]  [dim](use `claude` CLI, no key needed)[/dim]\n"
         "  [cyan][3][/cyan] [bold]OpenAI (GPT-4o)[/bold]  — API key  [dim](pay per token)[/dim]\n"
-        "  [cyan][4][/cyan] [bold]ChatGPT Plus / Team subscription[/bold]  [dim](session token, unofficial)[/dim]\n"
+        "  [cyan][4][/cyan] [bold]ChatGPT Plus / Team subscription[/bold]  [red][DEPRECATED — use option 7 with OpenRouter][/red]\n"
         "  [cyan][5][/cyan] [bold]Google Gemini[/bold] — API key  [dim](free tier at aistudio.google.com)[/dim]\n"
         "  [cyan][6][/cyan] [bold]Gemini Advanced subscription[/bold]  [dim](Vertex AI via gcloud, GCP project needed)[/dim]\n"
         "  [cyan][7][/cyan] [bold]Custom (OpenAI-compatible)[/bold]  [dim](OpenRouter, PaleDotBlue, Groq, Together, etc.)[/dim]\n"
@@ -396,13 +396,23 @@ def _wizard_ai_provider(items: list[tuple[str, str, bool]]) -> None:
         _prompt_and_save("OPENAI_API_KEY", "OpenAI API Key", secret=True)
 
     elif choice == "4":
-        _save_cred("AI_PROVIDER", "openai_subscription")
         console.print(
-            "\n  [yellow]ChatGPT session token (unofficial — may break on updates).[/yellow]\n"
-            "  Get it: chatgpt.com → F12 DevTools → Application → Cookies\n"
-            "          → [bold]__Secure-next-auth.session-token[/bold]\n"
+            "\n  [red bold]⛔  ChatGPT subscription mode is deprecated and non-functional.[/red bold]\n\n"
+            "  This mode used an unofficial ChatGPT API that [bold]does not support tool calling[/bold]\n"
+            "  (required for analysis) and violates OpenAI's Terms of Service.\n\n"
+            "  [bold]Recommended alternatives:[/bold]\n\n"
+            "  [cyan]Option A — OpenRouter[/cyan] (free tier, full tool calling):\n"
+            "    AI_PROVIDER=openai\n"
+            "    OPENAI_BASE_URL=https://openrouter.ai/api/v1\n"
+            "    OPENAI_API_KEY=<key from openrouter.ai>\n"
+            "    OPENAI_MODEL=openai/gpt-4o\n\n"
+            "  [cyan]Option B — Groq[/cyan] (free, fast):\n"
+            "    AI_PROVIDER=openai\n"
+            "    OPENAI_BASE_URL=https://api.groq.com/openai/v1\n"
+            "    OPENAI_API_KEY=<key from console.groq.com>\n"
+            "    OPENAI_MODEL=llama-3.3-70b-versatile\n\n"
+            "  Select option [bold]7[/bold] (Custom OpenAI-compatible) to configure these.\n"
         )
-        _prompt_and_save("OPENAI_SESSION_TOKEN", "ChatGPT Session Token", secret=True)
 
     elif choice == "5":
         _save_cred("AI_PROVIDER", "gemini")

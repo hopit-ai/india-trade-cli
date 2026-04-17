@@ -1,0 +1,111 @@
+name: Build macOS DMG
+
+on:
+  # Trigger on version tags (e.g. v0.2.0) or manual dispatch
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version string (e.g. 0.2.0)'
+        required: false
+        default: 'dev'
+
+# Only one build at a time per branch
+concurrency:
+  group: build-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-dmg:
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: macos-app/package-lock.json
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${VERSION:-dev}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VERSION}"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Install Node dependencies
+        working-directory: macos-app
+        run: npm ci
+
+      - name: Build React web app
+        working-directory: macos-app
+        run: npm run build:web
+
+      - name: Build Electron app + DMG
+        working-directory: macos-app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false  # Skip code signing (no Apple cert in CI)
+        run: npm run build
+
+      - name: Find DMG files
+        id: find_dmg
+        run: |
+          DMG_FILES=$(find macos-app/release -name "*.dmg" 2>/dev/null | head -5)
+          echo "dmg_files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "${DMG_FILES}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Found DMGs: ${DMG_FILES}"
+
+      - name: Upload DMG as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: india-trade-dmg-${{ steps.version.outputs.version }}
+          path: macos-app/release/*.dmg
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Create GitHub Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: India Trade CLI ${{ steps.version.outputs.version }}
+          body: |
+            ## India Trade CLI v${{ steps.version.outputs.version }}
+
+            ### Installation
+            1. Download the `.dmg` below
+            2. Open the DMG, drag the app to Applications
+            3. First launch: right-click → Open (to bypass Gatekeeper warning)
+
+            > Note: This build is unsigned. A future release will include Apple code signing.
+
+            ### What's new
+            See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          files: macos-app/release/*.dmg
+          fail_on_unmatched_files: false
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
