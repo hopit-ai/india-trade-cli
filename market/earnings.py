@@ -32,7 +32,7 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from rich.console import Console
@@ -224,7 +224,7 @@ def get_earnings_calendar(
         # explicitly requested this symbol)
         if not symbols:
             try:
-                result_dt = date.strptime(entry.result_date, "%d-%b-%Y")
+                result_dt = datetime.strptime(entry.result_date, "%d-%b-%Y").date()
                 if (result_dt - today).days > days_ahead:
                     continue
             except ValueError:
