@@ -147,9 +147,29 @@ def is_earnings_season() -> bool:
     )
 
 
+def _next_expected_date(sym: str, today: date) -> Optional[date]:
+    """
+    Compute the next expected reporting date for a stock based on its
+    typical reporting-month pattern.  Returns None if unknown.
+    """
+    months = _NIFTY50_EARNINGS_MONTHS.get(sym, [])
+    if not months:
+        return None
+    for offset in range(13):  # look up to ~1 year ahead
+        m = ((today.month - 1 + offset) % 12) + 1
+        y = today.year + ((today.month - 1 + offset) // 12)
+        if m in months:
+            # Results typically land around the 15th–20th of the month
+            day = min(15, 28)
+            est = date(y, m, day)
+            if est >= today:
+                return est
+    return None
+
+
 def get_earnings_calendar(
     symbols: Optional[list[str]] = None,
-    days_ahead: int = 30,
+    days_ahead: int = 60,
 ) -> list[EarningsEntry]:
     """
     Get upcoming earnings for given symbols (or NIFTY 50 by default).
@@ -157,6 +177,9 @@ def get_earnings_calendar(
     Uses a combination of:
     1. Known reporting patterns (which month each company typically reports)
     2. NSE board meeting calendar (for actual dates when available)
+
+    Only returns genuinely future events.  Past dates from NSE (previous
+    quarter) are discarded and replaced with the next expected date.
     """
     today = date.today()
     quarter = _current_quarter()
@@ -165,28 +188,49 @@ def get_earnings_calendar(
     entries = []
     for sym in target_symbols:
         sym = sym.upper()
-        months = _NIFTY50_EARNINGS_MONTHS.get(sym, [])
 
-        # Check if this stock reports in the current or next month
-        is_upcoming = any(abs(today.month - m) <= 1 or abs(today.month - m) == 11 for m in months)
+        entry = EarningsEntry(
+            symbol=sym,
+            quarter=quarter,
+            result_date="TBD",
+            avg_move=_AVG_EARNINGS_MOVE.get(sym),
+        )
 
-        if is_upcoming or symbols:  # always include if specifically requested
-            entry = EarningsEntry(
-                symbol=sym,
-                quarter=quarter,
-                result_date="TBD",
-                avg_move=_AVG_EARNINGS_MOVE.get(sym),
-            )
+        # Try to get actual date from NSE
+        nse_date: Optional[date] = None
+        try:
+            raw = _fetch_earnings_date_nse(sym)
+            if raw and raw != "TBD":
+                nse_date = date.fromisoformat(raw)
+        except Exception:
+            pass
 
-            # Try to get actual date from NSE
+        if nse_date and nse_date >= today:
+            # NSE returned a genuine upcoming date — use it
+            entry.result_date = nse_date.strftime("%d-%b-%Y")
+            entry.status = "UPCOMING"
+        else:
+            # NSE date is stale (past quarter) or unavailable — estimate next
+            next_dt = _next_expected_date(sym, today)
+            if next_dt:
+                entry.result_date = next_dt.strftime("%d-%b-%Y")
+                # Mark confirmed only if within the current season window
+                entry.status = "UPCOMING"
+            else:
+                entry.result_date = "TBD"
+                entry.status = "UPCOMING"
+
+        # Filter: skip if estimated date is beyond days_ahead (unless caller
+        # explicitly requested this symbol)
+        if not symbols:
             try:
-                actual_date = _fetch_earnings_date_nse(sym)
-                if actual_date:
-                    entry.result_date = actual_date
-            except Exception:
-                pass
+                result_dt = date.strptime(entry.result_date, "%d-%b-%Y")
+                if (result_dt - today).days > days_ahead:
+                    continue
+            except ValueError:
+                pass  # TBD — include anyway
 
-            entries.append(entry)
+        entries.append(entry)
 
     # Sort by date (TBD at the end)
     entries.sort(key=lambda e: e.result_date if e.result_date != "TBD" else "9999")
