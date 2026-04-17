@@ -689,7 +689,7 @@ def cmd_help() -> None:
         ],
         "Session": [
             ("login", "Connect to a broker"),
-            ("provider [name]", "Show/switch AI provider"),
+            ("provider [name|setup]", "Show/switch AI provider, or run setup wizard"),
             ("telegram [setup]", "Start bot / run guided setup wizard"),
             ("clear", "Start fresh AI conversation (reset context)"),
             ("credentials", "Manage API keys"),
@@ -1957,13 +1957,18 @@ def run_repl(broker: BrokerAPI) -> None:
                     _last_command = f"Harness: {query[:40]}"
 
             elif command == "provider":
-                if args:
+                if args and args[0].lower() == "setup":
+                    # Re-run the full interactive AI provider wizard
+                    agent = get_agent()
+                    agent.run_setup_wizard()
+                elif args:
                     new_provider = args[0].lower()
                     new_model = args[1] if len(args) > 1 else None
                     if new_provider not in ALL_PROVIDERS:
                         console.print(
                             f"[red]Unknown provider '{new_provider}'.[/red] "
-                            f"Valid: {', '.join(ALL_PROVIDERS)}"
+                            f"Valid: {', '.join(ALL_PROVIDERS)}\n"
+                            f"  Or run [cyan]provider setup[/cyan] for the guided wizard."
                         )
                     else:
                         agent = get_agent()

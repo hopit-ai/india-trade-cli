@@ -2048,11 +2048,43 @@ class TradingAgent:
 
     def switch_provider(self, provider: str, model: str | None = None) -> None:
         """
-        Hot-switch LLM provider mid-session.
+        Hot-switch LLM provider mid-session and persist the choice to keychain.
         Conversation history is preserved; new provider picks up context.
         """
         self._provider = get_provider(provider=provider, model=model, registry=self._registry)
-        console.print(f"[dim]Switched provider → {self._provider.provider_name}[/dim]")
+
+        # Save choice to keychain + env so it survives restarts
+        try:
+            from config.credentials import _kr_set
+
+            _kr_set("AI_PROVIDER", provider)
+            os.environ["AI_PROVIDER"] = provider
+            if model:
+                _kr_set("AI_MODEL", model)
+                os.environ["AI_MODEL"] = model
+        except Exception:
+            pass  # keychain unavailable — in-session switch still worked
+
+        console.print(
+            f"[green]✓ Switched to {self._provider.provider_name}[/green]"
+            f" [dim](saved — will persist on restart)[/dim]"
+        )
+
+    def run_setup_wizard(self) -> None:
+        """
+        Re-run the interactive AI provider setup wizard.
+        Updates the current session and saves the choice to keychain.
+        """
+        chosen = _first_time_provider_setup()
+        if chosen and chosen != "none":
+            try:
+                self._provider = get_provider(provider=chosen, registry=self._registry)
+                console.print(
+                    f"\n[green]✓ Provider set to {self._provider.provider_name}[/green]"
+                    f" [dim](saved to keychain)[/dim]\n"
+                )
+            except Exception as e:
+                console.print(f"[yellow]Provider saved but could not activate: {e}[/yellow]")
 
     def clear_history(self) -> None:
         """Start a fresh conversation (clear history)."""
@@ -2081,13 +2113,14 @@ class TradingAgent:
             console.print(f"\n  [dim]Custom endpoint: {base_url}[/dim]")
 
         console.print(
-            "\n  Switch with: [bold]provider <name>[/bold]  "
-            "e.g. [cyan]provider gemini[/cyan]\n"
-            "  [bold]Custom endpoint[/bold] (OpenRouter, Groq, etc.):\n"
+            "\n  [bold]Switch provider:[/bold]\n"
+            "    [cyan]provider setup[/cyan]               → guided wizard (saves to keychain)\n"
+            "    [cyan]provider gemini[/cyan]              → switch directly (also saves)\n"
+            "    [cyan]provider anthropic claude-opus-4-5[/cyan]  → switch + override model\n"
+            "\n  [bold]Custom endpoint[/bold] (OpenRouter, Groq, etc.):\n"
             "    [cyan]credentials set OPENAI_BASE_URL[/cyan]  → set the base URL\n"
             "    [cyan]credentials set OPENAI_API_KEY[/cyan]   → set the API key\n"
-            "    [cyan]provider openai[/cyan]                  → switch to it\n"
-            "  Or run [bold]credentials setup[/bold] → AI Provider for guided config.\n"
+            "    [cyan]provider openai[/cyan]               → switch to it\n"
         )
 
     @property
