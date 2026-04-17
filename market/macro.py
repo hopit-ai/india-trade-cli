@@ -37,7 +37,9 @@ class MacroSnapshot:
     gold: Optional[float] = None  # Gold USD/oz
     gold_change: Optional[float] = None
     us_10y: Optional[float] = None  # US 10Y treasury yield %
+    us_10y_change: Optional[float] = None  # bps change (not %)
     dxy: Optional[float] = None  # Dollar index
+    dxy_change: Optional[float] = None  # % change
 
 
 # Stock → macro factor sensitivity mapping
@@ -121,11 +123,14 @@ def get_macro_snapshot() -> MacroSnapshot:
         except Exception:
             pass
 
-        # US 10Y
+        # US 10Y — change shown in basis points (yield moves in bps, not %)
         try:
             t = yf.Ticker("^TNX")
             info = t.fast_info
             snap.us_10y = float(info.get("lastPrice", 0) or info.get("last_price", 0) or 0)
+            prev = float(info.get("previousClose", 0) or info.get("previous_close", 0) or 0)
+            if snap.us_10y and prev:
+                snap.us_10y_change = round((snap.us_10y - prev) * 100, 1)  # bps
         except Exception:
             pass
 
@@ -134,6 +139,9 @@ def get_macro_snapshot() -> MacroSnapshot:
             t = yf.Ticker("DX-Y.NYB")
             info = t.fast_info
             snap.dxy = float(info.get("lastPrice", 0) or info.get("last_price", 0) or 0)
+            prev = float(info.get("previousClose", 0) or info.get("previous_close", 0) or 0)
+            if snap.dxy and prev:
+                snap.dxy_change = round((snap.dxy - prev) / prev * 100, 2)
         except Exception:
             pass
 
@@ -281,9 +289,23 @@ def print_macro_snapshot(symbol: Optional[str] = None) -> None:
     _row("Crude Oil", snap.crude_oil, snap.crude_change)
     _row("Gold", snap.gold, snap.gold_change)
     if snap.us_10y:
-        table.add_row("US 10Y Yield", f"{snap.us_10y:.2f}%", "-")
+        # Yield change shown in basis points (more conventional than %)
+        if snap.us_10y_change is not None:
+            bps = snap.us_10y_change
+            bps_str = f"{bps:+.1f} bps"
+            bps_style = "green" if bps >= 0 else "red"
+            chg_cell = f"[{bps_style}]{bps_str}[/{bps_style}]"
+        else:
+            chg_cell = "-"
+        table.add_row("US 10Y Yield", f"{snap.us_10y:.2f}%", chg_cell)
     if snap.dxy:
-        table.add_row("Dollar Index", f"{snap.dxy:.1f}", "-")
+        if snap.dxy_change is not None:
+            dxy_str = f"{snap.dxy_change:+.2f}%"
+            dxy_style = "green" if snap.dxy_change >= 0 else "red"
+            chg_cell = f"[{dxy_style}]{dxy_str}[/{dxy_style}]"
+        else:
+            chg_cell = "-"
+        table.add_row("Dollar Index", f"{snap.dxy:.1f}", chg_cell)
 
     console.print(table)
 
