@@ -109,6 +109,21 @@ _AVG_EARNINGS_MOVE = {
     "MARUTI": 3.0,
     "TITAN": 3.5,
     "SUNPHARMA": 3.2,
+    # Additional NIFTY 50 constituents
+    "TATASTEEL": 4.5,
+    "M&M": 3.5,
+    "DRREDDY": 3.8,
+    "ADANIENT": 5.0,
+    "NTPC": 2.0,
+    "POWERGRID": 1.8,
+    "KOTAKBANK": 2.8,
+    "AXISBANK": 3.2,
+    "LT": 3.0,
+    "ULTRACEMCO": 3.5,
+    "HINDUNILVR": 2.5,
+    "ASIANPAINT": 3.0,
+    "HCLTECH": 3.8,
+    "TECHM": 4.5,
 }
 
 
