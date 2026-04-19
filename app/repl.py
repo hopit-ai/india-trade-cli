@@ -746,6 +746,7 @@ def _handle_backtest_command(args: list[str]) -> None:
     # Track last symbol so strategy builder can pick it up
     try:
         from app.commands.strategy import set_last_symbol
+
         set_last_symbol(symbol)
     except Exception:
         pass
@@ -1017,7 +1018,9 @@ def _handle_alert_command(args: list[str]) -> None:
         args = args[1:]
 
     # Map operator aliases: > → above, < → below, >= → above, <= → below
-    args = ["above" if a == ">" or a == ">=" else "below" if a == "<" or a == "<=" else a for a in args]
+    args = [
+        "above" if a == ">" or a == ">=" else "below" if a == "<" or a == "<=" else a for a in args
+    ]
 
     if args[0].lower() == "remove" and len(args) >= 2:
         removed = alert_manager.remove_alert(args[1])
@@ -1329,6 +1332,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     if plain:
                         try:
                             from app.commands.strategy import set_last_symbol
+
                             set_last_symbol(plain[-1])
                         except Exception:
                             pass
@@ -1367,6 +1371,7 @@ def run_repl(broker: BrokerAPI) -> None:
                 else:
                     try:
                         from app.commands.strategy import set_last_symbol
+
                         set_last_symbol(symbol)
                     except Exception:
                         pass
