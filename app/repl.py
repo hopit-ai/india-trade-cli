@@ -743,6 +743,12 @@ def _handle_backtest_command(args: list[str]) -> None:
         from engine.backtest import run_backtest
 
     symbol = clean_args[0].upper()
+    # Track last symbol so strategy builder can pick it up
+    try:
+        from app.commands.strategy import set_last_symbol
+        set_last_symbol(symbol)
+    except Exception:
+        pass
     strategy_name = clean_args[1].lower() if len(clean_args) > 1 else "rsi"
     strategy_args = clean_args[2:] if len(clean_args) > 2 else []
 
@@ -794,7 +800,6 @@ def _handle_backtest_command(args: list[str]) -> None:
         result = run_backtest(
             symbol=symbol,
             strategy_name=strategy_name,
-            strategy_args=strategy_args,
             period=period,
         )
         result.print_summary()
@@ -1006,6 +1011,13 @@ def _handle_alert_command(args: list[str]) -> None:
     if not args or args[0].lower() == "list":
         alert_manager.print_alerts()
         return
+
+    # Support "alert add SYMBOL ..." as alias for "alert SYMBOL ..."
+    if args[0].lower() == "add":
+        args = args[1:]
+
+    # Map operator aliases: > → above, < → below, >= → above, <= → below
+    args = ["above" if a == ">" or a == ">=" else "below" if a == "<" or a == "<=" else a for a in args]
 
     if args[0].lower() == "remove" and len(args) >= 2:
         removed = alert_manager.remove_alert(args[1])
@@ -1312,6 +1324,14 @@ def run_repl(broker: BrokerAPI) -> None:
                         "FINNIFTY": "NSE:FINNIFTY-INDEX",
                     }
                     resolved = [idx_aliases.get(a.upper(), a) for a in args]
+                    # Track last plain stock symbol (not index aliases)
+                    plain = [a.upper() for a in args if a.upper() not in idx_aliases]
+                    if plain:
+                        try:
+                            from app.commands.strategy import set_last_symbol
+                            set_last_symbol(plain[-1])
+                        except Exception:
+                            pass
                     cmd_quote(resolved)
 
             # ── Portfolio (unified multi-broker view) ─────────
@@ -1345,6 +1365,11 @@ def run_repl(broker: BrokerAPI) -> None:
                         "[red]Usage: analyze <SYMBOL> [--risk-debate] [--pdf] [--explain][/red]"
                     )
                 else:
+                    try:
+                        from app.commands.strategy import set_last_symbol
+                        set_last_symbol(symbol)
+                    except Exception:
+                        pass
                     agent = get_agent()
 
                     # Context prompt callback (#113): runs after analysts,

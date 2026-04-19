@@ -43,7 +43,11 @@ def _fetch_ohlcv(symbol: str, period: str = "1y", exchange: str = "NSE") -> pd.D
         suffix = ".NS" if exchange.upper() in ("NSE", "NFO") else ".BO"
         ticker = f"{symbol}{suffix}"
         df = yf.download(ticker, period=period, interval="1d", progress=False, auto_adjust=True)
-        df.columns = [c.lower() for c in df.columns]
+        # yfinance may return MultiIndex columns like ('Close', 'INFY.NS') — flatten to plain strings
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [c[0].lower() for c in df.columns]
+        else:
+            df.columns = [c.lower() for c in df.columns]
         df = df.dropna()
         if df.empty:
             raise ValueError(f"No data returned for {ticker}")

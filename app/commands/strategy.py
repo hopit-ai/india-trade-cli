@@ -24,6 +24,40 @@ from rich.prompt import Confirm
 
 console = Console()
 
+# Tracks the last symbol the user explicitly worked with (set by quote/analyse/backtest commands)
+_last_symbol: str = ""
+
+
+def get_last_symbol() -> str:
+    """Return the last symbol the user worked with, or empty string."""
+    return _last_symbol
+
+
+def set_last_symbol(symbol: str) -> None:
+    """Record the most recently used symbol."""
+    global _last_symbol
+    if symbol:
+        _last_symbol = symbol.upper()
+
+
+def _resolve_symbol(from_payload: str | None = None, from_args: str | None = None) -> str:
+    """
+    Resolve which symbol to use, in priority order:
+    1. Explicitly provided in args
+    2. Symbol the LLM extracted from the conversation
+    3. Last symbol the user worked with
+    4. Prompt the user interactively
+    """
+    from rich.prompt import Prompt
+
+    if from_args:
+        return from_args.upper()
+    if from_payload and from_payload.upper() not in ("", "TICKER_USER_MENTIONED", "SYMBOL"):
+        return from_payload.upper()
+    if _last_symbol:
+        return _last_symbol
+    return Prompt.ask("Which symbol should we backtest this on? (e.g. INFY, TCS)").upper()
+
 
 def run(args: list[str]) -> None:
     """Main dispatcher for the strategy command."""
@@ -116,14 +150,27 @@ def _cmd_new(args: list[str]) -> None:
 
     agent = get_agent()
 
+    # Isolate the strategy builder in a clean conversation context.
+    # Save the main conversation history and restore it when done.
+    _saved_history = list(agent._history)
+    agent._history = []
+
     # Inject the strategy builder system prompt as the first message
     first_message = prompt_text + "\n\n"
     if initial_desc:
         first_message += (
-            f"The user wants to build this strategy: {initial_desc}\n\nStart the interview."
+            f"The user wants to build this strategy: {initial_desc}\n\n"
+            "IMPORTANT: Do NOT call any tools yet. First confirm the strategy type and ask which "
+            "symbol/stock they want to trade. Only fetch data once the user has named a symbol."
         )
     else:
-        first_message += "The user wants to build a custom strategy. Start by asking what kind of strategy they have in mind."
+        first_message += (
+            "The user wants to build a custom strategy.\n\n"
+            "IMPORTANT: Do NOT call any tools yet. Start by asking:\n"
+            "1. What kind of strategy they have in mind (momentum, mean reversion, pairs, etc.)\n"
+            "2. Which stock or index they want to trade\n"
+            "Only begin fetching market data AFTER the user has named a specific symbol."
+        )
 
     # Run the multi-turn interview
     interview_session = PromptSession(history=InMemoryHistory())
@@ -140,17 +187,30 @@ def _cmd_new(args: list[str]) -> None:
                 user_input = interview_session.prompt("you ❯ ").strip()
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[yellow]Strategy builder cancelled.[/yellow]")
+                agent._history = _saved_history
                 return
 
             if not user_input:
                 continue
             if user_input.lower() == "cancel":
                 console.print("[yellow]Strategy builder cancelled.[/yellow]")
+                agent._history = _saved_history
                 return
             if user_input.lower() in ("done", "generate", "build", "build it", "go"):
                 response = _force_generate(agent)
             else:
-                response = agent.chat(user_input)
+                # Wrap the user input so the agent knows it MUST ask a follow-up question.
+                # This prevents the agent from treating a tool call as a complete response.
+                wrapped = (
+                    f"User says: {user_input!r}\n\n"
+                    "Use any tools you need to look up data for what the user mentioned. "
+                    "If the symbol is not found or returns no data, tell the user clearly and ask "
+                    "them to pick a different symbol (suggest NIFTY50 stocks like INFY, TCS, HDFC). "
+                    "Do NOT retry a failed symbol. "
+                    "After fetching data (or if no tool call is needed), ALWAYS end your response "
+                    "with the next interview question to keep the conversation moving."
+                )
+                response = agent.chat(wrapped)
 
         # Check if the LLM signaled completion
         payload = extract_strategy_payload(response)
@@ -178,6 +238,7 @@ def _cmd_new(args: list[str]) -> None:
         strategy_payload = extract_strategy_payload(response)
 
     if not strategy_payload:
+        agent._history = _saved_history
         console.print(
             "[yellow]Could not generate strategy code. Try again with [bold]strategy new[/bold].[/yellow]"
         )
@@ -187,7 +248,7 @@ def _cmd_new(args: list[str]) -> None:
     code = strategy_payload.get("code", "")
     name = strategy_payload.get("name", "custom_strategy")
     description = strategy_payload.get("description", "")
-    symbol = strategy_payload.get("symbol", "RELIANCE")
+    symbol = _resolve_symbol(from_payload=strategy_payload.get("symbol"))
     parameters = strategy_payload.get("parameters", {})
 
     console.print(f"\n[bold]Generated strategy: [cyan]{name}[/cyan][/bold]")
@@ -234,6 +295,7 @@ def _cmd_new(args: list[str]) -> None:
     except Exception as e:
         console.print(f"[red]Backtest failed: {e}[/red]")
         console.print("[dim]The strategy code might need adjustment.[/dim]")
+        agent._history = _saved_history
         return
 
     # ── Save prompt ──────────────────────────────────────────
@@ -262,6 +324,9 @@ def _cmd_new(args: list[str]) -> None:
         console.print(f"[dim]Run: strategy run {name} {symbol} --paper[/dim]")
     else:
         console.print("[dim]Strategy not saved.[/dim]")
+
+    # Restore main conversation history
+    agent._history = _saved_history
 
 
 # ── strategy list ────────────────────────────────────────────
@@ -295,11 +360,9 @@ def _cmd_backtest(args: list[str]) -> None:
 
     # Load symbol from metadata or prompt
     meta = strategy_store.get_metadata(name)
-    symbol = meta.get("default_symbol", "RELIANCE") if meta else "RELIANCE"
-
-    # Check if symbol was provided as second arg
-    if len(args) > 1 and not args[1].startswith("-"):
-        symbol = args[1].upper()
+    explicit = args[1].upper() if len(args) > 1 and not args[1].startswith("-") else None
+    saved = meta.get("default_symbol") if meta else None
+    symbol = _resolve_symbol(from_payload=saved, from_args=explicit)
 
     try:
         strategy = strategy_store.load_strategy(name)
@@ -357,11 +420,9 @@ def _cmd_run(args: list[str]) -> None:
     clean_args = [a for a in args[1:] if a != "--paper"]
 
     meta = strategy_store.get_metadata(name)
-    symbol = (
-        clean_args[0].upper()
-        if clean_args
-        else (meta.get("default_symbol", "RELIANCE") if meta else "RELIANCE")
-    )
+    explicit = clean_args[0].upper() if clean_args else None
+    saved = meta.get("default_symbol") if meta else None
+    symbol = _resolve_symbol(from_payload=saved, from_args=explicit)
 
     try:
         strategy = strategy_store.load_strategy(name)

@@ -525,7 +525,7 @@ def extract_strategy_payload(response: str) -> Optional[dict]:
             "code": code_match.group(1).strip(),
             "name": "custom_strategy",
             "description": "User-defined strategy",
-            "symbol": "RELIANCE",
+            "symbol": None,
             "parameters": {},
         }
 
@@ -549,7 +549,7 @@ def extract_strategy_payload(response: str) -> Optional[dict]:
                 "code": "\n".join(code_lines),
                 "name": "custom_strategy",
                 "description": "User-defined strategy",
-                "symbol": "RELIANCE",
+                "symbol": None,
                 "parameters": {},
             }
 
