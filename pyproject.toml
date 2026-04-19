@@ -58,6 +58,7 @@ dependencies = [
     "python-telegram-bot>=21.0",
     # ── Auth & Utilities ─────────────────────────────────────────────
     "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
     "keyring>=25.2.0",
     "pyotp>=2.9.0",
     "python-dateutil>=2.9.0",

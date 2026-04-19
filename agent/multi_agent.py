@@ -1049,9 +1049,11 @@ class MultiAgentAnalyzer:
         risk_debate: bool = False,
         progress_callback=None,
         context_prompt_callback=None,
+        fast_llm_provider: Any = None,  # (#91) fast model for extraction; defaults to llm_provider
     ) -> None:
         self.registry = registry
-        self.llm = llm_provider
+        self.llm = llm_provider  # deep: debate + synthesis
+        self.fast_llm = fast_llm_provider or llm_provider  # fast: extraction/classification
         self.parallel = parallel
         self.verbose = verbose
         self.risk_debate = risk_debate  # enable 3-way risk debate (aggressive/conservative/neutral)
@@ -1066,7 +1068,7 @@ class MultiAgentAnalyzer:
         self._synthesis_started: bool = False
 
         news_analyst = NewsMacroAnalyst(registry)
-        news_analyst.set_llm(llm_provider)
+        news_analyst.set_llm(self.fast_llm)  # news uses fast model for extraction
 
         self.analysts = [
             TechnicalAnalyst(registry),
