@@ -105,6 +105,7 @@ COMMANDS = [
     "oi-profile",
     "quote",
     "scan",
+    "search",
     "smile",
     "roll-options",
     "strategy",
@@ -2044,6 +2045,23 @@ def run_repl(broker: BrokerAPI) -> None:
                     registry=_debate_registry,
                     llm_provider=_debate_provider,
                 )
+
+            elif command == "search":
+                query = " ".join(args).strip()
+                if not query:
+                    console.print(
+                        "[dim]Usage: search <query>\n"
+                        "  Examples:\n"
+                        "    search RELIANCE BUY\n"
+                        '    search "iron condor"\n'
+                        "    search verdict:STRONG_BUY[/dim]"
+                    )
+                else:
+                    from engine.search import analysis_search, print_search_results
+
+                    analysis_search.index_from_memory()
+                    results = analysis_search.search(query)
+                    print_search_results(results, query)
 
             elif command == "whatif":
                 _handle_whatif_command(args)
