@@ -9,10 +9,8 @@ No LLM is required. All tests use mock AnalystReport fixtures.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 from agent.multi_agent import AnalystReport, AnalystScorecard
 from analysis.pipeline import (
@@ -47,7 +45,9 @@ def _make_report(
 
 
 ALL_BULLISH_REPORTS = [
-    _make_report("Technical", "BULLISH", 60, 75, ["RSI:28 oversold", "MACD:bullish", "above EMA50"]),
+    _make_report(
+        "Technical", "BULLISH", 60, 75, ["RSI:28 oversold", "MACD:bullish", "above EMA50"]
+    ),
     _make_report("Fundamental", "BULLISH", 70, 80, ["PE:22 ROE:20% D/E:0.1"]),
     _make_report("Options", "BULLISH", 50, 65, ["PCR:1.3 IVR:30 MaxPain:2600"]),
     _make_report("News & Macro", "BULLISH", 55, 60, ["FII net buy", "positive headlines"]),
@@ -67,7 +67,9 @@ MIXED_REPORTS = [
 ]
 
 ALL_BEARISH_REPORTS = [
-    _make_report("Technical", "BEARISH", -60, 80, ["RSI:72 overbought", "MACD:bear", "below EMA50"]),
+    _make_report(
+        "Technical", "BEARISH", -60, 80, ["RSI:72 overbought", "MACD:bear", "below EMA50"]
+    ),
     _make_report("Fundamental", "BEARISH", -50, 70, ["PE:45 ROE:8% high D/E"]),
     _make_report("Options", "BEARISH", -45, 65, ["PCR:0.5 IVR:85 MaxPain:2200"]),
     _make_report("News & Macro", "BEARISH", -55, 75, ["FII net sell large", "bearish headlines"]),
@@ -136,7 +138,12 @@ class TestBuildCompactSignals:
 
     def test_no_conflicts_when_all_agree(self):
         text = build_compact_signals("RELIANCE", "NSE", ALL_BULLISH_REPORTS, 2850.0)
-        assert "No conflicts" in text or "Conflicts: none" in text or "conflict" not in text.lower() or "no conflict" in text.lower()
+        assert (
+            "No conflicts" in text
+            or "Conflicts: none" in text
+            or "conflict" not in text.lower()
+            or "no conflict" in text.lower()
+        )
 
     def test_token_budget_under_300(self):
         """Compact signals must fit in approximately 300 tokens (rough: 4 chars/token)."""
@@ -154,8 +161,6 @@ class TestBuildCompactSignals:
 
     def test_no_llm_imports_in_module(self):
         """Stage 1 pipeline must have zero LLM imports."""
-        import importlib
-        import importlib.util
         import ast
         import pathlib
 
@@ -181,16 +186,19 @@ class TestBuildCompactSignals:
 class TestShouldUseFastPath:
     def test_all_bullish_high_agreement_triggers_fast_path(self):
         from agent.multi_agent import compute_scorecard
+
         scorecard = compute_scorecard(ALL_BULLISH_REPORTS)
         assert should_use_fast_path(scorecard) is True
 
     def test_all_bearish_high_agreement_triggers_fast_path(self):
         from agent.multi_agent import compute_scorecard
+
         scorecard = compute_scorecard(ALL_BEARISH_REPORTS)
         assert should_use_fast_path(scorecard) is True
 
     def test_mixed_reports_no_fast_path(self):
         from agent.multi_agent import compute_scorecard
+
         scorecard = compute_scorecard(MIXED_REPORTS)
         assert should_use_fast_path(scorecard) is False
 
@@ -228,12 +236,17 @@ class TestRunAnalysisPipeline:
         t = reports[0]
         registry.execute.side_effect = lambda tool, params: {
             "technical_analyse": {
-                "score": t.score, "verdict": t.verdict, "rsi": 45.0,
-                "ema20": 2800.0, "ema50": 2900.0, "ltp": 2850.0,
+                "score": t.score,
+                "verdict": t.verdict,
+                "rsi": 45.0,
+                "ema20": 2800.0,
+                "ema50": 2900.0,
+                "ltp": 2850.0,
             },
             "fundamental_analyse": {
                 "score": reports[1].score if len(reports) > 1 else 50,
-                "pe": 28.5, "roe": 18.0,
+                "pe": 28.5,
+                "roe": 18.0,
             },
             "get_options_chain": {"pcr": 0.92, "iv_rank": 68},
             "get_stock_news": [],
@@ -273,8 +286,14 @@ class TestRunAnalysisPipeline:
 
         def _mock_execute(tool: str, params: dict):
             if tool == "technical_analyse":
-                return {"score": 60, "verdict": "BULLISH", "rsi": 28.0,
-                        "ema20": 2900.0, "ema50": 2800.0, "ltp": 2850.0}
+                return {
+                    "score": 60,
+                    "verdict": "BULLISH",
+                    "rsi": 28.0,
+                    "ema20": 2900.0,
+                    "ema50": 2800.0,
+                    "ltp": 2850.0,
+                }
             if tool == "fundamental_analyse":
                 return {"score": 70, "pe": 22.0, "roe": 20.0}
             return {}
@@ -306,37 +325,90 @@ class TestCompactSignalsIntegration:
         """
         # Realistic fixtures with multiple key_points per analyst (as in production)
         rich_reports = [
-            _make_report("Technical", "BEARISH", -35, 65, [
-                "RSI: 45.3 (neutral zone, trending down from 60)", "MACD: bearish crossover signal",
-                "EMA20 below EMA50 (short-term trend down)", "Support: ₹2,450", "Resistance: ₹2,650",
-                "Volume: below 20-day average (-15%)", "Bollinger: approaching lower band",
-                "ATR(14): ₹42 — moderate daily volatility",
-            ]),
-            _make_report("Fundamental", "BULLISH", 55, 70, [
-                "PE: 28.5x (sector avg: 35x — attractively valued)", "ROE: 18% (strong, above 15% threshold)",
-                "ROCE: 16.2%", "Debt/Equity: 0.3 (low leverage)", "Revenue Growth (3Y CAGR): 14%",
-                "Profit Growth (TTM): 11%", "Promoter Holding: 50.3% (high conviction)",
-                "Dividend Yield: 1.2%",
-            ]),
-            _make_report("Options", "NEUTRAL", 5, 40, [
-                "PCR: 0.92 (near neutral — slight put bias)", "IV Rank: 68 (elevated options premiums)",
-                "Max Pain: ₹2,500", "OI buildup at ₹2,600 CE (resistance)",
-                "OI buildup at ₹2,400 PE (support)", "Straddle cost: ₹120 (4.2%)",
-            ]),
-            _make_report("News & Macro", "BEARISH", -20, 50, [
-                "FII: net seller (-₹450 Cr last 3 days)", "3 bearish headlines identified",
-                "RBI policy meeting in 5 days (uncertainty)", "US tech earnings mixed",
-                "Market breadth: A/D ratio 0.8 (weak)",
-            ]),
+            _make_report(
+                "Technical",
+                "BEARISH",
+                -35,
+                65,
+                [
+                    "RSI: 45.3 (neutral zone, trending down from 60)",
+                    "MACD: bearish crossover signal",
+                    "EMA20 below EMA50 (short-term trend down)",
+                    "Support: ₹2,450",
+                    "Resistance: ₹2,650",
+                    "Volume: below 20-day average (-15%)",
+                    "Bollinger: approaching lower band",
+                    "ATR(14): ₹42 — moderate daily volatility",
+                ],
+            ),
+            _make_report(
+                "Fundamental",
+                "BULLISH",
+                55,
+                70,
+                [
+                    "PE: 28.5x (sector avg: 35x — attractively valued)",
+                    "ROE: 18% (strong, above 15% threshold)",
+                    "ROCE: 16.2%",
+                    "Debt/Equity: 0.3 (low leverage)",
+                    "Revenue Growth (3Y CAGR): 14%",
+                    "Profit Growth (TTM): 11%",
+                    "Promoter Holding: 50.3% (high conviction)",
+                    "Dividend Yield: 1.2%",
+                ],
+            ),
+            _make_report(
+                "Options",
+                "NEUTRAL",
+                5,
+                40,
+                [
+                    "PCR: 0.92 (near neutral — slight put bias)",
+                    "IV Rank: 68 (elevated options premiums)",
+                    "Max Pain: ₹2,500",
+                    "OI buildup at ₹2,600 CE (resistance)",
+                    "OI buildup at ₹2,400 PE (support)",
+                    "Straddle cost: ₹120 (4.2%)",
+                ],
+            ),
+            _make_report(
+                "News & Macro",
+                "BEARISH",
+                -20,
+                50,
+                [
+                    "FII: net seller (-₹450 Cr last 3 days)",
+                    "3 bearish headlines identified",
+                    "RBI policy meeting in 5 days (uncertainty)",
+                    "US tech earnings mixed",
+                    "Market breadth: A/D ratio 0.8 (weak)",
+                ],
+            ),
             _make_report("Sentiment", "NEUTRAL", 0, 30, ["keyword-based sentiment: neutral"]),
-            _make_report("Sector Rotation", "BULLISH", 30, 60, [
-                "IT sector: +2.1% vs NIFTY +0.4% (outperforming)", "Sector momentum: positive",
-                "Relative strength vs NIFTY50: 1.08", "3 IT stocks in top 10 movers today",
-            ]),
-            _make_report("Risk Manager", "NEUTRAL", -10, 55, [
-                "India VIX: 14.2 (normal range 12-15)", "Capital: ₹2,00,000",
-                "Max risk per trade: ₹4,000 (2%)", "No major events in next 48h",
-            ]),
+            _make_report(
+                "Sector Rotation",
+                "BULLISH",
+                30,
+                60,
+                [
+                    "IT sector: +2.1% vs NIFTY +0.4% (outperforming)",
+                    "Sector momentum: positive",
+                    "Relative strength vs NIFTY50: 1.08",
+                    "3 IT stocks in top 10 movers today",
+                ],
+            ),
+            _make_report(
+                "Risk Manager",
+                "NEUTRAL",
+                -10,
+                55,
+                [
+                    "India VIX: 14.2 (normal range 12-15)",
+                    "Capital: ₹2,00,000",
+                    "Max risk per trade: ₹4,000 (2%)",
+                    "No major events in next 48h",
+                ],
+            ),
         ]
 
         verbose = "\n\n".join(r.summary_text() for r in rich_reports if not r.error)
