@@ -4,6 +4,7 @@ TDD — written before implementation.
 Covers issues #33, #47, #48, #49, #58.
 """
 
+import pytest
 import pandas as pd
 
 
@@ -33,12 +34,14 @@ class TestBulkDeals:
 
         assert classify_entity("RANDOM PERSON") == "OTHER"
 
+    @pytest.mark.network
     def test_get_block_deals_returns_list(self):
         from market.bulk_deals import get_block_deals
 
         result = get_block_deals()
         assert isinstance(result, list)
 
+    @pytest.mark.network
     def test_get_bulk_deals_returns_list(self):
         from market.bulk_deals import get_bulk_deals
 
