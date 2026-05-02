@@ -1155,6 +1155,18 @@ def run_repl(broker: BrokerAPI) -> None:
         )
     console.print()
 
+    # Auto-discover and register skill plugins from skills/ directory (#187)
+    try:
+        from engine.skill_loader import auto_register_skills
+        from agent.tools import build_registry as _build_skill_registry
+
+        _skill_registry = _build_skill_registry()
+        _registered = auto_register_skills(_skill_registry)
+        if _registered:
+            console.print(f"[dim]Skills loaded: {', '.join(_registered)}[/dim]")
+    except Exception:
+        pass  # skill loading is best-effort — never block startup
+
     # Buffer for post-processing commands (save-pdf, explain, explain-save)
     _last_output: str = ""
     _last_command: str = ""
