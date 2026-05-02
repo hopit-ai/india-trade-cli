@@ -81,6 +81,8 @@ def run(args: list[str]) -> None:
         _cmd_learn(args[1:])
     elif sub == "use":
         _cmd_use(args[1:])
+    elif sub == "export":
+        _cmd_export(args[1:])
     else:
         console.print(
             "[dim]Usage:\n"
@@ -92,7 +94,8 @@ def run(args: list[str]) -> None:
             "  strategy delete <name>                                       Delete\n"
             "  strategy library [category] [--type options|technical|all]  Browse templates\n"
             "  strategy learn <name>                                        Explain a template\n"
-            "  strategy use <name> SYMBOL [--lots N] [--dte N]              Apply template[/dim]"
+            "  strategy use <name> SYMBOL [--lots N] [--dte N]              Apply template\n"
+            "  strategy export <name> --pine                                Export to Pine Script[/dim]"
         )
 
 
@@ -555,6 +558,40 @@ def _cmd_delete(args: list[str]) -> None:
         console.print(f"[dim]Strategy '{name}' deleted.[/dim]")
     else:
         console.print("[dim]Cancelled.[/dim]")
+
+
+# ── strategy export ──────────────────────────────────────────
+
+
+def _cmd_export(args: list[str]) -> None:
+    """Export a saved strategy to Pine Script (.pine file)."""
+    if not args:
+        console.print("[red]Usage: strategy export <name> --pine[/red]")
+        return
+
+    from pathlib import Path
+    from engine.strategy_builder import strategy_store
+    from engine.export.pinescript import strategy_to_pinescript, save_pinescript
+
+    name = args[0]
+    pine_mode = "--pine" in args
+
+    if not pine_mode:
+        console.print("[red]Only --pine export is supported. Usage: strategy export <name> --pine[/red]")
+        return
+
+    code = strategy_store.get_code(name)
+    if not code:
+        console.print(f"[red]Strategy '{name}' not found. Run [bold]strategy list[/bold].[/red]")
+        return
+
+    meta = strategy_store.get_metadata(name) or {}
+    pine = strategy_to_pinescript(name=name, python_code=code, metadata=meta)
+
+    output_path = Path(f"{name}.pine")
+    save_pinescript(pine, output_path)
+    console.print(f"[green]Pine Script exported:[/green] {output_path.resolve()}")
+    console.print("[dim]Paste the file contents into TradingView's Pine Editor.[/dim]")
 
 
 # ── strategy library ─────────────────────────────────────────
