@@ -37,7 +37,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -47,6 +46,8 @@ from typing import Any, Optional
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+from agent.schema_parser import parse_synthesis_output as _parse_synthesis_output
 
 console = Console()
 
@@ -214,7 +215,7 @@ class TradeMemory:
                         fii_net = latest.get("fii_net")
 
         # Parse verdict and confidence from synthesis text
-        verdict, confidence, strategy = _parse_synthesis(synthesis)
+        verdict, confidence, strategy = _parse_synthesis_output(synthesis)
 
         # Debate info
         debate_winner = ""
@@ -681,45 +682,10 @@ def _parse_synthesis(text: str) -> tuple[str, int, str]:
     """
     Extract verdict, confidence, and strategy from synthesis LLM output.
 
-    Handles various LLM formatting styles:
-      - Plain:    VERDICT: BUY
-      - Markdown: **VERDICT: BUY**
-      - Mixed:    Final VERDICT: STRONG_SELL
-      - Any case: Verdict: sell
+    Thin wrapper around agent.schema_parser.parse_synthesis_output for
+    backward compatibility with code that imports _parse_synthesis directly.
     """
-    verdict = "HOLD"
-    confidence = 50
-    strategy = ""
-
-    # ── Verdict: robust regex, case-insensitive, strips markdown ──
-    verdict_match = re.search(
-        r"verdict\s*[:\s]\s*\*{0,2}([A-Z_a-z ]+?)\*{0,2}(?:\s|$|[,.\n])",
-        text,
-        re.IGNORECASE,
-    )
-    if verdict_match:
-        raw = verdict_match.group(1).strip().upper().replace(" ", "_").strip("_")
-        # Check longest matches first to avoid "BUY" matching before "STRONG_BUY"
-        for v in ("STRONG_BUY", "STRONG_SELL", "BUY", "SELL", "HOLD"):
-            # Exact match first; then check if verdict token starts with v
-            if raw == v or raw.startswith(v) or raw.endswith(v):
-                verdict = v
-                break
-
-    # ── Confidence: extract number after CONFIDENCE: ──────────────
-    conf_match = re.search(r"confidence\s*[:\s]\s*\*{0,2}(\d+)\s*%?\*{0,2}", text, re.IGNORECASE)
-    if conf_match:
-        try:
-            confidence = int(conf_match.group(1))
-        except ValueError:
-            pass
-
-    # ── Strategy: first line starting with strategy ───────────────
-    strategy_match = re.search(r"strategy\s*[:\s]\s*(.+?)(?:\n|$)", text, re.IGNORECASE)
-    if strategy_match:
-        strategy = strategy_match.group(1).strip().strip("*").strip()
-
-    return verdict, confidence, strategy
+    return _parse_synthesis_output(text)
 
 
 def _truncate(text: str, max_len: int) -> str:
