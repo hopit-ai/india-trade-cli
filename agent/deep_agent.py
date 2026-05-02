@@ -219,11 +219,13 @@ class DeepAnalyzer:
         llm_provider: Any,
         verbose: bool = True,
         risk_debate: bool = False,
+        context: str | None = None,
     ) -> None:
         self.registry = registry
         self.llm = llm_provider
         self.verbose = verbose
         self.risk_debate = risk_debate
+        self.context = context  # inline synthesis hint — no mid-run prompting
 
     def analyze(self, symbol: str, exchange: str = "NSE") -> str:
         """Run full LLM deep analysis."""
@@ -265,7 +267,21 @@ class DeepAnalyzer:
         multi = MultiAgentAnalyzer(
             self.registry, self.llm, verbose=self.verbose, risk_debate=self.risk_debate
         )
-        debate = multi._run_debate(symbol, exchange, reports)
+        # Inject inline context hint without blocking for input
+        if self.context:
+            multi.user_hints.put(self.context)
+
+        # Build compact Stage 1 signals for token-efficient debate prompts
+        from analysis.pipeline import build_compact_signals
+
+        ltp = 0.0
+        for r in reports:
+            if r.analyst == "Technical" and not r.error:
+                ltp = r.data.get("ltp", 0.0) or 0.0
+                break
+        _compact = build_compact_signals(symbol, exchange, reports, ltp)
+
+        debate = multi._run_debate(symbol, exchange, reports, compact_signals=_compact)
         debate_time = time.time() - t1
 
         # ── Phase 2.5: Risk Debate ───────────────────────────
@@ -292,7 +308,14 @@ class DeepAnalyzer:
             console.rule("[bold green]Deep Synthesis[/bold green]", style="green")
 
         t2 = time.time()
-        synthesis = multi._run_synthesis(symbol, exchange, reports, debate, risk_debate_result)
+        synthesis = multi._run_synthesis(
+            symbol,
+            exchange,
+            reports,
+            debate,
+            risk_debate_result,
+            compact_signals=_compact,
+        )
         synthesis_time = time.time() - t2
 
         # ── Trade plans ──────────────────────────────────────
