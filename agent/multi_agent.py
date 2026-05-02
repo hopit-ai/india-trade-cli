@@ -1095,9 +1095,12 @@ class MultiAgentAnalyzer:
             style="cyan",
         )
 
-        # ── Phase 1: Analyst Team ────────────────────────────
+        # ── Phase 1: Analyst Team (Stage 1 — deterministic) ──
+        from analysis.pipeline import run_analysis_pipeline
+
         t0 = time.time()
-        reports = self._run_analysts(symbol, exchange)
+        ctx = run_analysis_pipeline(symbol, exchange, self.registry, parallel=self.parallel)
+        reports = ctx.reports
         analyst_time = time.time() - t0
 
         if self.verbose:
@@ -1109,14 +1112,12 @@ class MultiAgentAnalyzer:
             console.print("[yellow]All analysts failed. Falling back to single-agent.[/yellow]")
             return self._fallback_single_agent(symbol, exchange)
 
-        # Compute scorecard
-        scorecard = compute_scorecard(reports)
+        # Use scorecard from pipeline (already computed)
+        scorecard = ctx.scorecard
         if self.verbose:
             console.print(f"\n[dim]{scorecard.summary()}[/dim]")
 
         # ── CLI context prompt (#113) ─────────────────────────
-        # After analysts complete, prompt user for optional focus context.
-        # This is the natural break point — no output interleaving.
         if getattr(self, "context_prompt_callback", None):
             try:
                 _ctx = self.context_prompt_callback()
@@ -1125,20 +1126,33 @@ class MultiAgentAnalyzer:
             except Exception:
                 pass  # prompt failed, continue without context
 
-        # ── Phase 2: Bull/Bear Debate ────────────────────────
+        # ── Phase 2: Bull/Bear Debate (or fast-path) ────────
         if self.progress_callback:
             self.progress_callback({"type": "phase", "phase": "debate"})
-        if self.verbose:
-            console.print()
-            console.rule(
-                "[bold yellow]Researcher Team — Bull vs Bear Debate[/bold yellow]", style="yellow"
-            )
 
         t1 = time.time()
-        debate = self._run_debate(symbol, exchange, reports)
+
+        if ctx.should_skip_debate:
+            # Fast-path: analysts agree strongly — skip 5 LLM debate calls
+            if self.verbose:
+                console.print()
+                console.print(
+                    f"[dim]  ⚡ fast-path: agreement {scorecard.agreement:.0f}% "
+                    f"— skipping debate ({scorecard.verdict})[/dim]"
+                )
+            debate = self._fast_path_debate(symbol, scorecard)
+        else:
+            if self.verbose:
+                console.print()
+                console.rule(
+                    "[bold yellow]Researcher Team — Bull vs Bear Debate[/bold yellow]",
+                    style="yellow",
+                )
+            debate = self._run_debate(symbol, exchange, reports, ctx.compact_signals)
+
         debate_time = time.time() - t1
 
-        if self.verbose:
+        if self.verbose and not ctx.should_skip_debate:
             self._print_debate(debate, debate_time)
 
         # ── Phase 2.5: Risk Debate ───────────────────────────
@@ -1180,7 +1194,14 @@ class MultiAgentAnalyzer:
             console.rule("[bold green]Fund Manager — Final Synthesis[/bold green]", style="green")
 
         t2 = time.time()
-        synthesis = self._run_synthesis(symbol, exchange, reports, debate, risk_debate)
+        synthesis = self._run_synthesis(
+            symbol,
+            exchange,
+            reports,
+            debate,
+            risk_debate,
+            compact_signals=ctx.compact_signals,
+        )
         synthesis_time = time.time() - t2
 
         # ── Phase 4: Store to Memory ─────────────────────────
@@ -1449,7 +1470,36 @@ class MultiAgentAnalyzer:
 
     # ── Phase 2: Bull/Bear Debate ────────────────────────────
 
-    def _run_debate(self, symbol: str, exchange: str, reports: list[AnalystReport]) -> DebateResult:
+    def _fast_path_debate(self, symbol: str, scorecard: Any) -> DebateResult:
+        """
+        Return a synthetic DebateResult when analysts agree strongly (fast-path).
+
+        Saves 5 LLM calls. The DebateResult carries a flag so _run_synthesis
+        knows to use a compact prompt instead of a full debate prompt.
+        """
+        direction = "BULL" if scorecard.weighted_total >= 0 else "BEAR"
+        summary = (
+            f"Fast-path: {scorecard.verdict} signal with {scorecard.agreement:.0f}% analyst agreement "
+            f"(weighted score: {scorecard.weighted_total:+.1f}). "
+            f"Debate skipped — analysts strongly agree on direction."
+        )
+        return DebateResult(
+            bull_argument=summary if direction == "BULL" else "",
+            bear_argument=summary if direction == "BEAR" else "",
+            bull_rebuttal="",
+            bear_rebuttal="",
+            facilitator=f"WINNER: {direction} — High analyst consensus ({scorecard.agreement:.0f}% agreement)",
+            winner=direction,
+            rounds=0,
+        )
+
+    def _run_debate(
+        self,
+        symbol: str,
+        exchange: str,
+        reports: list[AnalystReport],
+        compact_signals: str | None = None,
+    ) -> DebateResult:
         """
         Run multi-round bull/bear debate with facilitator.
 
@@ -1458,8 +1508,15 @@ class MultiAgentAnalyzer:
         Facilitator: Summarizes key agreements, disagreements, and picks a winner.
 
         Total: 5 LLM calls for debate (bull, bear, bull rebuttal, bear rebuttal, facilitator)
+
+        compact_signals: pre-computed Stage 1 signal block (≤300 tokens).
+        Falls back to verbose summary_text() if not provided.
         """
-        analyst_context = "\n\n".join(r.summary_text() for r in reports if not r.error)
+        # Use compact Stage 1 signals if available — saves ~800 tokens per call
+        if compact_signals:
+            analyst_context = compact_signals
+        else:
+            analyst_context = "\n\n".join(r.summary_text() for r in reports if not r.error)
 
         # ── Round 1: Opening arguments ───────────────────────
         if self.verbose:
@@ -1715,12 +1772,20 @@ class MultiAgentAnalyzer:
         reports: list[AnalystReport],
         debate: DebateResult,
         risk_debate: Optional[RiskDebateResult] = None,
+        compact_signals: str | None = None,
     ) -> str:
         """
         Final synthesis: weigh all analyst reports + debate arguments,
         produce a trade recommendation.
+
+        compact_signals: pre-computed Stage 1 signal block.
+        If provided, replaces verbose summary_text() (~80% token reduction).
         """
-        analyst_context = "\n\n".join(r.summary_text() for r in reports if not r.error)
+        # Use compact Stage 1 signals if available (Stage 2 — LLM only synthesizes)
+        if compact_signals:
+            analyst_context = compact_signals
+        else:
+            analyst_context = "\n\n".join(r.summary_text() for r in reports if not r.error)
 
         # Include risk data
         risk_report = next((r for r in reports if r.analyst == "Risk Manager"), None)
