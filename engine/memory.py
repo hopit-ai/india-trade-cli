@@ -102,6 +102,7 @@ class TradeRecord:
     # Analysis snapshot (#122)
     price_at_analysis: Optional[float] = None  # LTP at time of analysis
     synthesis_text: str = ""  # full raw LLM synthesis output
+    analysis_snapshot: dict = field(default_factory=dict)  # key metrics at analysis time
 
     # Reflection (#92) — LLM-extracted lesson from outcome
     lesson: str = ""
@@ -145,6 +146,7 @@ class TradeMemory:
         raw_synthesis: str = "",
         price_at_analysis: Optional[float] = None,
         synthesis_text: str = "",
+        analysis_snapshot: Optional[dict] = None,
     ) -> TradeRecord:
         """Store a new analysis/recommendation."""
         record = TradeRecord(
@@ -170,6 +172,7 @@ class TradeMemory:
             tags=tags or [],
             price_at_analysis=price_at_analysis,
             synthesis_text=synthesis_text or raw_synthesis,
+            analysis_snapshot=analysis_snapshot or {},
         )
 
         self._records.append(record)
@@ -229,6 +232,21 @@ class TradeMemory:
             if hasattr(debate, "winner"):
                 debate_winner = debate.winner
 
+        # Build analysis snapshot — compact dict of key metrics (#122)
+        snapshot: dict = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "verdict": verdict,
+            "confidence": confidence,
+        }
+        if price is not None:
+            snapshot["price"] = price
+        if vix is not None:
+            snapshot["vix"] = vix
+        if fii_net is not None:
+            snapshot["fii_net"] = fii_net
+        if scores:
+            snapshot["analyst_scores"] = scores
+
         return self.store(
             symbol=symbol,
             exchange=exchange,
@@ -243,6 +261,7 @@ class TradeMemory:
             bear_summary=bear_summary,
             synthesis_text=synthesis,
             price_at_analysis=price,
+            analysis_snapshot=snapshot,
         )
 
     # ── Record Outcome ───────────────────────────────────────
@@ -617,7 +636,16 @@ class TradeMemory:
                     line += f" (P&L: {r.actual_pnl:+,.0f})"
             if r.vix is not None:
                 line += f" | VIX={r.vix:.1f}"
+            if getattr(r, "price_at_analysis", None) is not None:
+                line += f" | ₹{r.price_at_analysis:.0f}"
             parts.append(line)
+            # Include snapshot summary if available
+            snap = getattr(r, "analysis_snapshot", {})
+            if snap and snap.get("analyst_scores"):
+                scores_str = ", ".join(
+                    f"{k}:{v}" for k, v in snap["analyst_scores"].items()
+                )
+                parts.append(f"    Scores: {scores_str}")
             if getattr(r, "lesson", ""):
                 parts.append(f"    Lesson: {r.lesson}")
 
