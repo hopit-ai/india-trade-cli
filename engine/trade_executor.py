@@ -123,6 +123,76 @@ def size_by_pct(
     return qty
 
 
+def resolve_position_size(size_spec: str, capital: float, price: float) -> int:
+    """
+    Resolve a position size specification to a share count.
+
+    Formats accepted:
+        "5%"    → 5% of capital at price  (e.g. 5% of ₹2,00,000 @ ₹1,400 = 71 shares)
+        "10000" → INR amount to invest     (e.g. ₹10,000 / ₹1,400 = 7 shares)
+        "50"    → direct share count       (50 shares)
+
+    Distinguishing rule:
+        If the spec ends with '%', it is a percentage.
+        If the spec is a number ≥ 1 and price > 0, we check if it is likely an INR
+        amount or a share count.  Heuristic: if value / price ≥ 2, treat as INR amount;
+        otherwise treat as share count.
+
+    Args:
+        size_spec:  User-provided string, e.g. "5%", "10000", "50"
+        capital:    Total capital in INR (used for % sizing)
+        price:      Current price per share (must be > 0)
+
+    Returns:
+        Integer share count (≥ 1)
+
+    Raises:
+        ValueError:  For invalid input, zero result, or >100% allocation.
+    """
+    if price <= 0:
+        raise ValueError(f"price must be > 0 for position sizing, got {price}")
+
+    spec = str(size_spec).strip()
+
+    # ── Percentage spec ───────────────────────────────────────
+    if spec.endswith("%"):
+        pct_val = float(spec[:-1])
+        if pct_val <= 0:
+            raise ValueError(f"Percentage must be > 0, got '{spec}'")
+        if pct_val > 100:
+            raise ValueError(f"Percentage cannot exceed 100%, got '{spec}'")
+        allocation = capital * pct_val / 100.0
+        qty = int(allocation / price)
+        if qty <= 0:
+            raise ValueError(
+                f"{pct_val:.1f}% of ₹{capital:,.0f} = ₹{allocation:,.0f} "
+                f"is not enough to buy 1 share at ₹{price:,.2f}"
+            )
+        return qty
+
+    # ── Numeric spec ──────────────────────────────────────────
+    try:
+        value = float(spec)
+    except ValueError:
+        raise ValueError(f"Invalid position size: '{spec}'")
+
+    if value <= 0:
+        raise ValueError(f"Position size must be > 0, got '{spec}'")
+
+    # Heuristic: if value divided by price gives ≥ 2, treat as INR amount
+    if value / price >= 2.0:
+        # INR amount → shares
+        qty = int(value / price)
+        if qty <= 0:
+            raise ValueError(
+                f"INR amount ₹{value:,.0f} is not enough to buy 1 share at ₹{price:,.2f}"
+            )
+        return qty
+
+    # Direct share count
+    return int(value)
+
+
 # ── Mode detection ────────────────────────────────────────────
 
 
