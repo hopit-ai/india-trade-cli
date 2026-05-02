@@ -1364,9 +1364,12 @@ def run_repl(broker: BrokerAPI) -> None:
                 wants_risk_debate = "--risk-debate" in clean_args
                 clean_args = [a for a in clean_args if a != "--risk-debate"]
                 symbol = clean_args[0].upper() if clean_args else ""
+                # Everything after the symbol is treated as inline synthesis context.
+                # e.g. "analyze INFY focus on AI revenue" — no mid-run interruption.
+                inline_context = " ".join(clean_args[1:]).strip() or None
                 if not symbol:
                     console.print(
-                        "[red]Usage: analyze <SYMBOL> [--risk-debate] [--pdf] [--explain][/red]"
+                        "[red]Usage: analyze <SYMBOL> [context hints] [--risk-debate] [--pdf] [--explain][/red]"
                     )
                 else:
                     try:
@@ -1377,21 +1380,15 @@ def run_repl(broker: BrokerAPI) -> None:
                         pass
                     agent = get_agent()
 
-                    # Context prompt callback (#113): runs after analysts,
-                    # before debate — a natural pause for user input.
-                    def _prompt_for_context():
-                        console.print()
-                        console.print(
-                            "[blue]◆ Add context for synthesis "
-                            "(e.g. 'focus on AI deals') or press Enter to skip:[/blue]"
-                        )
-                        try:
-                            hint = input("  ◆ ").strip()
-                            if hint:
-                                console.print(f"[dim]  ◆ Context queued: {hint}[/dim]")
-                            return hint if hint else None
-                        except (EOFError, KeyboardInterrupt):
-                            return None
+                    if inline_context:
+                        console.print(f"[dim]  ◆ Context: {inline_context}[/dim]")
+
+                    # Pass context inline — never block mid-analysis for input.
+                    def _make_context_cb(_ctx):
+                        def _cb():
+                            return _ctx
+
+                        return _cb
 
                     from agent.multi_agent import MultiAgentAnalyzer
 
@@ -1401,7 +1398,7 @@ def run_repl(broker: BrokerAPI) -> None:
                         parallel=True,
                         verbose=True,
                         risk_debate=wants_risk_debate,
-                        context_prompt_callback=_prompt_for_context,
+                        context_prompt_callback=_make_context_cb(inline_context),
                     )
                     output = _analyzer.analyze(symbol, "NSE")
                     agent._last_trade_plans = getattr(_analyzer, "last_trade_plans", {})
@@ -1590,12 +1587,15 @@ def run_repl(broker: BrokerAPI) -> None:
                 wants_risk_debate = "--risk-debate" in clean_args
                 clean_args = [a for a in clean_args if a != "--risk-debate"]
                 symbol = clean_args[0].upper() if clean_args else ""
+                inline_context = " ".join(clean_args[1:]).strip() or None
                 if not symbol:
                     console.print(
-                        "[red]Usage: deep-analyze <SYMBOL> [--risk-debate] [--pdf] [--explain][/red]"
+                        "[red]Usage: deep-analyze <SYMBOL> [context hints] [--risk-debate] [--pdf] [--explain][/red]"
                     )
                 else:
                     agent = get_agent()
+                    if inline_context:
+                        console.print(f"[dim]  ◆ Context: {inline_context}[/dim]")
                     try:
                         from agent.deep_agent import DeepAnalyzer
 
@@ -1603,6 +1603,7 @@ def run_repl(broker: BrokerAPI) -> None:
                             registry=agent._registry,
                             llm_provider=agent._provider,
                             risk_debate=wants_risk_debate,
+                            context=inline_context,
                         )
                         output = deep.analyze(symbol)
                         _last_output = output or ""
