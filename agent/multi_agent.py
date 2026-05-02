@@ -2051,7 +2051,11 @@ RISKS (2-3 bullets):
 - [primary risk]
 - [secondary risk]
 
-Keep the output concise and terminal-friendly. Use bullets. All prices in INR."""
+Keep the output concise and terminal-friendly. Use bullets. All prices in INR.
+
+Alternatively, if you prefer structured output, you MAY return a single JSON object instead of the text format above. Use these exact keys:
+{{"verdict": "BUY", "confidence": 72, "winner": "BULL", "strategy": "Buy on dip", "entry": "₹2,850", "stop_loss": "₹2,700 (5.3%)", "target": "₹3,100 (8.8%)", "risk_reward": "1.7:1", "position": "12 shares", "rationale": ["reason 1", "reason 2", "reason 3"], "risks": ["risk 1", "risk 2"]}}
+The text format above is always acceptable and preferred for readability. JSON is optional."""
 
 AGGRESSIVE_DEBATER_PROMPT = """You are the AGGRESSIVE RISK MANAGER at an Indian trading firm.
 The investment team has decided to trade {symbol} ({exchange}).

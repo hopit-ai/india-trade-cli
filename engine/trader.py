@@ -40,6 +40,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from agent.schema_parser import parse_synthesis_output
+
 console = Console()
 
 
@@ -445,9 +447,14 @@ class TraderAgent:
             vix_factor,
         )
 
-        # Parse rationale from synthesis
-        rationale = self._extract_rationale(synthesis_text) if synthesis_text else []
-        risks = self._extract_risks(synthesis_text) if synthesis_text else []
+        # Parse rationale and risks from synthesis using structured parser
+        if synthesis_text:
+            _parsed = parse_synthesis_output(synthesis_text)
+            rationale = _parsed.rationale
+            risks = _parsed.risks
+        else:
+            rationale = []
+            risks = []
 
         # Pre-conditions
         pre_conditions = self._check_preconditions(symbol, ltp, vix, confidence)
@@ -512,8 +519,11 @@ class TraderAgent:
             elif r.analyst == "Options":
                 iv_rank = data.get("iv_rank")
 
-        # Parse verdict from synthesis
-        verdict, confidence, strategy_hint = _parse_synthesis_verdict(synthesis)
+        # Parse verdict from synthesis using structured parser
+        _synthesis_parsed = parse_synthesis_output(synthesis)
+        verdict = _synthesis_parsed.verdict
+        confidence = _synthesis_parsed.confidence
+        strategy_hint = _synthesis_parsed.strategy
 
         return self.generate_plan(
             symbol=symbol,
@@ -1066,36 +1076,6 @@ class TraderAgent:
             return 0.85
         return 1.0
 
-    def _extract_rationale(self, text: str) -> list[str]:
-        """Extract rationale bullets from synthesis text."""
-        points = []
-        in_rationale = False
-        for line in text.splitlines():
-            stripped = line.strip()
-            if "RATIONALE" in stripped.upper() or "WHY" in stripped.upper():
-                in_rationale = True
-                continue
-            if in_rationale and stripped.startswith("- "):
-                points.append(stripped.lstrip("- ").strip())
-            elif in_rationale and stripped and not stripped.startswith("-"):
-                in_rationale = False
-        return points[:5]
-
-    def _extract_risks(self, text: str) -> list[str]:
-        """Extract risk bullets from synthesis text."""
-        points = []
-        in_risks = False
-        for line in text.splitlines():
-            stripped = line.strip()
-            if "RISK" in stripped.upper():
-                in_risks = True
-                continue
-            if in_risks and stripped.startswith("- "):
-                points.append(stripped.lstrip("- ").strip())
-            elif in_risks and stripped and not stripped.startswith("-"):
-                in_risks = False
-        return points[:5]
-
     def _check_preconditions(
         self,
         symbol,
@@ -1125,31 +1105,3 @@ class TraderAgent:
             pass
 
         return conditions
-
-
-# ── Helpers ──────────────────────────────────────────────────
-
-
-def _parse_synthesis_verdict(text: str) -> tuple[str, int, str]:
-    """Extract verdict, confidence, strategy from synthesis text."""
-    verdict = "HOLD"
-    confidence = 50
-    strategy = ""
-
-    for line in text.splitlines():
-        upper = line.strip().upper()
-        if upper.startswith("VERDICT:"):
-            val = line.split(":", 1)[1].strip().upper()
-            for v in ("STRONG_BUY", "STRONG_SELL", "BUY", "SELL", "HOLD"):
-                if v in val:
-                    verdict = v
-                    break
-        elif upper.startswith("CONFIDENCE:"):
-            try:
-                confidence = int(line.split(":", 1)[1].strip().rstrip("%"))
-            except (ValueError, IndexError):
-                pass
-        elif upper.startswith("STRATEGY"):
-            strategy = line.split(":", 1)[1].strip() if ":" in line else ""
-
-    return verdict, confidence, strategy
