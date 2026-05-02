@@ -1,17 +1,53 @@
-version: '3.8'
+version: '3.9'
+
 services:
   app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: india-trade-cli:latest
+    container_name: india-trade-app
     ports:
       - "8765:8765"
     volumes:
-      - india-trade-data:/root/.trading_platform
+      - india-trade-data:/data
+      - india-trade-exports:/root/Desktop
     environment:
       - DEPLOY_MODE=self-hosted
       - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
+      - AI_PROVIDER=${AI_PROVIDER:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - NEWSAPI_KEY=${NEWSAPI_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TRADING_CAPITAL=${TRADING_CAPITAL:-100000}
+      - TRADING_MODE=${TRADING_MODE:-paper}
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   india-trade-data:
+    driver: local
+  india-trade-exports:
+    driver: local

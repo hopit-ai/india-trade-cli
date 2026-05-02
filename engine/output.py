@@ -184,6 +184,7 @@ def export_to_pdf(
         filename = f"trade_{safe_title}_{ts}.pdf"
 
     filepath = PDF_OUTPUT_DIR / filename
+    PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     pdf.output(str(filepath))
 
     # ── Auto-archive a timestamped copy ──────────────────────

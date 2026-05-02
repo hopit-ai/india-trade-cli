@@ -261,7 +261,8 @@ class TradePlan:
             "",
             "  [bold]Sizing[/bold]",
             f"  Capital    : {self.capital_deployed:,.0f} ({self.capital_pct:.1f}% of portfolio)",
-            f"  Max Risk   : {self.max_risk:,.0f} ({self.risk_pct:.1f}% of capital)",
+            f"  Max Risk   : ₹{self.max_risk:,.0f} ({self.risk_pct:.1f}% of capital)",
+            f"  Max Gain   : ₹{self.max_risk * self.reward_risk:,.0f} (if T2 hit)",
             f"  R:R Ratio  : {self.reward_risk:.1f}",
         ]
 
@@ -609,6 +610,23 @@ class TraderAgent:
             _val(plans_list[0], "max_risk", "{:,.0f}"),
             _val(plans_list[1], "max_risk", "{:,.0f}"),
             _val(plans_list[2], "max_risk", "{:,.0f}"),
+        )
+
+        # Max gain (max_risk × R:R)
+        def _max_gain(plan):
+            if plan is None:
+                return "NO TRADE"
+            risk = getattr(plan, "max_risk", None)
+            rr = getattr(plan, "reward_risk", None)
+            if risk and rr:
+                return f"{risk * rr:,.0f}"
+            return "-"
+
+        table.add_row(
+            "Max Gain",
+            _max_gain(plans_list[0]),
+            _max_gain(plans_list[1]),
+            _max_gain(plans_list[2]),
         )
 
         # Quantity

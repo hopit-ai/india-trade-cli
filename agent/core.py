@@ -1190,55 +1190,59 @@ class ClaudeCLIProvider(LLMProvider):
 
 class OpenAISubscriptionProvider(LLMProvider):
     """
-    Uses an OpenAI session token (from your logged-in ChatGPT Plus/Team browser)
-    to make requests to the ChatGPT backend.
+    ⛔  DEPRECATED — non-functional as of 2025.
 
-    This is for users who have a ChatGPT Plus/Team **subscription** but do NOT
-    have a separate OpenAI API key.
+    This provider used an unofficial ChatGPT web API which:
+      - Does NOT support tool calling (the platform requires it for analysis)
+      - Violates OpenAI's Terms of Service for automated use
+      - Has been broken by OpenAI web app updates
 
-    How to get OPENAI_SESSION_TOKEN:
-      1. Log into chatgpt.com in Chrome/Firefox
-      2. Open DevTools → Application → Cookies
-      3. Copy the value of `__Secure-next-auth.session-token`
-      4. Set it in .env: OPENAI_SESSION_TOKEN=<value>
+    ─── MIGRATION ────────────────────────────────────────────────────────────
+    To use OpenAI models, choose one of these working alternatives:
 
-    ⚠️  WARNING:
-      - This uses an unofficial/undocumented ChatGPT API endpoint
-      - May break if OpenAI updates their web app
-      - Against OpenAI's Terms of Service for automated use
-      - For development / personal use only
-      - Token expires; you'll need to refresh it periodically
+    Option A — OpenAI API key (pay-as-you-go):
+      AI_PROVIDER=openai
+      OPENAI_API_KEY=sk-...            (from platform.openai.com)
+      OPENAI_MODEL=gpt-4o
 
-    For production or reliable use, get an API key at platform.openai.com.
+    Option B — OpenRouter (free tier available, full tool calling):
+      AI_PROVIDER=openai
+      OPENAI_BASE_URL=https://openrouter.ai/api/v1
+      OPENAI_API_KEY=sk-or-...         (from openrouter.ai)
+      OPENAI_MODEL=openai/gpt-4o
 
-    Set AI_PROVIDER=openai_subscription in .env
+    Option C — Groq (free tier, very fast, tool calling):
+      AI_PROVIDER=openai
+      OPENAI_BASE_URL=https://api.groq.com/openai/v1
+      OPENAI_API_KEY=gsk_...           (from console.groq.com)
+      OPENAI_MODEL=llama-3.3-70b-versatile
+    ──────────────────────────────────────────────────────────────────────────
     """
+
+    _DEPRECATION_MSG = (
+        "openai_subscription is no longer functional.\n\n"
+        "This provider used an unofficial ChatGPT web API that does not support\n"
+        "tool calling (required by the analysis pipeline) and violates OpenAI ToS.\n\n"
+        "Alternatives:\n"
+        "  • OpenRouter (free tier, full tool calling):\n"
+        "      AI_PROVIDER=openai\n"
+        "      OPENAI_BASE_URL=https://openrouter.ai/api/v1\n"
+        "      OPENAI_API_KEY=<key from openrouter.ai>\n"
+        "      OPENAI_MODEL=openai/gpt-4o\n\n"
+        "  • Groq (free, fast):\n"
+        "      AI_PROVIDER=openai\n"
+        "      OPENAI_BASE_URL=https://api.groq.com/openai/v1\n"
+        "      OPENAI_API_KEY=<key from console.groq.com>\n"
+        "      OPENAI_MODEL=llama-3.3-70b-versatile\n\n"
+        "  • OpenAI API key: AI_PROVIDER=openai, OPENAI_API_KEY=sk-...\n"
+        "    (platform.openai.com → usage-based billing)\n"
+    )
 
     BACKEND_URL = "https://chat.openai.com/backend-api/conversation"
     AUTH_URL = "https://chat.openai.com/api/auth/session"
 
     def __init__(self, model: str, registry: ToolRegistry, system_prompt: str) -> None:
-        super().__init__(model, registry, system_prompt)
-        try:
-            import httpx
-
-            self._httpx = httpx
-        except ImportError:
-            raise RuntimeError("httpx not installed. Run: pip install httpx")
-
-        self._session_token = get_credential(
-            "OPENAI_SESSION_TOKEN",
-            "OpenAI Session Token (ChatGPT Plus)",
-            secret=True,
-            required=False,
-        )
-        if not self._session_token:
-            raise RuntimeError(
-                "OPENAI_SESSION_TOKEN not set.\n"
-                "See .env.example for instructions on getting your session token.\n"
-                "Or use AI_PROVIDER=openai with an API key instead."
-            )
-        self._access_token = self._get_access_token()
+        raise RuntimeError(self._DEPRECATION_MSG)
 
     @property
     def provider_name(self) -> str:
@@ -2044,11 +2048,43 @@ class TradingAgent:
 
     def switch_provider(self, provider: str, model: str | None = None) -> None:
         """
-        Hot-switch LLM provider mid-session.
+        Hot-switch LLM provider mid-session and persist the choice to keychain.
         Conversation history is preserved; new provider picks up context.
         """
         self._provider = get_provider(provider=provider, model=model, registry=self._registry)
-        console.print(f"[dim]Switched provider → {self._provider.provider_name}[/dim]")
+
+        # Save choice to keychain + env so it survives restarts
+        try:
+            from config.credentials import _kr_set
+
+            _kr_set("AI_PROVIDER", provider)
+            os.environ["AI_PROVIDER"] = provider
+            if model:
+                _kr_set("AI_MODEL", model)
+                os.environ["AI_MODEL"] = model
+        except Exception:
+            pass  # keychain unavailable — in-session switch still worked
+
+        console.print(
+            f"[green]✓ Switched to {self._provider.provider_name}[/green]"
+            f" [dim](saved — will persist on restart)[/dim]"
+        )
+
+    def run_setup_wizard(self) -> None:
+        """
+        Re-run the interactive AI provider setup wizard.
+        Updates the current session and saves the choice to keychain.
+        """
+        chosen = _first_time_provider_setup()
+        if chosen and chosen != "none":
+            try:
+                self._provider = get_provider(provider=chosen, registry=self._registry)
+                console.print(
+                    f"\n[green]✓ Provider set to {self._provider.provider_name}[/green]"
+                    f" [dim](saved to keychain)[/dim]\n"
+                )
+            except Exception as e:
+                console.print(f"[yellow]Provider saved but could not activate: {e}[/yellow]")
 
     def clear_history(self) -> None:
         """Start a fresh conversation (clear history)."""
@@ -2077,13 +2113,14 @@ class TradingAgent:
             console.print(f"\n  [dim]Custom endpoint: {base_url}[/dim]")
 
         console.print(
-            "\n  Switch with: [bold]provider <name>[/bold]  "
-            "e.g. [cyan]provider gemini[/cyan]\n"
-            "  [bold]Custom endpoint[/bold] (OpenRouter, Groq, etc.):\n"
+            "\n  [bold]Switch provider:[/bold]\n"
+            "    [cyan]provider setup[/cyan]               → guided wizard (saves to keychain)\n"
+            "    [cyan]provider gemini[/cyan]              → switch directly (also saves)\n"
+            "    [cyan]provider anthropic claude-opus-4-5[/cyan]  → switch + override model\n"
+            "\n  [bold]Custom endpoint[/bold] (OpenRouter, Groq, etc.):\n"
             "    [cyan]credentials set OPENAI_BASE_URL[/cyan]  → set the base URL\n"
             "    [cyan]credentials set OPENAI_API_KEY[/cyan]   → set the API key\n"
-            "    [cyan]provider openai[/cyan]                  → switch to it\n"
-            "  Or run [bold]credentials setup[/bold] → AI Provider for guided config.\n"
+            "    [cyan]provider openai[/cyan]               → switch to it\n"
         )
 
     @property
@@ -2192,6 +2229,124 @@ def _print_tool_call(name: str, args: dict) -> None:
     )
 
 
+# ── Dual LLM routing helpers (#91) ────────────────────────────
+
+
+def get_deep_provider(
+    registry: "ToolRegistry | None" = None,
+) -> "LLMProvider":
+    """
+    Build the deep reasoning provider.
+
+    Uses AI_DEEP_PROVIDER + AI_DEEP_MODEL env vars, falling back to
+    AI_PROVIDER + AI_MODEL if the deep-specific vars aren't set.
+
+    This provider is used for: bull/bear debate, risk debate, synthesis.
+    """
+    deep_prov = os.environ.get("AI_DEEP_PROVIDER") or os.environ.get("AI_PROVIDER", "")
+    deep_model = os.environ.get("AI_DEEP_MODEL") or os.environ.get("AI_MODEL", "")
+    # Temporarily override env for get_provider call
+    _orig_prov = os.environ.get("AI_PROVIDER")
+    _orig_model = os.environ.get("AI_MODEL")
+    try:
+        if deep_prov:
+            os.environ["AI_PROVIDER"] = deep_prov
+        if deep_model:
+            os.environ["AI_MODEL"] = deep_model
+        return get_provider(registry=registry)
+    finally:
+        if _orig_prov is not None:
+            os.environ["AI_PROVIDER"] = _orig_prov
+        elif "AI_PROVIDER" in os.environ and deep_prov:
+            os.environ.pop("AI_PROVIDER", None)
+        if _orig_model is not None:
+            os.environ["AI_MODEL"] = _orig_model
+        elif "AI_MODEL" in os.environ and deep_model:
+            os.environ.pop("AI_MODEL", None)
+
+
+def get_fast_provider(
+    registry: "ToolRegistry | None" = None,
+    deep_provider: "LLMProvider | None" = None,
+) -> "LLMProvider":
+    """
+    Build the fast extraction provider.
+
+    Uses AI_FAST_PROVIDER + AI_FAST_MODEL env vars.
+    Falls back to `deep_provider` if the fast-specific vars aren't set —
+    ensuring zero breaking change for existing callers.
+
+    This provider is used for: news sentiment classification, signal extraction.
+
+    Args:
+        registry:      ToolRegistry (built if None)
+        deep_provider: The deep provider to fall back to if fast not configured.
+                       If None, calls get_provider() as fallback.
+
+    Returns:
+        A fast LLMProvider, or deep_provider if fast not configured.
+    """
+    fast_prov = os.environ.get("AI_FAST_PROVIDER", "")
+    fast_model = os.environ.get("AI_FAST_MODEL", "")
+
+    # No fast config → return deep provider (zero cost, zero breaking change)
+    if not fast_prov and not fast_model:
+        if deep_provider is not None:
+            return deep_provider
+        return get_provider(registry=registry)
+
+    # Build fast provider with overridden env
+    reg = registry or build_registry()
+    system = build_system_prompt()
+
+    chosen_prov = fast_prov or os.environ.get("AI_PROVIDER", PROVIDER_ANTHROPIC)
+    chosen_model = fast_model or _default_model(chosen_prov)
+
+    dispatch = {
+        PROVIDER_ANTHROPIC: AnthropicProvider,
+        PROVIDER_OPENAI: OpenAIProvider,
+        PROVIDER_GEMINI: GeminiProvider,
+        PROVIDER_CLAUDE_CLI: ClaudeCLIProvider,
+        PROVIDER_GEMINI_SUB: GeminiVertexProvider,
+        PROVIDER_OLLAMA: None,
+    }
+
+    try:
+        if chosen_prov == PROVIDER_OLLAMA:
+            base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            return OpenAIProvider(chosen_model, reg, system, base_url=base, api_key="ollama")
+        prov_cls = dispatch.get(chosen_prov, AnthropicProvider)
+        return prov_cls(chosen_model, reg, system)
+    except Exception:
+        # If fast provider fails to build, fall back to deep
+        if deep_provider is not None:
+            return deep_provider
+        return get_provider(registry=registry)
+
+
+def build_provider_from_env(registry=None, system_prompt=None) -> "LLMProvider":
+    """Build a provider using current env vars. Used by QuickScanner and similar."""
+    reg = registry or build_registry()
+    sys = system_prompt or build_system_prompt()
+    chosen = os.environ.get("AI_PROVIDER", "").lower() or _auto_detect_provider()
+    model = os.environ.get("AI_MODEL", "") or _default_model(chosen)
+
+    dispatch = {
+        PROVIDER_ANTHROPIC: AnthropicProvider,
+        PROVIDER_OPENAI: OpenAIProvider,
+        PROVIDER_GEMINI: GeminiProvider,
+        PROVIDER_CLAUDE_CLI: ClaudeCLIProvider,
+        PROVIDER_GEMINI_SUB: GeminiVertexProvider,
+        PROVIDER_OLLAMA: None,
+    }
+
+    if chosen == PROVIDER_OLLAMA:
+        base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        return OpenAIProvider(model, reg, sys, base_url=base, api_key="ollama")
+    prov_cls = dispatch.get(chosen, AnthropicProvider)
+    return prov_cls(model, reg, sys)
+
+
 # ── Singleton access ───────────────────────────────────────────
 
 _agent_instance: TradingAgent | None = None
@@ -2210,3 +2365,16 @@ def get_agent(
     if _agent_instance is None or force_new:
         _agent_instance = TradingAgent(provider=provider, model=model)
     return _agent_instance
+
+
+def ensure_ai_provider_configured() -> None:
+    """
+    Check whether an AI provider is already configured; if not, run the
+    first-time setup wizard immediately.
+
+    Called at startup (before the REPL) so the user is prompted once, cleanly,
+    rather than mid-session when they first type `analyze`.
+    """
+    chosen = os.environ.get("AI_PROVIDER", "").lower() or _auto_detect_provider()
+    if chosen == PROVIDER_ANTHROPIC and not _has_anthropic_key():
+        _first_time_provider_setup()

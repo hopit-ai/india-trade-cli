@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -97,6 +98,13 @@ class TradeRecord:
     hold_days: Optional[int] = None
     outcome_notes: str = ""
 
+    # Analysis snapshot (#122)
+    price_at_analysis: Optional[float] = None  # LTP at time of analysis
+    synthesis_text: str = ""  # full raw LLM synthesis output
+
+    # Reflection (#92) — LLM-extracted lesson from outcome
+    lesson: str = ""
+
     # Tags for filtering
     tags: list[str] = field(default_factory=list)
 
@@ -134,6 +142,8 @@ class TradeMemory:
         bear_summary: str = "",
         tags: Optional[list[str]] = None,
         raw_synthesis: str = "",
+        price_at_analysis: Optional[float] = None,
+        synthesis_text: str = "",
     ) -> TradeRecord:
         """Store a new analysis/recommendation."""
         record = TradeRecord(
@@ -157,6 +167,8 @@ class TradeMemory:
             bull_summary=bull_summary,
             bear_summary=bear_summary,
             tags=tags or [],
+            price_at_analysis=price_at_analysis,
+            synthesis_text=synthesis_text or raw_synthesis,
         )
 
         self._records.append(record)
@@ -175,6 +187,7 @@ class TradeMemory:
         analyst_reports: list,  # list of AnalystReport
         debate: Any,  # DebateResult
         synthesis: str,  # raw LLM output
+        price: Optional[float] = None,  # spot price at time of analysis (#122)
     ) -> TradeRecord:
         """
         Store a record directly from multi-agent pipeline output.
@@ -227,7 +240,8 @@ class TradeMemory:
             debate_winner=debate_winner,
             bull_summary=bull_summary,
             bear_summary=bear_summary,
-            raw_synthesis=synthesis,
+            synthesis_text=synthesis,
+            price_at_analysis=price,
         )
 
     # ── Record Outcome ───────────────────────────────────────
@@ -261,6 +275,90 @@ class TradeMemory:
 
         self._save()
         return True
+
+    def reflect_and_remember(self, trade_id: str, llm_provider=None) -> str:
+        """
+        Run reflection on a closed trade and store a lesson (#92).
+
+        Uses LLM if provided; falls back to rule-based lesson extraction.
+        Returns the lesson string (or "" if trade not found).
+        """
+        record = self.get_by_id(trade_id)
+        if not record:
+            return ""
+
+        # Try LLM first
+        if llm_provider:
+            try:
+                lesson = self._llm_reflect(record, llm_provider)
+                if lesson:
+                    record.lesson = lesson
+                    self._save()
+                    return lesson
+            except Exception:
+                pass  # fall through to rule-based
+
+        # Rule-based fallback
+        lesson = self._rule_reflect(record)
+        record.lesson = lesson
+        self._save()
+        return lesson
+
+    def _llm_reflect(self, record: "TradeRecord", llm_provider) -> str:
+        """Use LLM to extract a lesson from the trade record."""
+        prompt = (
+            f"A trade on {record.symbol} ({record.exchange}) was analysed on {record.timestamp[:10]}.\n"
+            f"Verdict: {record.verdict} (confidence: {record.confidence}%)\n"
+            f"Strategy: {record.strategy or 'unspecified'}\n"
+        )
+        if record.entry_price:
+            prompt += f"Entry: {record.entry_price}, SL: {record.stop_loss}, Target: {record.target_price}\n"
+        if record.vix is not None:
+            prompt += f"VIX at analysis: {record.vix:.1f}\n"
+        if record.synthesis_text:
+            prompt += f"\nBull thesis: {record.bull_summary}\nBear thesis: {record.bear_summary}\n"
+        prompt += (
+            f"\nOutcome: {record.outcome or 'unknown'}, P&L: {record.actual_pnl:+,.0f}\n"
+            if record.actual_pnl is not None
+            else "\nOutcome: unknown\n"
+        )
+        prompt += (
+            "\nIn 1-3 sentences, what is the most important trading lesson from this trade? "
+            "Be specific: mention the signal, market conditions, and what worked or failed."
+        )
+        return llm_provider.chat(
+            messages=[{"role": "user", "content": prompt}],
+            stream=False,
+        )
+
+    @staticmethod
+    def _rule_reflect(record: "TradeRecord") -> str:
+        """Rule-based lesson extraction when no LLM is available."""
+        outcome = (record.outcome or "").upper()
+        pnl_str = (
+            f" (+{record.actual_pnl:,.0f})"
+            if record.actual_pnl and record.actual_pnl > 0
+            else (f" ({record.actual_pnl:,.0f})" if record.actual_pnl else "")
+        )
+        if outcome == "WIN":
+            return (
+                f"The {record.verdict} signal on {record.symbol} was correct{pnl_str}. "
+                f"Similar setups may work in the future."
+            )
+        elif outcome == "LOSS":
+            return (
+                f"The {record.verdict} signal on {record.symbol} was incorrect{pnl_str}. "
+                f"Review the thesis and consider tightening the stop-loss."
+            )
+        elif outcome in ("BREAKEVEN", "EXPIRED"):
+            return (
+                f"The {record.symbol} trade was a wash — "
+                f"market conditions may have changed after the {record.verdict} signal."
+            )
+        return (
+            f"Trade on {record.symbol} ({record.verdict}) — outcome not yet recorded. "
+            f"Update with result to generate a lesson."
+        )
 
     # ── Query ────────────────────────────────────────────────
 
@@ -381,12 +479,27 @@ class TradeMemory:
         # Average confidence
         avg_confidence = sum(r.confidence for r in self._records) / total if total else 0
 
+        # Win rate: only meaningful with ≥5 outcomes (#123)
+        _min_outcomes_for_rate = 5
+        _tracked = len(with_outcome)
+        if _tracked >= _min_outcomes_for_rate:
+            win_rate: Optional[float] = round(len(wins) / _tracked * 100, 1)
+            win_rate_label = f"{len(wins)}/{_tracked} tracked ({win_rate:.0f}%)"
+        elif _tracked > 0:
+            win_rate = None
+            win_rate_label = f"{len(wins)}/{_tracked} tracked (insufficient data)"
+        else:
+            win_rate = None
+            win_rate_label = "No outcomes recorded"
+
         return {
             "total_analyses": total,
-            "with_outcome": len(with_outcome),
+            "with_outcome": _tracked,
             "wins": len(wins),
             "losses": len(losses),
-            "win_rate": round(len(wins) / len(with_outcome) * 100, 1) if with_outcome else 0,
+            "win_rate": win_rate,
+            "win_rate_label": win_rate_label,
+            "win_rate_insufficient": _tracked < _min_outcomes_for_rate,
             "total_pnl": round(total_pnl, 2),
             "avg_pnl": round(avg_pnl, 2),
             "avg_confidence": round(avg_confidence, 1),
@@ -504,6 +617,8 @@ class TradeMemory:
             if r.vix is not None:
                 line += f" | VIX={r.vix:.1f}"
             parts.append(line)
+            if getattr(r, "lesson", ""):
+                parts.append(f"    Lesson: {r.lesson}")
 
         return "\n".join(parts)
 
@@ -545,7 +660,16 @@ class TradeMemory:
         try:
             if MEMORY_FILE.exists():
                 data = json.loads(MEMORY_FILE.read_text())
-                self._records = [TradeRecord(**d) for d in data]
+                # Backward compat: strip unknown keys, fill missing with defaults
+                valid_fields = set(TradeRecord.__dataclass_fields__.keys())
+                records = []
+                for d in data:
+                    filtered = {k: v for k, v in d.items() if k in valid_fields}
+                    try:
+                        records.append(TradeRecord(**filtered))
+                    except Exception:
+                        pass  # skip corrupt records
+                self._records = records
         except Exception:
             self._records = []
 
@@ -554,29 +678,46 @@ class TradeMemory:
 
 
 def _parse_synthesis(text: str) -> tuple[str, int, str]:
-    """Extract verdict, confidence, and strategy from synthesis LLM output."""
+    """
+    Extract verdict, confidence, and strategy from synthesis LLM output.
+
+    Handles various LLM formatting styles:
+      - Plain:    VERDICT: BUY
+      - Markdown: **VERDICT: BUY**
+      - Mixed:    Final VERDICT: STRONG_SELL
+      - Any case: Verdict: sell
+    """
     verdict = "HOLD"
     confidence = 50
     strategy = ""
 
-    for line in text.splitlines():
-        upper = line.strip().upper()
+    # ── Verdict: robust regex, case-insensitive, strips markdown ──
+    verdict_match = re.search(
+        r"verdict\s*[:\s]\s*\*{0,2}([A-Z_a-z ]+?)\*{0,2}(?:\s|$|[,.\n])",
+        text,
+        re.IGNORECASE,
+    )
+    if verdict_match:
+        raw = verdict_match.group(1).strip().upper().replace(" ", "_").strip("_")
+        # Check longest matches first to avoid "BUY" matching before "STRONG_BUY"
+        for v in ("STRONG_BUY", "STRONG_SELL", "BUY", "SELL", "HOLD"):
+            # Exact match first; then check if verdict token starts with v
+            if raw == v or raw.startswith(v) or raw.endswith(v):
+                verdict = v
+                break
 
-        if upper.startswith("VERDICT:"):
-            val = line.split(":", 1)[1].strip().upper()
-            for v in ("STRONG_BUY", "STRONG_SELL", "BUY", "SELL", "HOLD"):
-                if v in val:
-                    verdict = v
-                    break
+    # ── Confidence: extract number after CONFIDENCE: ──────────────
+    conf_match = re.search(r"confidence\s*[:\s]\s*\*{0,2}(\d+)\s*%?\*{0,2}", text, re.IGNORECASE)
+    if conf_match:
+        try:
+            confidence = int(conf_match.group(1))
+        except ValueError:
+            pass
 
-        elif upper.startswith("CONFIDENCE:"):
-            try:
-                confidence = int(line.split(":", 1)[1].strip().rstrip("%"))
-            except (ValueError, IndexError):
-                pass
-
-        elif upper.startswith("STRATEGY"):
-            strategy = line.split(":", 1)[1].strip() if ":" in line else ""
+    # ── Strategy: first line starting with strategy ───────────────
+    strategy_match = re.search(r"strategy\s*[:\s]\s*(.+?)(?:\n|$)", text, re.IGNORECASE)
+    if strategy_match:
+        strategy = strategy_match.group(1).strip().strip("*").strip()
 
     return verdict, confidence, strategy
 

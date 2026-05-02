@@ -1491,6 +1491,19 @@ async def broker_disconnect(broker_key: str, request: Request):
     return {"ok": True, "broker": broker_key}
 
 
+@app.get("/api/risk/status")
+async def api_risk_status(request: Request):
+    """Return current daily risk usage and configured limits."""
+    _require_localhost(request)
+    try:
+        from engine.risk_limits import RiskLimits
+
+        rl = RiskLimits()
+        return {"status": "ok", "data": rl.get_status()}
+    except Exception as e:
+        raise _HTTPException(500, str(e))
+
+
 @app.get("/api/portfolio")
 async def api_portfolio(request: Request):
     _require_localhost(request)

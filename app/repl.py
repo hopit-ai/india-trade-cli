@@ -66,6 +66,7 @@ COMMANDS = [
     "orders",
     "morning-brief",
     "analyze",
+    "quick",
     "trade",
     "portfolio",
     "paper",
@@ -688,7 +689,7 @@ def cmd_help() -> None:
         ],
         "Session": [
             ("login", "Connect to a broker"),
-            ("provider [name]", "Show/switch AI provider"),
+            ("provider [name|setup]", "Show/switch AI provider, or run setup wizard"),
             ("telegram [setup]", "Start bot / run guided setup wizard"),
             ("clear", "Start fresh AI conversation (reset context)"),
             ("credentials", "Manage API keys"),
@@ -714,24 +715,41 @@ def cmd_help() -> None:
 
 
 def _handle_backtest_command(args: list[str]) -> None:
-    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain]"""
+    """Handle: backtest SYMBOL [strategy] [args...] [--period 2y] [--pdf] [--explain] [--html] [--compare] [--fast]"""
     from engine.output import parse_output_flags, handle_output_flags
 
-    clean_args, wants_pdf, wants_explain, _ = parse_output_flags(args)
+    wants_html = "--html" in args
+    wants_compare = "--compare" in args
+    wants_fast = "--fast" in args
+    clean_args, wants_pdf, wants_explain, _ = parse_output_flags(
+        [a for a in args if a not in ("--html", "--compare", "--fast")]
+    )
     if not clean_args:
         console.print(
-            "[red]Usage: backtest SYMBOL [strategy] [--pdf] [--explain][/red]\n"
-            "[dim]  backtest RELIANCE rsi              RSI(30/70) strategy\n"
+            "[red]Usage: backtest SYMBOL [strategy] [--pdf] [--explain] [--html] [--compare] [--fast][/red]\n"
+            "[dim]  backtest RELIANCE rsi              RSI(30/70) strategy (event-driven)\n"
+            "  backtest RELIANCE rsi --fast        Vectorized, <1s (no slippage sim)\n"
             "  backtest RELIANCE ma 20 50          EMA crossover\n"
             "  backtest RELIANCE macd --pdf         Export to PDF\n"
             "  backtest RELIANCE bb --explain       Add simple explanation\n"
+            "  backtest RELIANCE rsi macd bb --compare --html  Compare + HTML report\n"
             "  Strategies: rsi, ma, ema, macd, bb/bollinger[/dim]"
         )
         return
 
-    from engine.backtest import run_backtest
+    if wants_fast:
+        from engine.backtest_vectorized import run_vectorized_backtest as run_backtest
+    else:
+        from engine.backtest import run_backtest
 
     symbol = clean_args[0].upper()
+    # Track last symbol so strategy builder can pick it up
+    try:
+        from app.commands.strategy import set_last_symbol
+
+        set_last_symbol(symbol)
+    except Exception:
+        pass
     strategy_name = clean_args[1].lower() if len(clean_args) > 1 else "rsi"
     strategy_args = clean_args[2:] if len(clean_args) > 2 else []
 
@@ -752,13 +770,37 @@ def _handle_backtest_command(args: list[str]) -> None:
                 pass
             strategy_args = [a for a in strategy_args if a not in ("--trades", clean_args[idx + 1])]
 
+    # ── Multi-strategy compare mode ──────────────────────────
+    if wants_compare or (wants_html and len(clean_args) > 2):
+        # All positional args after the symbol are strategy names
+        strategies = [a for a in clean_args[1:] if not a.startswith("--")] or ["rsi"]
+        all_results = []
+        for strat in strategies:
+            console.print(f"[dim]Running {strat} on {symbol} ({period})...[/dim]")
+            try:
+                r = run_backtest(symbol=symbol, strategy_name=strat, period=period)
+                all_results.append(r)
+                ret_color = "green" if r.total_return >= 0 else "red"
+                console.print(
+                    f"  [bold]{strat:12s}[/bold] [{ret_color}]{r.total_return:+.2f}%[/{ret_color}]"
+                    f"  Sharpe {r.sharpe_ratio:.2f}"
+                )
+            except Exception as e:
+                console.print(f"  [red]{strat}[/red] failed: {e}")
+
+        if all_results and wants_html:
+            from engine.backtest_report import generate_html_report
+
+            report_path = generate_html_report(all_results)
+            console.print(f"\n[green]HTML report saved:[/green] {report_path}")
+        return
+
     console.print(f"\n[dim]Running backtest: {symbol} / {strategy_name} / {period}...[/dim]")
 
     try:
         result = run_backtest(
             symbol=symbol,
             strategy_name=strategy_name,
-            strategy_args=strategy_args,
             period=period,
         )
         result.print_summary()
@@ -784,6 +826,11 @@ def _handle_backtest_command(args: list[str]) -> None:
         _bt_summary = "\n".join(lines)
         _last_output = _bt_summary
         _last_command = f"Backtest {symbol} {strategy_name}"
+        if wants_html:
+            from engine.backtest_report import generate_html_report
+
+            report_path = generate_html_report([result])
+            console.print(f"\n[green]HTML report saved:[/green] {report_path}")
         if wants_pdf or wants_explain:
             handle_output_flags(
                 _bt_summary, f"Backtest {symbol} {strategy_name}", wants_pdf, wants_explain
@@ -838,7 +885,7 @@ def _handle_whatif_command(args: list[str]) -> None:
 
 
 def _handle_memory_command(args: list[str]) -> None:
-    """Handle memory commands: memory [stats|list|<symbol>|outcome <id> <result>]"""
+    """Handle memory commands: memory [stats|list|reflect <id>|<symbol>|outcome <id> <result>]"""
     from engine.memory import trade_memory
 
     sub = args[0].lower() if args else "list"
@@ -862,6 +909,28 @@ def _handle_memory_command(args: list[str]) -> None:
             console.print(f"[green]Recorded outcome for {trade_id}: {outcome}[/green]")
         else:
             console.print(f"[red]Trade ID {trade_id} not found.[/red]")
+
+    elif sub == "reflect":
+        if len(args) < 2:
+            console.print("[red]Usage: memory reflect <trade_id>[/red]")
+            return
+        trade_id = args[1]
+        # Optionally use the active LLM provider for richer reflection
+        llm_provider = None
+        try:
+            from agent.core import ToolRegistry, get_fast_provider, get_deep_provider
+
+            llm_provider = get_fast_provider(
+                ToolRegistry(), deep_provider=get_deep_provider(ToolRegistry())
+            )
+        except Exception:
+            pass
+        console.print(f"[dim]Reflecting on trade {trade_id}...[/dim]")
+        lesson = trade_memory.reflect_and_remember(trade_id, llm_provider=llm_provider)
+        if not lesson:
+            console.print(f"[red]Trade ID {trade_id} not found.[/red]")
+        else:
+            console.print(f"\n[bold]Lesson:[/bold] {lesson}\n")
 
     elif sub == "clear":
         console.print("[yellow]This will delete all trade memory. Type 'yes' to confirm:[/yellow]")
@@ -943,6 +1012,15 @@ def _handle_alert_command(args: list[str]) -> None:
     if not args or args[0].lower() == "list":
         alert_manager.print_alerts()
         return
+
+    # Support "alert add SYMBOL ..." as alias for "alert SYMBOL ..."
+    if args[0].lower() == "add":
+        args = args[1:]
+
+    # Map operator aliases: > → above, < → below, >= → above, <= → below
+    args = [
+        "above" if a == ">" or a == ">=" else "below" if a == "<" or a == "<=" else a for a in args
+    ]
 
     if args[0].lower() == "remove" and len(args) >= 2:
         removed = alert_manager.remove_alert(args[1])
@@ -1249,6 +1327,15 @@ def run_repl(broker: BrokerAPI) -> None:
                         "FINNIFTY": "NSE:FINNIFTY-INDEX",
                     }
                     resolved = [idx_aliases.get(a.upper(), a) for a in args]
+                    # Track last plain stock symbol (not index aliases)
+                    plain = [a.upper() for a in args if a.upper() not in idx_aliases]
+                    if plain:
+                        try:
+                            from app.commands.strategy import set_last_symbol
+
+                            set_last_symbol(plain[-1])
+                        except Exception:
+                            pass
                     cmd_quote(resolved)
 
             # ── Portfolio (unified multi-broker view) ─────────
@@ -1282,6 +1369,12 @@ def run_repl(broker: BrokerAPI) -> None:
                         "[red]Usage: analyze <SYMBOL> [--risk-debate] [--pdf] [--explain][/red]"
                     )
                 else:
+                    try:
+                        from app.commands.strategy import set_last_symbol
+
+                        set_last_symbol(symbol)
+                    except Exception:
+                        pass
                     agent = get_agent()
 
                     # Context prompt callback (#113): runs after analysts,
@@ -1529,6 +1622,79 @@ def run_repl(broker: BrokerAPI) -> None:
                         )
                         console.print("[dim]Falling back to standard analysis...[/dim]")
                         agent.run_multi_agent_analysis(symbol)
+
+            elif command == "quick":
+                # Quick scan: single-agent, 1 LLM call, 3-5s
+                # Usage: quick SYMBOL [SYMBOL2 ...]
+
+                if not args:
+                    console.print("[dim]Usage: quick <SYMBOL> [SYMBOL2 ...][/dim]")
+                    console.print("[dim]  quick INFY          → fast BUY/SELL/HOLD[/dim]")
+                    console.print("[dim]  quick INFY TCS HDFC → scan multiple symbols[/dim]")
+                else:
+                    from agent.quick_scan import QuickScanner
+                    from rich.table import Table
+
+                    agent = get_agent()
+                    scanner = QuickScanner(
+                        provider=getattr(agent, "_provider", None),
+                        registry=getattr(agent, "_registry", None),
+                    )
+
+                    symbols = [a.upper() for a in args if not a.startswith("-")]
+                    if len(symbols) == 1:
+                        # Single symbol — rich output
+                        sym = symbols[0]
+                        console.print(f"\n  [dim]Scanning {sym}...[/dim]")
+                        result = scanner.scan(sym)
+                        if result.error:
+                            console.print(f"  [red]Error:[/red] {result.error}")
+                        else:
+                            v_style = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}.get(
+                                result.verdict, "white"
+                            )
+                            console.print(
+                                f"\n  [bold]{result.symbol}[/bold] · "
+                                f"[{v_style}]{result.verdict}[/{v_style}] "
+                                f"({result.confidence}%) · ₹{result.ltp:,.2f}"
+                            )
+                            for reason in result.reasons:
+                                console.print(f"    • {reason}")
+                            if result.entry:
+                                console.print(
+                                    f"\n  Entry: ₹{result.entry:,.2f}  "
+                                    f"SL: ₹{result.sl:,.2f}  "
+                                    f"Target: ₹{result.target:,.2f}"
+                                    if result.sl and result.target
+                                    else f"\n  Entry: ₹{result.entry:,.2f}"
+                                )
+                            console.print(f"  [dim]⏱ {result.elapsed_ms}ms · 1 LLM call[/dim]\n")
+                    else:
+                        # Multi-symbol — table output
+                        console.print(f"\n  [dim]Quick-scanning {len(symbols)} symbols...[/dim]")
+                        table = Table(show_header=True, header_style="bold cyan", box=None)
+                        table.add_column("Symbol", style="bold", width=10)
+                        table.add_column("Price", justify="right", width=10)
+                        table.add_column("Verdict", width=8)
+                        table.add_column("Conf", justify="right", width=6)
+                        table.add_column("Top Reason", width=50)
+                        table.add_column("⏱", justify="right", width=6)
+
+                        for sym in symbols:
+                            result = scanner.scan(sym)
+                            v_style = {"BUY": "green", "SELL": "red", "HOLD": "yellow"}.get(
+                                result.verdict, "white"
+                            )
+                            table.add_row(
+                                result.symbol,
+                                f"₹{result.ltp:,.0f}" if result.ltp else "-",
+                                f"[{v_style}]{result.verdict}[/{v_style}]",
+                                f"{result.confidence}%",
+                                result.reasons[0] if result.reasons else "-",
+                                f"{result.elapsed_ms}ms",
+                            )
+                        console.print(table)
+                        console.print()
 
             elif command == "telegram":
                 sub = args[0].lower() if args else ""
@@ -1821,13 +1987,18 @@ def run_repl(broker: BrokerAPI) -> None:
                     _last_command = f"Harness: {query[:40]}"
 
             elif command == "provider":
-                if args:
+                if args and args[0].lower() == "setup":
+                    # Re-run the full interactive AI provider wizard
+                    agent = get_agent()
+                    agent.run_setup_wizard()
+                elif args:
                     new_provider = args[0].lower()
                     new_model = args[1] if len(args) > 1 else None
                     if new_provider not in ALL_PROVIDERS:
                         console.print(
                             f"[red]Unknown provider '{new_provider}'.[/red] "
-                            f"Valid: {', '.join(ALL_PROVIDERS)}"
+                            f"Valid: {', '.join(ALL_PROVIDERS)}\n"
+                            f"  Or run [cyan]provider setup[/cyan] for the guided wizard."
                         )
                     else:
                         agent = get_agent()
@@ -1910,20 +2081,46 @@ def run_repl(broker: BrokerAPI) -> None:
                         console.print(f"[red]Error:[/red] {e}")
 
             elif command in ("buy", "sell"):
-                # Quick order: buy YESBANK 1 15 | sell RELIANCE 5
-                # Format: buy SYMBOL QTY [LIMIT_PRICE]
+                # Quick order: buy YESBANK 1 15 | sell RELIANCE 5 | buy INFY 5% | buy INFY 5% 1400
+                # Format: buy SYMBOL QTY|PCT% [LIMIT_PRICE]
                 import os as _os
 
                 if not args:
                     console.print(f"[dim]Usage: {command} SYMBOL QTY [LIMIT_PRICE][/dim]")
                     console.print(f"[dim]  {command} YESBANK 1 15   → limit order at ₹15[/dim]")
                     console.print(f"[dim]  {command} YESBANK 1      → market order[/dim]")
+                    console.print(
+                        f"[dim]  {command} INFY 5%        → 5% of capital at market[/dim]"
+                    )
+                    console.print(
+                        f"[dim]  {command} INFY 5% 1400   → 5% of capital, limit ₹1400[/dim]"
+                    )
                 elif not broker:
                     console.print("[red]No broker connected. Run: broker connect[/red]")
                 else:
                     _sym = args[0].upper()
-                    _qty = int(args[1]) if len(args) > 1 else 1
+                    _raw_qty = args[1] if len(args) > 1 else "1"
                     _limit = float(args[2]) if len(args) > 2 else None
+                    # Resolve percentage sizing
+                    try:
+                        from engine.trade_executor import (
+                            parse_qty_or_pct,
+                            size_by_pct,
+                            get_trading_capital,
+                        )
+
+                        _qty_val, _is_pct = parse_qty_or_pct(_raw_qty)
+                        if _is_pct:
+                            _capital = get_trading_capital()
+                            _qty = size_by_pct(_sym, _qty_val, _capital, limit_price=_limit)
+                            console.print(
+                                f"  [dim]{_qty_val:.1f}% of ₹{_capital:,.0f} → [bold]{_qty}[/bold] shares[/dim]"
+                            )
+                        else:
+                            _qty = int(_qty_val)
+                    except ValueError as _e:
+                        console.print(f"[red]Sizing error:[/red] {_e}")
+                        continue
                     _mode = _os.environ.get("TRADING_MODE", "PAPER")
                     _side = "BUY" if command == "buy" else "SELL"
                     _otype = "LIMIT" if _limit else "MARKET"

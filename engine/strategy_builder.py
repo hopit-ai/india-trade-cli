@@ -19,6 +19,8 @@ import json
 import re
 import sys
 import tempfile
+import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -171,6 +173,78 @@ class StrategyStore:
         if py_file.exists():
             return py_file.read_text()
         return None
+
+    # ── Marketplace: Export (#161) ───────────────────────────
+
+    def export_strategy(self, name: str, output_path: str) -> str:
+        """
+        Export a strategy as a self-contained JSON package.
+        Includes metadata, code, and any backtest results.
+        Returns the output path.
+        """
+        meta = self.get_metadata(name) or {"name": name, "description": ""}
+        code = self.get_code(name) or ""
+
+        package = {
+            "version": "1.0",
+            "name": meta.get("name", name),
+            "description": meta.get("description", ""),
+            "author": meta.get("author", ""),
+            "created_at": meta.get(
+                "created", meta.get("created_at", datetime.now().isoformat()[:10])
+            ),
+            "code": code,
+            "backtest": meta.get("backtest", {}),
+            "tags": meta.get("tags", []),
+            "license": meta.get("license", "MIT"),
+        }
+
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(package, indent=2, default=str))
+        return str(out)
+
+    # ── Marketplace: Import (#161) ───────────────────────────
+
+    def import_strategy(self, source: str) -> dict:
+        """
+        Import a strategy from a local JSON file or URL.
+        Validates required fields, saves code + metadata.
+        Returns the imported metadata dict.
+
+        Args:
+            source: Local file path or HTTP(S) URL.
+        """
+        if source.startswith("http://") or source.startswith("https://"):
+            import requests
+
+            resp = requests.get(source, timeout=15)
+            resp.raise_for_status()
+            package = resp.json()
+        else:
+            package = json.loads(Path(source).read_text())
+
+        # Validate required fields
+        required = ("name", "code")
+        missing = [f for f in required if not package.get(f)]
+        if missing:
+            raise ValueError(f"Strategy package missing required fields: {missing}")
+
+        name = package["name"]
+        code = package["code"]
+        meta = {
+            "name": name,
+            "description": package.get("description", ""),
+            "author": package.get("author", ""),
+            "created_at": package.get("created_at", ""),
+            "version": package.get("version", "1.0"),
+            "backtest": package.get("backtest", {}),
+            "tags": package.get("tags", []),
+            "license": package.get("license", "MIT"),
+        }
+
+        self.save_strategy(name, code, meta)
+        return meta
 
 
 # Singleton
@@ -451,7 +525,7 @@ def extract_strategy_payload(response: str) -> Optional[dict]:
             "code": code_match.group(1).strip(),
             "name": "custom_strategy",
             "description": "User-defined strategy",
-            "symbol": "RELIANCE",
+            "symbol": None,
             "parameters": {},
         }
 
@@ -475,7 +549,7 @@ def extract_strategy_payload(response: str) -> Optional[dict]:
                 "code": "\n".join(code_lines),
                 "name": "custom_strategy",
                 "description": "User-defined strategy",
-                "symbol": "RELIANCE",
+                "symbol": None,
                 "parameters": {},
             }
 
@@ -533,3 +607,151 @@ def print_strategy_code(name: str, code: str, metadata: Optional[dict] = None) -
 
     syntax = Syntax(code, "python", theme="monokai", line_numbers=True)
     console.print(Panel(syntax, title=f"Strategy: {name}", border_style="cyan"))
+
+
+# ── StrategySpec + Interactive Session (#44) ─────────────────
+
+
+@dataclass
+class StrategySpec:
+    """Fully resolved strategy specification from user interview."""
+
+    name: str
+    description: str
+    entry_conditions: list
+    exit_conditions: list
+    stop_loss_pct: float = 1.5
+    target_pct: float = 3.0
+    max_hold_days: int = 15
+    position_size_pct: float = 2.0
+    generated_code: str = ""
+
+
+# Structured questions asked during the builder interview
+_BUILDER_QUESTIONS = [
+    ("entry_conditions", "What are the entry conditions? (indicator, threshold, timeframe)"),
+    (
+        "exit_conditions",
+        "What are the exit conditions? (target %, stop %, indicator, or time limit)",
+    ),
+    ("stop_loss_pct", "What is your stop-loss percentage? (e.g. 1.5)"),
+    ("target_pct", "What is your profit target percentage? (e.g. 3.0)"),
+    ("max_hold_days", "Maximum holding period in days? (e.g. 15)"),
+    ("position_size_pct", "Position size as % of capital per trade? (e.g. 2.0)"),
+]
+
+
+class StrategyBuilderSession:
+    """
+    Interactive session that collects strategy requirements via Q&A
+    and produces a StrategySpec + optionally generates code.
+
+    Usage:
+        session = StrategyBuilderSession()
+        questions = session.start("Buy NIFTY on RSI oversold + EMA filter")
+        # Returns list of clarifying question strings
+        session.answer("stop_loss_pct", "1.5")
+        spec = session.finalize()
+    """
+
+    def __init__(self, llm_provider=None) -> None:
+        self._llm = llm_provider
+        self.session_id: str = str(uuid.uuid4())[:8]
+        self.description: str = ""
+        self.answers: dict = {}
+        self._questions: list[tuple[str, str]] = list(_BUILDER_QUESTIONS)
+
+    def start(self, description: str) -> list[str]:
+        """
+        Begin a strategy builder session.
+        Parses what's already in the description, returns remaining questions.
+        """
+        self.description = description
+        self._pre_fill_from_description(description)
+        # Return only questions not already answered
+        unanswered = [q for k, q in self._questions if k not in self.answers]
+        return unanswered
+
+    def answer(self, question_key: str, value: str) -> None:
+        """Record an answer to a question key."""
+        self.answers[question_key] = value
+
+    def finalize(self) -> StrategySpec:
+        """
+        Build a StrategySpec from the collected answers.
+        Any unanswered fields use defaults.
+        """
+
+        def _get(key: str, default):
+            return self.answers.get(key, default)
+
+        entry = _get("entry_conditions", [self.description])
+        if isinstance(entry, str):
+            entry = [entry]
+        exit_c = _get("exit_conditions", ["target or stop"])
+        if isinstance(exit_c, str):
+            exit_c = [exit_c]
+
+        sl = self._parse_pct(_get("stop_loss_pct", "1.5"), default=1.5)
+        tgt = self._parse_pct(_get("target_pct", "3.0"), default=3.0)
+        hold = self._parse_int(_get("max_hold_days", "15"), default=15)
+        size = self._parse_pct(_get("position_size_pct", "2.0"), default=2.0)
+
+        name = self._make_name(self.description)
+        return StrategySpec(
+            name=name,
+            description=self.description,
+            entry_conditions=entry,
+            exit_conditions=exit_c,
+            stop_loss_pct=sl,
+            target_pct=tgt,
+            max_hold_days=hold,
+            position_size_pct=size,
+            generated_code="",  # LLM code generation is a separate step
+        )
+
+    # ── Private helpers ──────────────────────────────────────
+
+    def _pre_fill_from_description(self, text: str) -> None:
+        """Extract obvious answers from the initial description."""
+        import re
+
+        # Stop loss
+        m = re.search(r"stop[\s\-_]*(?:loss)?[\s:@]*(\d+(?:\.\d+)?)\s*%", text, re.I)
+        if m:
+            self.answers.setdefault("stop_loss_pct", m.group(1))
+
+        # Target
+        m = re.search(r"target[\s:@]*(\d+(?:\.\d+)?)\s*%", text, re.I)
+        if m:
+            self.answers.setdefault("target_pct", m.group(1))
+
+        # Entry conditions (crude)
+        indicators = []
+        for ind in ("RSI", "MACD", "EMA", "SMA", "Bollinger", "ADX", "ATR", "Stochastic"):
+            if ind.lower() in text.lower():
+                indicators.append(ind)
+        if indicators:
+            self.answers.setdefault("entry_conditions", ", ".join(indicators))
+
+    @staticmethod
+    def _make_name(description: str) -> str:
+        import re
+
+        clean = re.sub(r"[^\w\s]", "", description.lower())
+        words = clean.split()[:4]
+        return "_".join(words) or "custom_strategy"
+
+    @staticmethod
+    def _parse_pct(value, default: float) -> float:
+        try:
+            return float(str(value).replace("%", "").strip())
+        except (ValueError, TypeError):
+            return default
+
+    @staticmethod
+    def _parse_int(value, default: int) -> int:
+        try:
+            return int(str(value).strip())
+        except (ValueError, TypeError):
+            return default
