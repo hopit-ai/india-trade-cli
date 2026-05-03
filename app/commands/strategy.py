@@ -577,7 +577,9 @@ def _cmd_export(args: list[str]) -> None:
     pine_mode = "--pine" in args
 
     if not pine_mode:
-        console.print("[red]Only --pine export is supported. Usage: strategy export <name> --pine[/red]")
+        console.print(
+            "[red]Only --pine export is supported. Usage: strategy export <name> --pine[/red]"
+        )
         return
 
     code = strategy_store.get_code(name)

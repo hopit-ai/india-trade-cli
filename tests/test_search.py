@@ -92,8 +92,16 @@ class TestAnalysisSearchQuery:
 
     def test_search_by_strategy_name(self, search_db):
         records = [
-            _make_record("st1", "NIFTY", "BUY", strategy="Iron Condor", synthesis_text="Condor spread setup"),
-            _make_record("st2", "BANKNIFTY", "HOLD", strategy="Bull Call Spread", synthesis_text="Mild uptrend"),
+            _make_record(
+                "st1", "NIFTY", "BUY", strategy="Iron Condor", synthesis_text="Condor spread setup"
+            ),
+            _make_record(
+                "st2",
+                "BANKNIFTY",
+                "HOLD",
+                strategy="Bull Call Spread",
+                synthesis_text="Mild uptrend",
+            ),
         ]
         search_db.index_records(records)
         results = search_db.search("Iron")
@@ -102,7 +110,9 @@ class TestAnalysisSearchQuery:
 
     def test_search_synthesis_text(self, search_db):
         records = [
-            _make_record("tx1", "INFY", "BUY", synthesis_text="MACD crossover bullish signal confirmed"),
+            _make_record(
+                "tx1", "INFY", "BUY", synthesis_text="MACD crossover bullish signal confirmed"
+            ),
             _make_record("tx2", "TCS", "HOLD", synthesis_text="RSI neutral zone no signal"),
         ]
         search_db.index_records(records)
@@ -118,8 +128,10 @@ class TestAnalysisSearchQuery:
     def test_search_result_has_snippet(self, search_db):
         records = [
             _make_record(
-                "sn1", "HDFC", "BUY",
-                synthesis_text="HDFC shows strong momentum with RSI above 60 and MACD positive"
+                "sn1",
+                "HDFC",
+                "BUY",
+                synthesis_text="HDFC shows strong momentum with RSI above 60 and MACD positive",
             )
         ]
         search_db.index_records(records)

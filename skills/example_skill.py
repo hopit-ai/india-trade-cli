@@ -23,7 +23,7 @@ def _get_sector_news(symbol: str, count: int = 3) -> dict:
     """
     return {
         "symbol": symbol.upper(),
-        "headlines": [f"[Placeholder] Headline {i+1} for {symbol.upper()}" for i in range(count)],
+        "headlines": [f"[Placeholder] Headline {i + 1} for {symbol.upper()}" for i in range(count)],
         "count": count,
     }
 

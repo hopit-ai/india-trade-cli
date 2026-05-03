@@ -5,7 +5,6 @@ Tests for Pine Script export (#185).
 from __future__ import annotations
 
 
-
 class TestStrategyToPinescript:
     def test_returns_string(self):
         from engine.export.pinescript import strategy_to_pinescript

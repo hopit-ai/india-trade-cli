@@ -5,7 +5,6 @@ Tests for channel-aware prompting (#179).
 from __future__ import annotations
 
 
-
 class TestGetChannelHint:
     def test_cli_returns_non_empty_string(self):
         from agent.prompts import get_channel_hint

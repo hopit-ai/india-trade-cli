@@ -642,9 +642,7 @@ class TradeMemory:
             # Include snapshot summary if available
             snap = getattr(r, "analysis_snapshot", {})
             if snap and snap.get("analyst_scores"):
-                scores_str = ", ".join(
-                    f"{k}:{v}" for k, v in snap["analyst_scores"].items()
-                )
+                scores_str = ", ".join(f"{k}:{v}" for k, v in snap["analyst_scores"].items())
                 parts.append(f"    Scores: {scores_str}")
             if getattr(r, "lesson", ""):
                 parts.append(f"    Lesson: {r.lesson}")

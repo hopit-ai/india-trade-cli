@@ -5,7 +5,6 @@ Tests for soft tool limiting and loop detection (#177).
 from __future__ import annotations
 
 
-
 class TestSoftLimitWarning:
     def test_no_warning_below_soft_limit(self):
         from engine.tool_limiter import ToolLimiter

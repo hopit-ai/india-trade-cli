@@ -225,9 +225,7 @@ class TestExampleSkillFile:
         """example_skill.py is a valid skill file when loaded directly."""
         from engine.skill_loader import load_skill
 
-        example_path = (
-            Path(__file__).parent.parent / "skills" / "example_skill.py"
-        )
+        example_path = Path(__file__).parent.parent / "skills" / "example_skill.py"
         if not example_path.exists():
             pytest.skip("example_skill.py not found")
 

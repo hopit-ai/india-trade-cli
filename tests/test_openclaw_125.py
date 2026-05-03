@@ -97,15 +97,40 @@ class TestAllExpectedSkillsPresent:
 
     EXPECTED_SKILLS = {
         # Original
-        "quote", "options_chain", "flows", "earnings", "macro", "deals",
-        "backtest", "pairs", "analyze", "deep_analyze", "chat",
-        "alerts_add", "alerts_list", "alerts_remove", "alerts_check",
-        "chat_reset", "morning_brief",
+        "quote",
+        "options_chain",
+        "flows",
+        "earnings",
+        "macro",
+        "deals",
+        "backtest",
+        "pairs",
+        "analyze",
+        "deep_analyze",
+        "chat",
+        "alerts_add",
+        "alerts_list",
+        "alerts_remove",
+        "alerts_check",
+        "chat_reset",
+        "morning_brief",
         # Added in earlier pass (#125)
-        "iv_smile", "gex", "risk_report", "strategy", "whatif", "greeks",
-        "oi", "scan", "patterns", "delta_hedge", "drift", "memory", "memory_query",
+        "iv_smile",
+        "gex",
+        "risk_report",
+        "strategy",
+        "whatif",
+        "greeks",
+        "oi",
+        "scan",
+        "patterns",
+        "delta_hedge",
+        "drift",
+        "memory",
+        "memory_query",
         # Added in #166
-        "persona", "debate",
+        "persona",
+        "debate",
     }
 
     def test_all_expected_skills_present(self):
@@ -115,6 +140,5 @@ class TestAllExpectedSkillsPresent:
 
     def test_skill_count_at_least_expected(self):
         assert len(MANIFEST["skills"]) >= len(self.EXPECTED_SKILLS), (
-            f"Expected at least {len(self.EXPECTED_SKILLS)} skills, "
-            f"got {len(MANIFEST['skills'])}"
+            f"Expected at least {len(self.EXPECTED_SKILLS)} skills, got {len(MANIFEST['skills'])}"
         )
