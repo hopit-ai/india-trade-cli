@@ -106,12 +106,13 @@ def _parse_text_path(text: str) -> SynthesisOutput:
     in_risks = False
 
     for line in text.splitlines():
-        stripped = line.strip()
+        stripped = line.strip().strip("*").strip()  # remove markdown bold markers
         upper = stripped.upper()
 
         # ── Top-level fields ──────────────────────────────────────────────────
-        if upper.startswith("VERDICT:"):
-            val = stripped.split(":", 1)[1].strip()
+        # Match "VERDICT: ..." anywhere on the line (handles "Final VERDICT: BUY")
+        if "VERDICT:" in upper:
+            val = re.split(r"(?i)verdict:", stripped, maxsplit=1)[1].strip()
             verdict = _parse_verdict(val)
             in_trade_rec = in_rationale = in_risks = False
             continue
@@ -195,6 +196,18 @@ def _parse_text_path(text: str) -> SynthesisOutput:
             elif stripped and not stripped.startswith("-"):
                 in_risks = False
             continue
+
+        # ── Standalone Strategy: line (outside TRADE RECOMMENDATION block) ────
+        if upper.startswith("STRATEGY:") and not strategy:
+            strategy = stripped.split(":", 1)[1].strip()
+
+    # ── Keyword fallback: if still HOLD, scan full text for a verdict token ───
+    if verdict == "HOLD":
+        upper_text = text.upper()
+        for token in _VERDICT_TOKENS:
+            if token in upper_text:
+                verdict = token
+                break
 
     return SynthesisOutput(
         verdict=verdict,

@@ -27,43 +27,43 @@ class TestParseSynthesisOutput:
     def test_plain_buy(self):
         from agent.schema_parser import parse_synthesis_output
 
-        verdict, conf, _ = parse_synthesis_output("VERDICT: BUY\nCONFIDENCE: 72%")
-        assert verdict == "BUY"
-        assert conf == 72
+        result = parse_synthesis_output("VERDICT: BUY\nCONFIDENCE: 72%")
+        assert result.verdict == "BUY"
+        assert result.confidence == 72
 
     def test_plain_sell(self):
         from agent.schema_parser import parse_synthesis_output
 
-        verdict, conf, _ = parse_synthesis_output("VERDICT: SELL\nCONFIDENCE: 60%")
-        assert verdict == "SELL"
-        assert conf == 60
+        result = parse_synthesis_output("VERDICT: SELL\nCONFIDENCE: 60%")
+        assert result.verdict == "SELL"
+        assert result.confidence == 60
 
     def test_strong_buy(self):
         from agent.schema_parser import parse_synthesis_output
 
-        verdict, conf, _ = parse_synthesis_output("VERDICT: STRONG_BUY\nCONFIDENCE: 85%")
-        assert verdict == "STRONG_BUY"
-        assert conf == 85
+        result = parse_synthesis_output("VERDICT: STRONG_BUY\nCONFIDENCE: 85%")
+        assert result.verdict == "STRONG_BUY"
+        assert result.confidence == 85
 
     def test_strong_sell(self):
         from agent.schema_parser import parse_synthesis_output
 
-        verdict, _, _ = parse_synthesis_output("VERDICT: STRONG_SELL\nCONFIDENCE: 90%")
-        assert verdict == "STRONG_SELL"
+        result = parse_synthesis_output("VERDICT: STRONG_SELL\nCONFIDENCE: 90%")
+        assert result.verdict == "STRONG_SELL"
 
     def test_markdown_bold(self):
         from agent.schema_parser import parse_synthesis_output
 
-        verdict, conf, _ = parse_synthesis_output("**VERDICT: STRONG_BUY**\n**CONFIDENCE: 80%**")
-        assert verdict == "STRONG_BUY"
-        assert conf == 80
+        result = parse_synthesis_output("**VERDICT: STRONG_BUY**\n**CONFIDENCE: 80%**")
+        assert result.verdict == "STRONG_BUY"
+        assert result.confidence == 80
 
     def test_case_insensitive(self):
         from agent.schema_parser import parse_synthesis_output
 
-        verdict, conf, _ = parse_synthesis_output("Verdict: sell\nConfidence: 45%")
-        assert verdict == "SELL"
-        assert conf == 45
+        result = parse_synthesis_output("Verdict: sell\nConfidence: 45%")
+        assert result.verdict == "SELL"
+        assert result.confidence == 45
 
     def test_verdict_in_paragraph(self):
         from agent.schema_parser import parse_synthesis_output
@@ -72,38 +72,36 @@ class TestParseSynthesisOutput:
             "Based on the analysis of technical and fundamental factors,\n"
             "Final VERDICT: BUY\nCONFIDENCE: 68%\nStrategy: Iron Bull Spread"
         )
-        verdict, conf, strategy = parse_synthesis_output(text)
-        assert verdict == "BUY"
-        assert conf == 68
-        assert "Iron Bull Spread" in strategy
+        result = parse_synthesis_output(text)
+        assert result.verdict == "BUY"
+        assert result.confidence == 68
+        assert "Iron Bull Spread" in result.strategy
 
     def test_default_hold_when_absent(self):
         from agent.schema_parser import parse_synthesis_output
 
-        verdict, conf, _ = parse_synthesis_output("The analysis is inconclusive.")
-        assert verdict == "HOLD"
-        assert conf == 50
+        result = parse_synthesis_output("The analysis is inconclusive.")
+        assert result.verdict == "HOLD"
+        assert result.confidence == 50
 
     def test_keyword_fallback(self):
         """If no explicit label, keyword scan should still catch the verdict."""
         from agent.schema_parser import parse_synthesis_output
 
-        text = "All indicators point to a STRONG_BUY opportunity here."
-        verdict, _, _ = parse_synthesis_output(text)
-        assert verdict == "STRONG_BUY"
+        result = parse_synthesis_output("All indicators point to a STRONG_BUY opportunity here.")
+        assert result.verdict == "STRONG_BUY"
 
     def test_confidence_clamped_to_100(self):
         from agent.schema_parser import parse_synthesis_output
 
-        _, conf, _ = parse_synthesis_output("VERDICT: BUY\nCONFIDENCE: 150%")
-        assert conf == 100
+        result = parse_synthesis_output("VERDICT: BUY\nCONFIDENCE: 150%")
+        assert result.confidence == 100
 
     def test_confidence_clamped_to_0(self):
         from agent.schema_parser import parse_synthesis_output
 
-        # Negative or zero should clamp
-        _, conf, _ = parse_synthesis_output("VERDICT: HOLD\nCONFIDENCE: 0%")
-        assert conf == 0
+        result = parse_synthesis_output("VERDICT: HOLD\nCONFIDENCE: 0%")
+        assert result.confidence == 0
 
 
 class TestStoreFromAnalysisSavesCorrectVerdict:

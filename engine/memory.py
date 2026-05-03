@@ -218,7 +218,8 @@ class TradeMemory:
                         fii_net = latest.get("fii_net")
 
         # Parse verdict and confidence from synthesis text
-        verdict, confidence, strategy = _parse_synthesis_output(synthesis)
+        _parsed = _parse_synthesis_output(synthesis)
+        verdict, confidence, strategy = _parsed.verdict, _parsed.confidence, _parsed.strategy
 
         # Debate info
         debate_winner = ""
@@ -711,7 +712,8 @@ def _parse_synthesis(text: str) -> tuple[str, int, str]:
     Thin wrapper around agent.schema_parser.parse_synthesis_output for
     backward compatibility with code that imports _parse_synthesis directly.
     """
-    return _parse_synthesis_output(text)
+    result = _parse_synthesis_output(text)
+    return result.verdict, result.confidence, result.strategy
 
 
 def _truncate(text: str, max_len: int) -> str:
