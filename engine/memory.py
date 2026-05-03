@@ -37,7 +37,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -47,6 +46,8 @@ from typing import Any, Optional
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+from agent.schema_parser import parse_synthesis_output as _parse_synthesis_output
 
 console = Console()
 
@@ -101,6 +102,7 @@ class TradeRecord:
     # Analysis snapshot (#122)
     price_at_analysis: Optional[float] = None  # LTP at time of analysis
     synthesis_text: str = ""  # full raw LLM synthesis output
+    analysis_snapshot: dict = field(default_factory=dict)  # key metrics at analysis time
 
     # Reflection (#92) — LLM-extracted lesson from outcome
     lesson: str = ""
@@ -144,6 +146,7 @@ class TradeMemory:
         raw_synthesis: str = "",
         price_at_analysis: Optional[float] = None,
         synthesis_text: str = "",
+        analysis_snapshot: Optional[dict] = None,
     ) -> TradeRecord:
         """Store a new analysis/recommendation."""
         record = TradeRecord(
@@ -169,6 +172,7 @@ class TradeMemory:
             tags=tags or [],
             price_at_analysis=price_at_analysis,
             synthesis_text=synthesis_text or raw_synthesis,
+            analysis_snapshot=analysis_snapshot or {},
         )
 
         self._records.append(record)
@@ -214,7 +218,8 @@ class TradeMemory:
                         fii_net = latest.get("fii_net")
 
         # Parse verdict and confidence from synthesis text
-        verdict, confidence, strategy = _parse_synthesis(synthesis)
+        _parsed = _parse_synthesis_output(synthesis)
+        verdict, confidence, strategy = _parsed.verdict, _parsed.confidence, _parsed.strategy
 
         # Debate info
         debate_winner = ""
@@ -227,6 +232,21 @@ class TradeMemory:
                 bear_summary = _truncate(debate.bear_argument, 200)
             if hasattr(debate, "winner"):
                 debate_winner = debate.winner
+
+        # Build analysis snapshot — compact dict of key metrics (#122)
+        snapshot: dict = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "verdict": verdict,
+            "confidence": confidence,
+        }
+        if price is not None:
+            snapshot["price"] = price
+        if vix is not None:
+            snapshot["vix"] = vix
+        if fii_net is not None:
+            snapshot["fii_net"] = fii_net
+        if scores:
+            snapshot["analyst_scores"] = scores
 
         return self.store(
             symbol=symbol,
@@ -242,6 +262,7 @@ class TradeMemory:
             bear_summary=bear_summary,
             synthesis_text=synthesis,
             price_at_analysis=price,
+            analysis_snapshot=snapshot,
         )
 
     # ── Record Outcome ───────────────────────────────────────
@@ -616,7 +637,14 @@ class TradeMemory:
                     line += f" (P&L: {r.actual_pnl:+,.0f})"
             if r.vix is not None:
                 line += f" | VIX={r.vix:.1f}"
+            if getattr(r, "price_at_analysis", None) is not None:
+                line += f" | ₹{r.price_at_analysis:.0f}"
             parts.append(line)
+            # Include snapshot summary if available
+            snap = getattr(r, "analysis_snapshot", {})
+            if snap and snap.get("analyst_scores"):
+                scores_str = ", ".join(f"{k}:{v}" for k, v in snap["analyst_scores"].items())
+                parts.append(f"    Scores: {scores_str}")
             if getattr(r, "lesson", ""):
                 parts.append(f"    Lesson: {r.lesson}")
 
@@ -681,45 +709,11 @@ def _parse_synthesis(text: str) -> tuple[str, int, str]:
     """
     Extract verdict, confidence, and strategy from synthesis LLM output.
 
-    Handles various LLM formatting styles:
-      - Plain:    VERDICT: BUY
-      - Markdown: **VERDICT: BUY**
-      - Mixed:    Final VERDICT: STRONG_SELL
-      - Any case: Verdict: sell
+    Thin wrapper around agent.schema_parser.parse_synthesis_output for
+    backward compatibility with code that imports _parse_synthesis directly.
     """
-    verdict = "HOLD"
-    confidence = 50
-    strategy = ""
-
-    # ── Verdict: robust regex, case-insensitive, strips markdown ──
-    verdict_match = re.search(
-        r"verdict\s*[:\s]\s*\*{0,2}([A-Z_a-z ]+?)\*{0,2}(?:\s|$|[,.\n])",
-        text,
-        re.IGNORECASE,
-    )
-    if verdict_match:
-        raw = verdict_match.group(1).strip().upper().replace(" ", "_").strip("_")
-        # Check longest matches first to avoid "BUY" matching before "STRONG_BUY"
-        for v in ("STRONG_BUY", "STRONG_SELL", "BUY", "SELL", "HOLD"):
-            # Exact match first; then check if verdict token starts with v
-            if raw == v or raw.startswith(v) or raw.endswith(v):
-                verdict = v
-                break
-
-    # ── Confidence: extract number after CONFIDENCE: ──────────────
-    conf_match = re.search(r"confidence\s*[:\s]\s*\*{0,2}(\d+)\s*%?\*{0,2}", text, re.IGNORECASE)
-    if conf_match:
-        try:
-            confidence = int(conf_match.group(1))
-        except ValueError:
-            pass
-
-    # ── Strategy: first line starting with strategy ───────────────
-    strategy_match = re.search(r"strategy\s*[:\s]\s*(.+?)(?:\n|$)", text, re.IGNORECASE)
-    if strategy_match:
-        strategy = strategy_match.group(1).strip().strip("*").strip()
-
-    return verdict, confidence, strategy
+    result = _parse_synthesis_output(text)
+    return result.verdict, result.confidence, result.strategy
 
 
 def _truncate(text: str, max_len: int) -> str:

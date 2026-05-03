@@ -82,9 +82,11 @@ COMMANDS = [
     "persona",
     "debate",
     "clear",
+    "debate",
     "deep-analyze",
     "drift",
     "active",
+    "persona",
     "bulk-deals",
     "dcf",
     "deals",
@@ -103,6 +105,7 @@ COMMANDS = [
     "oi-profile",
     "quote",
     "scan",
+    "search",
     "smile",
     "roll-options",
     "strategy",
@@ -112,6 +115,7 @@ COMMANDS = [
     "profile",
     "provider",
     "risk-report",
+    "risk-status",
     "execute",
     "harness",
     "save-pdf",
@@ -661,6 +665,7 @@ def cmd_help() -> None:
             ("delta-hedge", "Suggest trades to neutralize delta"),
             ("roll-options", "Find expiring positions, suggest rolls"),
             ("risk-report", "VaR/CVaR portfolio risk analysis"),
+            ("risk-status", "Daily P&L, trade counts, hard limit usage"),
             ("orders", "Today's orders"),
         ],
         "Memory & Learning": [
@@ -1150,6 +1155,18 @@ def run_repl(broker: BrokerAPI) -> None:
         )
     console.print()
 
+    # Auto-discover and register skill plugins from skills/ directory (#187)
+    try:
+        from engine.skill_loader import auto_register_skills
+        from agent.tools import build_registry as _build_skill_registry
+
+        _skill_registry = _build_skill_registry()
+        _registered = auto_register_skills(_skill_registry)
+        if _registered:
+            console.print(f"[dim]Skills loaded: {', '.join(_registered)}[/dim]")
+    except Exception:
+        pass  # skill loading is best-effort — never block startup
+
     # Buffer for post-processing commands (save-pdf, explain, explain-save)
     _last_output: str = ""
     _last_command: str = ""
@@ -1553,6 +1570,57 @@ def run_repl(broker: BrokerAPI) -> None:
                 from engine.risk_metrics import print_risk_report
 
                 print_risk_report()
+
+            elif command == "risk-status":
+                from engine.risk_limits import risk_limits
+
+                status = risk_limits.get_status()
+                table = Table(
+                    title="Risk Limits Status",
+                    show_header=False,
+                    box=None,
+                    padding=(0, 2),
+                )
+                table.add_column(style="dim")
+                table.add_column(style="bold")
+
+                daily_loss = status["daily_loss"]
+                loss_style = "red" if daily_loss < 0 else "green"
+                table.add_row(
+                    "Daily P&L",
+                    f"[{loss_style}]₹{daily_loss:,.0f}[/{loss_style}]",
+                )
+                table.add_row(
+                    "Daily Loss Cap",
+                    f"₹{status['max_daily_loss']:,.0f}",
+                )
+                room = status["remaining_loss_room"]
+                room_style = "green" if room > 0 else "red"
+                table.add_row(
+                    "Remaining Loss Room",
+                    f"[{room_style}]₹{room:,.0f}[/{room_style}]",
+                )
+                table.add_row(
+                    "Trades Today",
+                    f"{status['trades_today']} / {status['max_daily_trades']}",
+                )
+                table.add_row(
+                    "Remaining Trades",
+                    f"{status['remaining_trades']}",
+                )
+                table.add_row(
+                    "Max Trades per Symbol",
+                    f"{status['max_trades_per_symbol']}",
+                )
+                limits_hit = status["limits_hit"]
+                limits_style = "bold red" if limits_hit else "bold green"
+                table.add_row(
+                    "Limits Hit",
+                    f"[{limits_style}]{'YES' if limits_hit else 'NO'}[/{limits_style}]",
+                )
+                console.print()
+                console.print(table)
+                console.print()
 
             elif command == "drift":
                 from engine.drift import print_drift_report
@@ -1962,6 +2030,49 @@ def run_repl(broker: BrokerAPI) -> None:
                 from app.commands.strategy import run as strategy_run
 
                 strategy_run(args)
+
+            elif command == "persona":
+                from app.commands.persona import run as persona_run
+                from agent.tools import build_registry
+                from agent.core import get_provider
+
+                _persona_registry = build_registry()
+                _persona_provider = get_provider(registry=_persona_registry)
+                persona_run(
+                    args,
+                    registry=_persona_registry,
+                    llm_provider=_persona_provider,
+                )
+
+            elif command == "debate":
+                from app.commands.persona import run_debate_command
+                from agent.tools import build_registry
+                from agent.core import get_provider
+
+                _debate_registry = build_registry()
+                _debate_provider = get_provider(registry=_debate_registry)
+                run_debate_command(
+                    args,
+                    registry=_debate_registry,
+                    llm_provider=_debate_provider,
+                )
+
+            elif command == "search":
+                query = " ".join(args).strip()
+                if not query:
+                    console.print(
+                        "[dim]Usage: search <query>\n"
+                        "  Examples:\n"
+                        "    search RELIANCE BUY\n"
+                        '    search "iron condor"\n'
+                        "    search verdict:STRONG_BUY[/dim]"
+                    )
+                else:
+                    from engine.search import analysis_search, print_search_results
+
+                    analysis_search.index_from_memory()
+                    results = analysis_search.search(query)
+                    print_search_results(results, query)
 
             elif command == "whatif":
                 _handle_whatif_command(args)
