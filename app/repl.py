@@ -2146,7 +2146,10 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[red]No broker connected. Run: broker connect[/red]")
                 else:
                     try:
-                        _orders = broker.get_orders()
+                        from brokers.session import get_execution_broker as _get_exec
+
+                        _exec_broker = _get_exec()
+                        _orders = _exec_broker.get_orders()
                         _open = [
                             o
                             for o in _orders
@@ -2164,7 +2167,7 @@ def run_repl(broker: BrokerAPI) -> None:
                             if _Confirm.ask("  Confirm?", default=False):
                                 for _o in _open:
                                     try:
-                                        broker.cancel_order(_o.order_id)
+                                        _exec_broker.cancel_order(_o.order_id)
                                         console.print(
                                             f"  [green]✓[/green] Cancelled {_o.symbol} {_o.order_id}"
                                         )
@@ -2173,7 +2176,7 @@ def run_repl(broker: BrokerAPI) -> None:
                         elif args:
                             _oid = args[0]
                             try:
-                                broker.cancel_order(_oid)
+                                _exec_broker.cancel_order(_oid)
                                 console.print(f"  [green]✓ Cancelled order {_oid}[/green]")
                             except Exception as _e:
                                 console.print(f"  [red]Cancel failed:[/red] {_e}")
@@ -2194,7 +2197,7 @@ def run_repl(broker: BrokerAPI) -> None:
                             elif _pick.lower() == "all":
                                 for _o in _open:
                                     try:
-                                        broker.cancel_order(_o.order_id)
+                                        _exec_broker.cancel_order(_o.order_id)
                                         console.print(f"  [green]✓[/green] Cancelled {_o.symbol}")
                                     except Exception as _e:
                                         console.print(f"  [red]✗[/red] {_e}")
@@ -2202,7 +2205,7 @@ def run_repl(broker: BrokerAPI) -> None:
                                 try:
                                     _idx = int(_pick) - 1
                                     _o = _open[_idx]
-                                    broker.cancel_order(_o.order_id)
+                                    _exec_broker.cancel_order(_o.order_id)
                                     console.print(
                                         f"  [green]✓ Cancelled {_o.symbol} {_o.order_id}[/green]"
                                     )
@@ -2273,6 +2276,7 @@ def run_repl(broker: BrokerAPI) -> None:
                     if _Confirm.ask("  Confirm?", default=False):
                         try:
                             from brokers.base import OrderRequest as _OR
+                            from brokers.session import get_execution_broker as _get_exec
 
                             _req = _OR(
                                 symbol=_sym,
@@ -2283,7 +2287,7 @@ def run_repl(broker: BrokerAPI) -> None:
                                 price=_limit,
                                 product="CNC",
                             )
-                            _resp = broker.place_order(_req)
+                            _resp = _get_exec().place_order(_req)
                             if _resp.status in ("OPEN", "COMPLETE", "PUT ORDER REQ RECEIVED"):
                                 console.print(
                                     f"  [green]✓ Order placed![/green]  ID: {_resp.order_id}  Status: {_resp.status}"

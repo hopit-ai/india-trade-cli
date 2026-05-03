@@ -321,9 +321,9 @@ def _get_daily_returns(symbol: str, days: int = 252) -> Optional[np.ndarray]:
 def _get_holdings() -> list[dict]:
     """Get current holdings from broker or return empty list."""
     try:
-        from brokers.session import get_broker
+        from brokers.session import get_execution_broker
 
-        broker = get_broker()
+        broker = get_execution_broker()
         holdings = broker.get_holdings()
         return [
             {"symbol": h.symbol, "value": h.last_price * h.quantity, "qty": h.quantity}

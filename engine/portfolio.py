@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 import re
 
-from brokers.session import get_broker
+from brokers.session import get_execution_broker
 from brokers.base import Holding, Position, Funds
 
 
@@ -99,7 +99,7 @@ def get_portfolio_summary() -> PortfolioSummary:
     Full live portfolio snapshot from the primary broker.
     Fetches holdings, positions, funds, computes Greeks for options positions.
     """
-    broker = get_broker()
+    broker = get_execution_broker()
     funds = broker.get_funds()
     holdings = broker.get_holdings()
     positions = broker.get_positions()
@@ -220,7 +220,7 @@ def get_multi_broker_summary() -> PortfolioSummary:
 
 def get_position_greeks() -> PortfolioGreeks:
     """Compute net Greeks across all F&O positions (primary broker)."""
-    broker = get_broker()
+    broker = get_execution_broker()
     positions = broker.get_positions()
     rows = _build_position_rows(positions)
     return _compute_net_greeks(rows)
@@ -228,7 +228,7 @@ def get_position_greeks() -> PortfolioGreeks:
 
 def risk_meter() -> RiskMeter:
     """Capital deployment and risk assessment (primary broker)."""
-    broker = get_broker()
+    broker = get_execution_broker()
     funds = broker.get_funds()
     holdings = broker.get_holdings()
     positions = broker.get_positions()

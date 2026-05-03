@@ -515,14 +515,14 @@ class AlertManager:
         if not alert.conditions:
             return False
 
-        from brokers.session import get_broker
+        from brokers.session import get_data_broker
 
         for cond_dict in alert.conditions:
             cond = AlertCondition(**cond_dict) if isinstance(cond_dict, dict) else cond_dict
 
             if cond.condition_type == "PRICE":
                 try:
-                    broker = get_broker()
+                    broker = get_data_broker()
                     instrument = f"{alert.exchange}:{alert.symbol}"
                     ltp = broker.get_ltp(instrument)
                 except Exception:
