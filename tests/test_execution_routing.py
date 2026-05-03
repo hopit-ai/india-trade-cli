@@ -198,3 +198,56 @@ class TestAutoRoleAssignment:
         register_broker("mock", mock, primary=True)
         # Single broker gets "both" role
         assert session_mod._broker_roles.get("mock") in ("both", "data", "execution", None)
+
+    def test_login_assigns_fyers_data_role(self, monkeypatch):
+        """login() should auto-assign 'data' role to fyers without any config."""
+        session_mod._brokers = {}
+        session_mod._primary_key = ""
+        session_mod._broker_roles = {}
+
+        mock = MockBrokerAPI()
+        # Bypass the interactive auth by injecting mock directly
+        monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("fyers", mock))
+        monkeypatch.setattr(mock, "is_authenticated", lambda: True)
+
+        session_mod.login("5")  # fyers
+        assert session_mod._broker_roles.get("fyers") == "data"
+
+    def test_connect_broker_assigns_zerodha_execution_role(self, monkeypatch):
+        """connect_broker() should auto-assign 'execution' role to zerodha."""
+        fyers_mock = MockBrokerAPI()
+        zerodha_mock = MockBrokerAPI()
+        session_mod._brokers = {"fyers": fyers_mock}
+        session_mod._primary_key = "fyers"
+        session_mod._broker_roles = {"fyers": "data"}
+
+        monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("zerodha", zerodha_mock))
+        monkeypatch.setattr(zerodha_mock, "is_authenticated", lambda: True)
+        monkeypatch.setattr(session_mod, "_print_welcome", lambda *a, **kw: None)
+
+        session_mod.connect_broker("1")  # zerodha
+        assert session_mod._broker_roles.get("zerodha") == "execution"
+
+    def test_dual_broker_routing_after_login_and_connect(self, monkeypatch):
+        """After fyers login + zerodha connect, routing resolves correctly."""
+        from brokers.session import get_data_broker, get_execution_broker
+
+        fyers_mock = MockBrokerAPI()
+        zerodha_mock = MockBrokerAPI()
+        session_mod._brokers = {}
+        session_mod._primary_key = ""
+        session_mod._broker_roles = {}
+
+        # Simulate fyers login
+        monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("fyers", fyers_mock))
+        monkeypatch.setattr(fyers_mock, "is_authenticated", lambda: True)
+        session_mod.login("5")
+
+        # Simulate zerodha connect
+        monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("zerodha", zerodha_mock))
+        monkeypatch.setattr(zerodha_mock, "is_authenticated", lambda: True)
+        monkeypatch.setattr(session_mod, "_print_welcome", lambda *a, **kw: None)
+        session_mod.connect_broker("1")
+
+        assert get_data_broker() is fyers_mock
+        assert get_execution_broker() is zerodha_mock

@@ -722,6 +722,9 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
 
     _brokers[key] = broker
     _primary_key = key
+    # Auto-assign role from defaults (fyers→data, zerodha→execution)
+    if key in _DEFAULT_ROLES and key not in _broker_roles:
+        _broker_roles[key] = _DEFAULT_ROLES[key]
 
     # Skip _print_welcome on resume (it makes slow API calls)
     # Just show broker name
@@ -789,6 +792,9 @@ def connect_broker(choice: Optional[str] = None) -> BrokerAPI:
             _do_auth(key, broker)
 
     _brokers[key] = broker
+    # Auto-assign role from defaults (fyers→data, zerodha→execution)
+    if key in _DEFAULT_ROLES and key not in _broker_roles:
+        _broker_roles[key] = _DEFAULT_ROLES[key]
     _print_welcome(broker, role="connected")
 
     console.print(
