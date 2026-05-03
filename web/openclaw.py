@@ -720,5 +720,72 @@ MANIFEST: dict = {
             },
             "output_description": ("records: list of TradeRecord filtered by the given criteria."),
         },
+        # ── Persona skills (#166) ──────────────────────────────────
+        {
+            "name": "persona",
+            "path": "/skills/persona",
+            "method": "POST",
+            "description": (
+                "Run a single named investor persona analysis on a stock. "
+                "Personas available: buffett, jhunjhunwala, lynch, soros, munger. "
+                "Each persona uses its own investment philosophy to evaluate the stock. "
+                "Uses deterministic rule-based fallback if no LLM is configured."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "persona_id": {
+                        "type": "string",
+                        "description": "Persona ID: buffett, jhunjhunwala, lynch, soros, or munger",
+                        "enum": ["buffett", "jhunjhunwala", "lynch", "soros", "munger"],
+                    },
+                    "symbol": {
+                        "type": "string",
+                        "description": "Stock symbol, e.g. RELIANCE or INFY",
+                    },
+                    "exchange": {
+                        "type": "string",
+                        "description": "Exchange: NSE (default) or BSE",
+                        "default": "NSE",
+                    },
+                },
+                "required": ["persona_id", "symbol"],
+            },
+            "output_description": (
+                "PersonaSignal with: persona, verdict (STRONG_BUY/BUY/HOLD/SELL/STRONG_SELL), "
+                "confidence (0-100), rationale (list of analysis points), key_metrics (dict)."
+            ),
+        },
+        {
+            "name": "debate",
+            "path": "/skills/debate",
+            "method": "POST",
+            "description": (
+                "Run all 5 named investor personas on a stock and return consensus. "
+                "Personas: Buffett, Jhunjhunwala, Lynch, Soros, Munger. "
+                "Returns individual signals + consensus verdict + dissent summary. "
+                "Uses deterministic fallback if no LLM configured."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Stock symbol, e.g. RELIANCE or INFY",
+                    },
+                    "exchange": {
+                        "type": "string",
+                        "description": "Exchange: NSE (default) or BSE",
+                        "default": "NSE",
+                    },
+                },
+                "required": ["symbol"],
+            },
+            "output_description": (
+                "signals: list of PersonaSignal (one per persona), "
+                "consensus: {verdict, buy_count, sell_count, hold_count, total, "
+                "buy_personas, sell_personas, hold_personas}."
+            ),
+        },
     ],
 }

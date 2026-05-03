@@ -171,39 +171,8 @@ def _cmd_debate(
     )
 
     # ── Debate table ──────────────────────────────────────────
-    table = Table(
-        show_header=True,
-        header_style="bold cyan",
-        box=box.SIMPLE_HEAVY,
-        padding=(0, 1),
-    )
-    table.add_column("Persona", width=18)
-    table.add_column("Signal", width=12)
-    table.add_column("Confidence", justify="right", width=12)
-    table.add_column("Key Factor", width=36)
-
     name_map = {p.id: p.name for p in list_personas()}
-
-    for signal in signals:
-        persona_name = name_map.get(signal.persona, signal.persona.title())
-        top_factor = ""
-        if signal.key_metrics:
-            # Pick first key metric as the "key factor" display
-            k, v = next(iter(signal.key_metrics.items()))
-            top_factor = f"{k}: {v}"
-        elif signal.rationale:
-            # Use first rationale item, strip leading check marks
-            top_factor = signal.rationale[0].lstrip("✓✗~— ").strip()
-            if len(top_factor) > 34:
-                top_factor = top_factor[:31] + "..."
-
-        table.add_row(
-            persona_name,
-            _verdict_styled(signal.verdict),
-            f"{signal.confidence}%",
-            top_factor,
-        )
-
+    table = _build_debate_table(signals)
     console.print(table)
 
     # ── Consensus ─────────────────────────────────────────────
@@ -211,47 +180,114 @@ def _cmd_debate(
     console.print()
 
 
-def _print_consensus(signals: list[PersonaSignal], name_map: dict[str, str]) -> None:
-    """Compute and print the consensus verdict line."""
-    # Bucket verdicts
+def _compute_consensus(signals: list[PersonaSignal]) -> dict:
+    """
+    Compute consensus from a list of PersonaSignal objects.
+
+    Returns a dict with:
+      verdict       — plurality verdict (BUY / HOLD / SELL)
+      total         — total signal count
+      buy_count     — signals with BUY / STRONG_BUY
+      sell_count    — signals with SELL / STRONG_SELL
+      hold_count    — neutral signals
+      buy_personas  — names/ids of personas in BUY camp
+      sell_personas — names/ids of personas in SELL camp
+      hold_personas — names/ids of personas in HOLD camp
+    """
     buy_verdicts = {"STRONG_BUY", "BUY"}
     sell_verdicts = {"STRONG_SELL", "SELL"}
 
-    buy_camp: list[str] = []
-    sell_camp: list[str] = []
-    hold_camp: list[str] = []
+    buy_personas: list[str] = []
+    sell_personas: list[str] = []
+    hold_personas: list[str] = []
 
     for sig in signals:
-        name = name_map.get(sig.persona, sig.persona.title())
         if sig.verdict in buy_verdicts:
-            buy_camp.append(name)
+            buy_personas.append(sig.persona)
         elif sig.verdict in sell_verdicts:
-            sell_camp.append(name)
+            sell_personas.append(sig.persona)
         else:
-            hold_camp.append(name)
+            hold_personas.append(sig.persona)
 
-    # Plurality wins
     counts = {
-        "BUY": len(buy_camp),
-        "HOLD": len(hold_camp),
-        "SELL": len(sell_camp),
+        "BUY": len(buy_personas),
+        "HOLD": len(hold_personas),
+        "SELL": len(sell_personas),
     }
-    consensus = max(counts, key=lambda k: counts[k])
-    count = counts[consensus]
+    verdict = max(counts, key=lambda k: counts[k])
 
-    consensus_str = _verdict_styled(consensus)
-    parts = [f"  Consensus  : {consensus_str} ({count}/{len(signals)})"]
+    return {
+        "verdict": verdict,
+        "total": len(signals),
+        "buy_count": len(buy_personas),
+        "sell_count": len(sell_personas),
+        "hold_count": len(hold_personas),
+        "buy_personas": buy_personas,
+        "sell_personas": sell_personas,
+        "hold_personas": hold_personas,
+    }
 
-    if consensus == "HOLD":
+
+def _build_debate_table(signals: list[PersonaSignal]) -> Table:
+    """Build and return a Rich Table for the debate output."""
+    name_map = {p.id: p.name for p in list_personas()}
+
+    tbl = Table(
+        show_header=True,
+        header_style="bold cyan",
+        box=box.SIMPLE_HEAVY,
+        padding=(0, 1),
+    )
+    tbl.add_column("Persona", width=18)
+    tbl.add_column("Signal", width=12)
+    tbl.add_column("Confidence", justify="right", width=12)
+    tbl.add_column("Key Factor", width=36)
+
+    for signal in signals:
+        persona_name = name_map.get(signal.persona, signal.persona.title())
+        top_factor = ""
+        if signal.key_metrics:
+            k, v = next(iter(signal.key_metrics.items()))
+            top_factor = f"{k}: {v}"
+        elif signal.rationale:
+            top_factor = signal.rationale[0].lstrip("✓✗~— ").strip()
+            if len(top_factor) > 34:
+                top_factor = top_factor[:31] + "..."
+
+        tbl.add_row(
+            persona_name,
+            _verdict_styled(signal.verdict),
+            f"{signal.confidence}%",
+            top_factor,
+        )
+
+    return tbl
+
+
+def _print_consensus(signals: list[PersonaSignal], name_map: dict[str, str]) -> None:
+    """Compute and print the consensus verdict line."""
+    consensus_data = _compute_consensus(signals)
+    verdict = consensus_data["verdict"]
+    count = consensus_data[f"{verdict.lower()}_count"]
+    total = consensus_data["total"]
+
+    buy_camp = [name_map.get(p, p.title()) for p in consensus_data["buy_personas"]]
+    sell_camp = [name_map.get(p, p.title()) for p in consensus_data["sell_personas"]]
+    hold_camp = [name_map.get(p, p.title()) for p in consensus_data["hold_personas"]]
+
+    consensus_str = _verdict_styled(verdict)
+    parts = [f"  Consensus  : {consensus_str} ({count}/{total})"]
+
+    if verdict == "HOLD":
         if buy_camp:
             parts.append(f"  — BUY camp: {', '.join(buy_camp)}")
         if sell_camp:
             parts.append(f"  — SELL camp: {', '.join(sell_camp)}")
-    elif consensus == "BUY":
+    elif verdict == "BUY":
         if hold_camp or sell_camp:
             dissenters = hold_camp + sell_camp
             parts.append(f"  — Cautious: {', '.join(dissenters)}")
-    elif consensus == "SELL":
+    elif verdict == "SELL":
         if hold_camp or buy_camp:
             dissenters = hold_camp + buy_camp
             parts.append(f"  — Bullish holdouts: {', '.join(dissenters)}")
