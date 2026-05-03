@@ -1,13 +1,13 @@
 """Tests for engine/trader.py — TraderAgent, position sizing, strategy selection."""
 
+from agent.schema_parser import parse_synthesis_output
 from engine.trader import (
-    TraderAgent,
-    TradePlan,
-    OrderLeg,
     ExitPlan,
-    RISK_PROFILES,
     LOT_SIZES,
-    _parse_synthesis_verdict,
+    OrderLeg,
+    RISK_PROFILES,
+    TradePlan,
+    TraderAgent,
 )
 
 
@@ -188,30 +188,30 @@ class TestGenerateAllPlans:
             assert agg.max_risk >= con.max_risk
 
 
-# ── _parse_synthesis_verdict ─────────────────────────────────
+# ── parse_synthesis_output (replaces _parse_synthesis_verdict) ───────────────
 
 
 class TestParseSynthesisVerdict:
     def test_buy_verdict(self):
-        text = "Verdict: BUY\nConfidence: 75%\nStrategy: Delivery"
-        verdict, conf, strat = _parse_synthesis_verdict(text)
-        assert verdict == "BUY"
-        assert conf == 75
-        assert "Delivery" in strat
+        text = "VERDICT: BUY\nCONFIDENCE: 75%\n\nTRADE RECOMMENDATION:\nStrategy  : Delivery\n"
+        result = parse_synthesis_output(text)
+        assert result.verdict == "BUY"
+        assert result.confidence == 75
+        assert "Delivery" in result.strategy
 
     def test_strong_sell(self):
-        verdict, conf, _ = _parse_synthesis_verdict("Verdict: STRONG_SELL\nConfidence: 85%")
-        assert verdict == "STRONG_SELL"
-        assert conf == 85
+        result = parse_synthesis_output("VERDICT: STRONG_SELL\nCONFIDENCE: 85%")
+        assert result.verdict == "STRONG_SELL"
+        assert result.confidence == 85
 
     def test_hold_default(self):
-        verdict, conf, _ = _parse_synthesis_verdict("No clear signal")
-        assert verdict == "HOLD"
-        assert conf == 50
+        result = parse_synthesis_output("No clear signal")
+        assert result.verdict == "HOLD"
+        assert result.confidence == 50
 
     def test_confidence_without_percent(self):
-        _, conf, _ = _parse_synthesis_verdict("Verdict: BUY\nConfidence: 60")
-        assert conf == 60
+        result = parse_synthesis_output("VERDICT: BUY\nCONFIDENCE: 60")
+        assert result.confidence == 60
 
 
 # ── Lot sizes ────────────────────────────────────────────────

@@ -33,6 +33,7 @@ dependencies = [
     "fyers-apiv3>=3.1.0",
     # ── AI ───────────────────────────────────────────────────────────
     "anthropic>=0.40.0",
+    "pydantic>=2.0.0",
     "openai>=1.40.0",
     "google-genai>=1.0.0",
     "google-cloud-aiplatform>=1.60.0",
