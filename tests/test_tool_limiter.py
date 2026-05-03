@@ -82,12 +82,13 @@ class TestLoopDetection:
     def test_no_loop_with_same_tool_repeated(self):
         from engine.tool_limiter import ToolLimiter
 
-        limiter = ToolLimiter(soft_limit_per_tool=10, hard_limit_total=50)
-        # Same tool 6 times — soft limit, not loop
+        # soft_limit=5: calling 6 times triggers a soft limit warning, not a loop
+        limiter = ToolLimiter(soft_limit_per_tool=5, hard_limit_total=50)
+        result = None
         for _ in range(6):
             result = limiter.check_and_record("same_tool")
-        # Should be soft limit warning, not loop
-        assert result is not None
+        # Should produce a soft limit warning, but NOT a loop detection warning
+        assert result is not None, "Expected soft limit warning after exceeding per-tool limit"
         assert "LOOP DETECTED" not in result
 
     def test_loop_requires_exactly_6_alternating(self):
