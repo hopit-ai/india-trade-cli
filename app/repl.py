@@ -1724,7 +1724,6 @@ def run_repl(broker: BrokerAPI) -> None:
                     console.print("[dim]  quick INFY TCS HDFC → scan multiple symbols[/dim]")
                 else:
                     from agent.quick_scan import QuickScanner
-                    from rich.table import Table
 
                     agent = get_agent()
                     scanner = QuickScanner(

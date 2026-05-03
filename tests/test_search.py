@@ -5,7 +5,6 @@ Tests for FTS5 full-text search across past analyses (#183).
 from __future__ import annotations
 
 import pytest
-from pathlib import Path
 
 
 @pytest.fixture
@@ -153,7 +152,7 @@ class TestAnalysisSearchQuery:
         search_db.index_records(records)
         # FTS5 special chars that might fail — should not raise
         try:
-            results = search_db.search("BUY OR")
+            search_db.search("BUY OR")
         except Exception:
             pytest.fail("search() raised an exception on malformed query")
 

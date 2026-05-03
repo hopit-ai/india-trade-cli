@@ -4,8 +4,6 @@ Tests for Pine Script export (#185).
 
 from __future__ import annotations
 
-import pytest
-from pathlib import Path
 
 
 class TestStrategyToPinescript:

@@ -4,7 +4,6 @@ Tests for soft tool limiting and loop detection (#177).
 
 from __future__ import annotations
 
-import pytest
 
 
 class TestSoftLimitWarning:

@@ -4,7 +4,6 @@ Tests for channel-aware prompting (#179).
 
 from __future__ import annotations
 
-import pytest
 
 
 class TestGetChannelHint:
