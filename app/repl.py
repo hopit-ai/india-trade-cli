@@ -79,6 +79,8 @@ COMMANDS = [
     "alerts",
     "audit",
     "backtest",
+    "persona",
+    "debate",
     "clear",
     "deep-analyze",
     "drift",
@@ -1623,6 +1625,26 @@ def run_repl(broker: BrokerAPI) -> None:
                         )
                         console.print("[dim]Falling back to standard analysis...[/dim]")
                         agent.run_multi_agent_analysis(symbol)
+
+            elif command == "persona":
+                from app.commands.persona import run as persona_run
+
+                agent = get_agent()
+                persona_run(
+                    args=args,
+                    registry=getattr(agent, "_registry", None),
+                    llm_provider=getattr(agent, "_provider", None),
+                )
+
+            elif command == "debate":
+                from app.commands.persona import run_debate_command
+
+                agent = get_agent()
+                run_debate_command(
+                    args=args,
+                    registry=getattr(agent, "_registry", None),
+                    llm_provider=getattr(agent, "_provider", None),
+                )
 
             elif command == "quick":
                 # Quick scan: single-agent, 1 LLM call, 3-5s
