@@ -251,3 +251,77 @@ class TestAutoRoleAssignment:
 
         assert get_data_broker() is fyers_mock
         assert get_execution_broker() is zerodha_mock
+
+
+# ── Role exclusivity invariant ────────────────────────────────
+
+
+class TestRoleExclusivity:
+    """With two brokers connected, each must have a distinct role — never 'both'."""
+
+    def _setup(self):
+        session_mod._brokers = {}
+        session_mod._primary_key = ""
+        session_mod._broker_roles = {}
+
+    def test_no_both_role_when_two_brokers_registered(self):
+        from brokers.session import register_broker
+
+        self._setup()
+        a, b = MockBrokerAPI(), MockBrokerAPI()
+        register_broker("fyers", a, primary=True)
+        register_broker("zerodha", b)
+
+        for key in ("fyers", "zerodha"):
+            assert session_mod._broker_roles.get(key) != "both", (
+                f"{key} must not have 'both' role when two brokers are connected"
+            )
+
+    def test_roles_are_complementary(self):
+        from brokers.session import register_broker
+
+        self._setup()
+        register_broker("fyers", MockBrokerAPI(), primary=True)
+        register_broker("zerodha", MockBrokerAPI())
+
+        roles = {k: session_mod._broker_roles.get(k) for k in ("fyers", "zerodha")}
+        assert set(roles.values()) == {"data", "execution"}, (
+            f"Expected one data + one execution, got: {roles}"
+        )
+
+    def test_set_data_broker_makes_other_execution(self):
+        from brokers.session import set_data_broker
+
+        self._setup()
+        session_mod._brokers = {"fyers": MockBrokerAPI(), "zerodha": MockBrokerAPI()}
+        session_mod._primary_key = "fyers"
+        session_mod._broker_roles = {"fyers": "data", "zerodha": "execution"}
+
+        set_data_broker("zerodha")
+
+        assert session_mod._broker_roles["zerodha"] == "data"
+        assert session_mod._broker_roles["fyers"] == "execution"
+
+    def test_set_exec_broker_makes_other_data(self):
+        from brokers.session import set_exec_broker
+
+        self._setup()
+        session_mod._brokers = {"fyers": MockBrokerAPI(), "zerodha": MockBrokerAPI()}
+        session_mod._primary_key = "fyers"
+        session_mod._broker_roles = {"fyers": "data", "zerodha": "execution"}
+
+        set_exec_broker("fyers")
+
+        assert session_mod._broker_roles["fyers"] == "execution"
+        assert session_mod._broker_roles["zerodha"] == "data"
+
+    def test_single_broker_may_have_implicit_both(self):
+        from brokers.session import register_broker, get_data_broker, get_execution_broker
+
+        self._setup()
+        mock = MockBrokerAPI()
+        register_broker("zerodha", mock, primary=True)
+
+        # Single broker — both routes must resolve to it
+        assert get_data_broker() is mock
+        assert get_execution_broker() is mock
