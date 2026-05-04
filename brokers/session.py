@@ -190,36 +190,19 @@ def get_broker_role(key: str) -> str:
 
 
 def _rebalance_roles() -> None:
-    """Enforce the invariant: exactly 1 data broker and 1 execution broker.
+    """Enforce role exclusivity after any broker add or role change.
 
-    Called after any broker is added or a role is changed.
-
-    Single broker connected  → implicit 'both', no change needed.
-    Two+ brokers connected   → 'both' is not allowed; every broker must
-                               have either 'data' or 'execution'.
-
-    Resolution order:
-    1. Honour explicit _DEFAULT_ROLES assignments (fyers→data, zerodha→execution).
-    2. For unknown brokers still on 'both': assign 'data' if the data slot is
-       empty, otherwise 'execution'.
-    3. If two brokers somehow share the same role, demote the non-primary one.
+    Rules:
+    - Single broker   → it is the data broker; execution falls back to it
+                        via get_execution_broker()'s primary fallback.
+    - Two+ brokers    → exactly 1 "data" and 1 "execution", never "both".
+                        If a conflict exists (two brokers with the same role),
+                        the non-primary broker is demoted to the complement.
     """
     if len(_brokers) <= 1:
-        # Single broker must handle everything — remove any restrictive role so
-        # get_broker_role() returns the 'both' fallback and the display shows
-        # Data: X  Execution: X instead of Data: X  Execution: None.
-        if len(_brokers) == 1:
-            key = next(iter(_brokers))
-            if _broker_roles.get(key) in ("data", "execution"):
-                del _broker_roles[key]
-        return
+        return  # nothing to balance; single broker uses primary fallback for execution
 
-    # Step 1: apply _DEFAULT_ROLES for any broker not yet explicitly assigned
-    for key in list(_brokers):
-        if key in _DEFAULT_ROLES and _broker_roles.get(key) not in ("data", "execution"):
-            _broker_roles[key] = _DEFAULT_ROLES[key]
-
-    # Step 2: resolve remaining 'both' / unset brokers
+    # Resolve any remaining 'both' or unset brokers
     data_holder = next((k for k in _brokers if _broker_roles.get(k) == "data"), None)
     exec_holder = next((k for k in _brokers if _broker_roles.get(k) == "execution"), None)
 
@@ -229,21 +212,15 @@ def _rebalance_roles() -> None:
             if data_holder is None:
                 _broker_roles[key] = "data"
                 data_holder = key
-            elif exec_holder is None:
+            else:
                 _broker_roles[key] = "execution"
                 exec_holder = key
-            else:
-                # Both slots taken — demote to execution (least surprising default)
-                _broker_roles[key] = "execution"
 
-    # Step 3: if same role is held by two brokers, demote the non-primary one
-    data_holders = [k for k in _brokers if _broker_roles.get(k) == "data"]
-    exec_holders = [k for k in _brokers if _broker_roles.get(k) == "execution"]
-
-    for holders in (data_holders, exec_holders):
+    # If two brokers share the same role, demote the non-primary one
+    for target_role, complement in (("data", "execution"), ("execution", "data")):
+        holders = [k for k in _brokers if _broker_roles.get(k) == target_role]
         if len(holders) > 1:
-            keep = holders[0] if _primary_key not in holders else _primary_key
-            complement = "execution" if _broker_roles.get(keep) == "data" else "data"
+            keep = _primary_key if _primary_key in holders else holders[0]
             for k in holders:
                 if k != keep:
                     _broker_roles[k] = complement
@@ -309,18 +286,15 @@ def list_connected_brokers() -> None:
     console.print(t)
 
     # Show routing summary
-    data_key = None
-    exec_key = None
-    for key in _brokers:
-        role = get_broker_role(key)
-        if role in ("data", "both") and data_key is None:
-            data_key = key
-        if role in ("execution", "both") and exec_key is None:
-            exec_key = key
+    data_key = next((k for k in _brokers if get_broker_role(k) in ("data", "both")), None)
+    exec_key = next((k for k in _brokers if get_broker_role(k) in ("execution", "both")), None)
+    # Single-broker case: execution falls back to the data broker (primary)
+    exec_display = exec_key or _primary_key or "none"
     if data_key or exec_key:
         console.print(
             f"  [dim]Data:[/dim] [bold]{(data_key or 'none').title()}[/bold]"
-            f"  [dim]Execution:[/dim] [bold]{(exec_key or 'none').title()}[/bold]"
+            f"  [dim]Execution:[/dim] [bold]{exec_display.title()}[/bold]"
+            + (" [dim](fallback)[/dim]" if exec_key is None and exec_display != "none" else "")
         )
     console.print()
 
@@ -768,6 +742,7 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
     if key == "mock":
         _brokers[key] = broker
         _primary_key = key
+        _broker_roles[key] = "data"  # login is always the data broker
         _print_welcome(broker, role="primary")
         return broker
 
@@ -781,9 +756,8 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
 
     _brokers[key] = broker
     _primary_key = key
-    # Auto-assign role from defaults (fyers→data, zerodha→execution)
-    if key in _DEFAULT_ROLES and key not in _broker_roles:
-        _broker_roles[key] = _DEFAULT_ROLES[key]
+    # login() is always the data broker — role is not broker-name dependent
+    _broker_roles[key] = "data"
     _rebalance_roles()
 
     # Skip _print_welcome on resume (it makes slow API calls)
@@ -852,9 +826,8 @@ def connect_broker(choice: Optional[str] = None) -> BrokerAPI:
             _do_auth(key, broker)
 
     _brokers[key] = broker
-    # Auto-assign role from defaults (fyers→data, zerodha→execution)
-    if key in _DEFAULT_ROLES and key not in _broker_roles:
-        _broker_roles[key] = _DEFAULT_ROLES[key]
+    # connect() is always the execution broker
+    _broker_roles[key] = "execution"
     _rebalance_roles()
     _print_welcome(broker, role="connected")
 
