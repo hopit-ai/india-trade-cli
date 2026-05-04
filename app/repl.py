@@ -497,7 +497,7 @@ def _cmd_portfolio(summary) -> None:
     }.get(r.risk_rating, "white")
 
     bar_len = 20
-    filled = int(r.deployment_pct / 100 * bar_len)
+    filled = min(int(r.deployment_pct / 100 * bar_len), bar_len)
     bar = "█" * filled + "░" * (bar_len - filled)
 
     console.print(

@@ -425,7 +425,14 @@ def _compute_risk(
     deployed_cash = sum(r.value for r in holding_rows)
     used_margin = funds.used_margin
     free_cash = funds.available_cash
-    total_capital = funds.total_balance
+
+    # total_capital = everything you own: equity holdings + cash + margin in use.
+    # funds.total_balance is often just the *cash* segment from the broker API and
+    # does NOT include the market value of CNC holdings, so we take the larger of
+    # the two to avoid a >100 % deployment percentage.
+    broker_reported = funds.total_balance
+    true_total = deployed_cash + free_cash + used_margin
+    total_capital = max(broker_reported, true_total)
 
     deployment_pct = (
         (deployed_cash + used_margin) / total_capital * 100 if total_capital > 0 else 0.0
