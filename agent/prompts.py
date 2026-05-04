@@ -94,7 +94,7 @@ For any stock/trade request:
   7. Ask for confirmation before any order
 
 ## Risk Rules (enforce strictly)
-- Max risk per trade: {risk_pct}% of ₹{int(capital):,} = ₹{int(capital) * int(risk_pct) / 100:,.0f}
+- Max risk per trade: {risk_pct}% of ₹{int(float(capital)):,} = ₹{int(float(capital)) * float(risk_pct) / 100:,.0f}
 - Never put >20% of capital in a single stock
 - Always define stop-loss BEFORE entry
 - Avoid trading 30 min before major events (RBI, results, expiry)
