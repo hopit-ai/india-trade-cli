@@ -61,7 +61,7 @@ def get_ohlcv(
     # Normalize interval alias
     kite_interval = INTERVAL_MAP.get(interval, interval)
 
-    # Data cascade: broker API → yfinance. No mock/synthetic data.
+    # Data cascade: broker API → yfinance → disk cache. No mock/synthetic data.
     raw = None
     try:
         from brokers.session import get_broker
@@ -84,6 +84,13 @@ def get_ohlcv(
 
     if not raw:
         raw = _yfinance_fallback(symbol, exchange, kite_interval, from_date, to_date)
+        # Cache successful daily fetches to disk for offline fallback
+        if raw and kite_interval == "day":
+            save_ohlcv_cache(f"ohlcv_{symbol}", raw)
+
+    if not raw:
+        # Tier 3: disk cache — last-resort when both broker and yfinance fail
+        raw, _ = load_ohlcv_cache(f"ohlcv_{symbol}")
 
     if not raw:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
@@ -95,6 +102,20 @@ def get_ohlcv(
     df = df[["open", "high", "low", "close", "volume"]].astype(float)
     df.sort_index(inplace=True)
     return df
+
+
+def save_ohlcv_cache(key: str, data: list) -> None:
+    """Save OHLCV rows to disk cache (daily interval only)."""
+    from market.disk_cache import save_cache
+
+    save_cache(key, data)
+
+
+def load_ohlcv_cache(key: str) -> tuple[list, None]:
+    """Load OHLCV rows from disk cache."""
+    from market.disk_cache import load_cache
+
+    return load_cache(key)
 
 
 def _yfinance_fallback(
