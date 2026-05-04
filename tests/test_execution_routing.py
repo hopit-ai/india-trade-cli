@@ -298,3 +298,44 @@ class TestIndependentPointers:
         session_mod._brokers["groww"] = MockBrokerAPI()
         # groww is connected but not pointed to by either key
         assert session_mod.get_broker_role("groww") == ""
+
+    def test_set_data_broker_auto_login_preserves_exec(self, monkeypatch):
+        """data-broker X auto-connects X via login() but must NOT move _exec_key."""
+        from brokers.session import set_data_broker
+
+        fyers_mock = MockBrokerAPI()
+        zerodha_mock = MockBrokerAPI()
+        # Zerodha connected as both; Fyers not yet connected
+        session_mod._brokers = {"zerodha": zerodha_mock}
+        session_mod._primary_key = "zerodha"
+        session_mod._data_key = "zerodha"
+        session_mod._exec_key = "zerodha"
+
+        monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("fyers", fyers_mock))
+        monkeypatch.setattr(fyers_mock, "is_authenticated", lambda: True)
+
+        set_data_broker("fyers")
+
+        assert session_mod._data_key == "fyers"  # moved to fyers
+        assert session_mod._exec_key == "zerodha"  # untouched
+
+    def test_set_exec_broker_auto_login_preserves_data(self, monkeypatch):
+        """exec-broker X auto-connects X via login() but must NOT move _data_key."""
+        from brokers.session import set_exec_broker
+
+        fyers_mock = MockBrokerAPI()
+        zerodha_mock = MockBrokerAPI()
+        # Fyers connected as data; Zerodha not yet connected
+        session_mod._brokers = {"fyers": fyers_mock}
+        session_mod._primary_key = "fyers"
+        session_mod._data_key = "fyers"
+        session_mod._exec_key = "fyers"
+
+        monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("zerodha", zerodha_mock))
+        monkeypatch.setattr(zerodha_mock, "is_authenticated", lambda: True)
+        monkeypatch.setattr(session_mod, "_print_welcome", lambda *a, **kw: None)
+
+        set_exec_broker("zerodha")
+
+        assert session_mod._exec_key == "zerodha"  # moved to zerodha
+        assert session_mod._data_key == "fyers"  # untouched

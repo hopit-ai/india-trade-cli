@@ -262,11 +262,13 @@ def list_connected_brokers() -> None:
 
 def set_data_broker(key: str) -> None:
     """Move the data pointer to this broker. Execution pointer is unchanged."""
-    global _data_key
+    global _data_key, _exec_key
     key = _BROKER_NAMES.get(key.lower(), key.lower())
     if key not in _brokers:
         console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
+        saved_exec = _exec_key  # login() sets both pointers; preserve exec
         login(key)
+        _exec_key = saved_exec  # restore — only data should change
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
@@ -276,11 +278,13 @@ def set_data_broker(key: str) -> None:
 
 def set_exec_broker(key: str) -> None:
     """Move the execution pointer to this broker. Data pointer is unchanged."""
-    global _exec_key
+    global _exec_key, _data_key
     key = _BROKER_NAMES.get(key.lower(), key.lower())
     if key not in _brokers:
         console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
+        saved_data = _data_key  # login() sets both pointers; preserve data
         login(key)
+        _data_key = saved_data  # restore — only exec should change
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
