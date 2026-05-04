@@ -160,7 +160,7 @@ def test_both_role_matches_data_and_execution():
 
 
 def test_unregister_removes_broker_from_routing():
-    from brokers.session import register_broker, set_broker_role, get_broker_role, unregister_broker
+    from brokers.session import register_broker, set_broker_role, unregister_broker
 
     fyers = _make_mock()
     zerodha = _make_mock()
