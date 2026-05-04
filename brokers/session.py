@@ -274,11 +274,9 @@ def set_data_broker(key: str) -> None:
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
-    # Remove data role from any other broker
+    # Demote any other broker that currently holds the data role to execution
     for k in list(_broker_roles):
-        if k != key and _broker_roles.get(k) == "data":
-            del _broker_roles[k]
-        elif k != key and _broker_roles.get(k) == "both":
+        if k != key and _broker_roles.get(k) in ("data", "both"):
             _broker_roles[k] = "execution"
     set_broker_role(key, "data")
     console.print(f"[green]✓ Data broker set to {key.title()}[/green]")
@@ -294,11 +292,9 @@ def set_exec_broker(key: str) -> None:
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
-    # Remove execution role from any other broker
+    # Demote any other broker that currently holds the execution role to data
     for k in list(_broker_roles):
-        if k != key and _broker_roles.get(k) == "execution":
-            del _broker_roles[k]
-        elif k != key and _broker_roles.get(k) == "both":
+        if k != key and _broker_roles.get(k) in ("execution", "both"):
             _broker_roles[k] = "data"
     set_broker_role(key, "execution")
     console.print(f"[green]✓ Execution broker set to {key.title()}[/green]")
