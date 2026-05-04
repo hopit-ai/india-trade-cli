@@ -102,6 +102,7 @@ class DealsRequest(BaseModel):
 class AnalyzeRequest(BaseModel):
     symbol: str
     exchange: str = "NSE"
+    channel: str = "api"  # cli | electron | api | whatsapp (#179)
 
 
 class ChatRequest(BaseModel):
@@ -280,10 +281,16 @@ async def skill_analyze(req: AnalyzeRequest):
         from agent.tools import build_registry
         from agent.core import get_provider
         from agent.multi_agent import MultiAgentAnalyzer
+        from agent.prompts import get_channel_hint
 
         registry = build_registry()
         provider = get_provider(registry=registry)
         analyzer = MultiAgentAnalyzer(registry, provider, verbose=False)
+
+        # Inject channel format hint before analysis (#179)
+        channel_hint = get_channel_hint(req.channel)
+        analyzer.user_hints.put(channel_hint)
+
         report = analyzer.analyze(req.symbol.upper(), req.exchange.upper())
 
         return {
@@ -291,6 +298,7 @@ async def skill_analyze(req: AnalyzeRequest):
             "data": {
                 "symbol": req.symbol.upper(),
                 "exchange": req.exchange.upper(),
+                "channel": req.channel,
                 "report": report,
                 "trade_plans": _serialise(getattr(analyzer, "last_trade_plans", {})),
             },

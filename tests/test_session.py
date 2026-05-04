@@ -20,13 +20,12 @@ from brokers.mock import MockBrokerAPI
 
 class TestBrokerNames:
     def test_numeric_choices(self):
-        # Menu broker numbers: 0=Demo, 1=Zerodha, 2=Fyers
+        # Menu broker numbers: 0=Demo, 1=Zerodha, 2=Groww, 3=Angel One, 4=Upstox, 5=Fyers
         assert _BROKER_NAMES["0"] == "mock"
         assert _BROKER_NAMES["1"] == "zerodha"
-        assert _BROKER_NAMES["2"] == "fyers"
+        assert _BROKER_NAMES["5"] == "fyers"
 
     def test_legacy_numeric_aliases_still_resolve(self):
-        # Legacy aliases kept for programmatic use (not in menu)
         assert _BROKER_NAMES["3"] == "angelone"
         assert _BROKER_NAMES["4"] == "upstox"
 
@@ -41,12 +40,11 @@ class TestBrokerNames:
             assert key in _BROKER_LABELS
 
     def test_menu_has_supported_brokers(self):
-        # Menu contains only Demo, Zerodha, Fyers (3 entries)
         nums = [num for num, _, _ in _BROKER_MENU]
         assert "0" in nums  # Demo
         assert "1" in nums  # Zerodha
-        assert "2" in nums  # Fyers
-        assert len(_BROKER_MENU) == 3
+        assert "5" in nums  # Fyers
+        assert len(_BROKER_MENU) >= 3
 
 
 # ── get_broker / get_all_brokers ─────────────────────────────

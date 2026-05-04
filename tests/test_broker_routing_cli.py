@@ -14,7 +14,8 @@ def _reset_session():
 
     sess._brokers.clear()
     sess._primary_key = ""
-    sess._broker_roles.clear()
+    sess._data_key = ""
+    sess._exec_key = ""
 
 
 @pytest.fixture(autouse=True)

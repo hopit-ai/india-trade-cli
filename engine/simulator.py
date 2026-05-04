@@ -99,9 +99,9 @@ class Simulator:
         if self._loaded:
             return
         try:
-            from brokers.session import get_broker
+            from brokers.session import get_execution_broker
 
-            broker = get_broker()
+            broker = get_execution_broker()
             self._holdings = broker.get_holdings()
             self._positions = broker.get_positions()
         except Exception:

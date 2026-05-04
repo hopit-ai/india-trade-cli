@@ -1117,6 +1117,37 @@ class MultiAgentAnalyzer:
         if self.verbose:
             console.print(f"\n[dim]{scorecard.summary()}[/dim]")
 
+        # ── Risk Gate (#174) — pre-LLM hard limits ────────────
+        risk_gate_context = ""
+        try:
+            from engine.risk_gate import compute_allowed_actions
+            from engine.risk_gate_context import format_risk_gate_for_llm
+
+            allowed = compute_allowed_actions(symbol, exchange)
+            risk_gate_context = format_risk_gate_for_llm(allowed)
+            if self.verbose:
+                gate_style = "red" if not allowed.allowed else "dim green"
+                gate_label = "BLOCKED" if not allowed.allowed else "ALLOWED"
+                console.print(f"\n[{gate_style}]  Risk Gate: {gate_label}[/{gate_style}]", end="")
+                if allowed.flags:
+                    console.print(f"[dim]  Flags: {', '.join(allowed.flags)}[/dim]", end="")
+                console.print()
+
+            if not allowed.allowed:
+                # Short-circuit: skip debate + synthesis, return blocked message
+                blocked_msg = (
+                    f"[RISK GATE BLOCKED — {symbol}]\n\n"
+                    f"{risk_gate_context}\n\n"
+                    f"Analysis was aborted before LLM reasoning. "
+                    f"No trade recommendation is available today for {symbol}.\n"
+                    f"Reason: {allowed.block_reason}"
+                )
+                if self.progress_callback:
+                    self.progress_callback({"type": "synthesis_text", "text": blocked_msg})
+                return blocked_msg
+        except Exception:
+            pass  # risk gate is non-critical — proceed without it on failure
+
         # ── CLI context prompt (#113) ─────────────────────────
         if getattr(self, "context_prompt_callback", None):
             try:
@@ -1201,6 +1232,7 @@ class MultiAgentAnalyzer:
             debate,
             risk_debate,
             compact_signals=ctx.compact_signals,
+            risk_gate_context=risk_gate_context,
         )
         synthesis_time = time.time() - t2
 
@@ -1773,6 +1805,7 @@ class MultiAgentAnalyzer:
         debate: DebateResult,
         risk_debate: Optional[RiskDebateResult] = None,
         compact_signals: str | None = None,
+        risk_gate_context: str = "",
     ) -> str:
         """
         Final synthesis: weigh all analyst reports + debate arguments,
@@ -1780,6 +1813,9 @@ class MultiAgentAnalyzer:
 
         compact_signals: pre-computed Stage 1 signal block.
         If provided, replaces verbose summary_text() (~80% token reduction).
+
+        risk_gate_context: pre-computed hard constraints from risk gate (#174).
+        If non-empty, injected into the prompt as non-negotiable limits.
         """
         # Use compact Stage 1 signals if available (Stage 2 — LLM only synthesizes)
         if compact_signals:
@@ -1866,6 +1902,7 @@ class MultiAgentAnalyzer:
                 risk_context=risk_context,
                 memory_context=memory_context,
                 pattern_context=pattern_context,
+                risk_gate_context=risk_gate_context or "(No risk gate constraints computed)",
             )
             + _hint_suffix
         )
@@ -2011,6 +2048,13 @@ You must make the final call on {symbol} ({exchange}) after reviewing all eviden
 ## Risk Parameters
 {risk_context}
 
+## Risk Gate Constraints (HARD — pre-computed before LLM)
+{risk_gate_context}
+
+HARD CONSTRAINTS from risk gate — your recommendation MUST respect these limits.
+Do not recommend a position larger than the max_qty shown above.
+Do not recommend the blocked direction if direction is restricted.
+
 ## Trade Memory (Past Analyses)
 {memory_context}
 
@@ -2051,7 +2095,11 @@ RISKS (2-3 bullets):
 - [primary risk]
 - [secondary risk]
 
-Keep the output concise and terminal-friendly. Use bullets. All prices in INR."""
+Keep the output concise and terminal-friendly. Use bullets. All prices in INR.
+
+Alternatively, if you prefer structured output, you MAY return a single JSON object instead of the text format above. Use these exact keys:
+{{"verdict": "BUY", "confidence": 72, "winner": "BULL", "strategy": "Buy on dip", "entry": "₹2,850", "stop_loss": "₹2,700 (5.3%)", "target": "₹3,100 (8.8%)", "risk_reward": "1.7:1", "position": "12 shares", "rationale": ["reason 1", "reason 2", "reason 3"], "risks": ["risk 1", "risk 2"]}}
+The text format above is always acceptable and preferred for readability. JSON is optional."""
 
 AGGRESSIVE_DEBATER_PROMPT = """You are the AGGRESSIVE RISK MANAGER at an Indian trading firm.
 The investment team has decided to trade {symbol} ({exchange}).

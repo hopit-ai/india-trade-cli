@@ -25,6 +25,10 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._tools: dict[str, dict] = {}  # name → {fn, description, params, flags}
+        # Soft tool limiter — warns on excessive or looping tool calls (#177)
+        from engine.tool_limiter import ToolLimiter
+
+        self._limiter = ToolLimiter()
 
     def register(
         self,
@@ -120,9 +124,20 @@ class ToolRegistry:
             return {"error": f"Unknown tool: {name}"}
         if self._tools[name].get("permission") == "deny":
             return {"error": f"Tool '{name}' is blocked by permission rules."}
+
+        # Check and record for loop/limit detection (#177)
+        warning = self._limiter.check_and_record(name)
+
         try:
             result = self._tools[name]["fn"](**arguments)
-            return _serialise(result)
+            serialised = _serialise(result)
+            # Prepend warning to result if limit was hit
+            if warning:
+                if isinstance(serialised, dict):
+                    serialised["_tool_warning"] = warning
+                else:
+                    serialised = {"result": serialised, "_tool_warning": warning}
+            return serialised
         except Exception as exc:
             return {"error": str(exc), "trace": traceback.format_exc()[-500:]}
 
