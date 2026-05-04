@@ -205,7 +205,14 @@ def _rebalance_roles() -> None:
     3. If two brokers somehow share the same role, demote the non-primary one.
     """
     if len(_brokers) <= 1:
-        return  # single broker: implicit 'both' is fine
+        # Single broker must handle everything — remove any restrictive role so
+        # get_broker_role() returns the 'both' fallback and the display shows
+        # Data: X  Execution: X instead of Data: X  Execution: None.
+        if len(_brokers) == 1:
+            key = next(iter(_brokers))
+            if _broker_roles.get(key) in ("data", "execution"):
+                del _broker_roles[key]
+        return
 
     # Step 1: apply _DEFAULT_ROLES for any broker not yet explicitly assigned
     for key in list(_brokers):

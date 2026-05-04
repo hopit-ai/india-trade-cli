@@ -167,14 +167,16 @@ class TestAlertUsesDataBroker:
 
 class TestAutoRoleAssignment:
     def test_fyers_gets_data_role_on_register(self):
-        from brokers.session import register_broker
+        from brokers.session import register_broker, get_data_broker
 
         mock = MockBrokerAPI()
         session_mod._brokers = {}
         session_mod._primary_key = ""
         session_mod._broker_roles = {}
         register_broker("fyers", mock, primary=True)
-        assert session_mod._broker_roles.get("fyers") == "data"
+        # Single broker: role entry may be absent (implicit 'both'), but it must
+        # still resolve as the data broker.
+        assert get_data_broker() is mock
 
     def test_zerodha_gets_execution_role_on_register(self):
         from brokers.session import register_broker
@@ -186,6 +188,7 @@ class TestAutoRoleAssignment:
         session_mod._broker_roles = {}
         register_broker("fyers", fyers, primary=True)
         register_broker("zerodha", zerodha, primary=False)
+        # Two brokers: zerodha must have an explicit "execution" role.
         assert session_mod._broker_roles.get("zerodha") == "execution"
 
     def test_both_role_assigned_when_only_one_broker(self):
@@ -200,18 +203,20 @@ class TestAutoRoleAssignment:
         assert session_mod._broker_roles.get("mock") in ("both", "data", "execution", None)
 
     def test_login_assigns_fyers_data_role(self, monkeypatch):
-        """login() should auto-assign 'data' role to fyers without any config."""
+        """login() with fyers only: fyers serves as data broker (implicit both)."""
+        from brokers.session import get_data_broker, get_execution_broker
+
         session_mod._brokers = {}
         session_mod._primary_key = ""
         session_mod._broker_roles = {}
 
         mock = MockBrokerAPI()
-        # Bypass the interactive auth by injecting mock directly
         monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("fyers", mock))
         monkeypatch.setattr(mock, "is_authenticated", lambda: True)
 
-        session_mod.login("5")  # fyers
-        assert session_mod._broker_roles.get("fyers") == "data"
+        session_mod.login("5")  # fyers only — must handle both routes
+        assert get_data_broker() is mock
+        assert get_execution_broker() is mock
 
     def test_connect_broker_assigns_zerodha_execution_role(self, monkeypatch):
         """connect_broker() should auto-assign 'execution' role to zerodha."""
