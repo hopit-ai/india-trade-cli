@@ -18,11 +18,13 @@ def reset_session():
     """Isolate each test from global broker state."""
     orig_brokers = session_mod._brokers.copy()
     orig_primary = session_mod._primary_key
-    orig_roles = session_mod._broker_roles.copy()
+    orig_data = session_mod._data_key
+    orig_exec = session_mod._exec_key
     yield
     session_mod._brokers = orig_brokers
     session_mod._primary_key = orig_primary
-    session_mod._broker_roles = orig_roles
+    session_mod._data_key = orig_data
+    session_mod._exec_key = orig_exec
 
 
 def _setup_dual(data_key="fyers", exec_key="zerodha"):
@@ -31,7 +33,8 @@ def _setup_dual(data_key="fyers", exec_key="zerodha"):
     exec_broker = MockBrokerAPI()
     session_mod._brokers = {data_key: data_broker, exec_key: exec_broker}
     session_mod._primary_key = data_key
-    session_mod._broker_roles = {data_key: "data", exec_key: "execution"}
+    session_mod._data_key = data_key
+    session_mod._exec_key = exec_key
     return data_broker, exec_broker
 
 
@@ -57,7 +60,8 @@ class TestBrokerResolution:
         mock = MockBrokerAPI()
         session_mod._brokers = {"mock": mock}
         session_mod._primary_key = "mock"
-        session_mod._broker_roles = {}
+        session_mod._data_key = "mock"
+        session_mod._exec_key = "mock"
         assert get_data_broker() is mock
 
     def test_single_broker_execution_falls_back_to_primary(self):
@@ -66,7 +70,8 @@ class TestBrokerResolution:
         mock = MockBrokerAPI()
         session_mod._brokers = {"mock": mock}
         session_mod._primary_key = "mock"
-        session_mod._broker_roles = {}
+        session_mod._data_key = "mock"
+        session_mod._exec_key = "mock"
         assert get_execution_broker() is mock
 
     def test_no_broker_raises(self):
@@ -74,6 +79,8 @@ class TestBrokerResolution:
 
         session_mod._brokers = {}
         session_mod._primary_key = ""
+        session_mod._data_key = ""
+        session_mod._exec_key = ""
         with pytest.raises(RuntimeError):
             get_execution_broker()
 
@@ -162,76 +169,57 @@ class TestAlertUsesDataBroker:
         assert len(ltp_calls) == 1
 
 
-# ── Role auto-assignment on register ─────────────────────────
+# ── Role assignment on login / connect ────────────────────────
 
 
 class TestAutoRoleAssignment:
-    def test_fyers_gets_data_role_on_register(self):
-        from brokers.session import register_broker, get_data_broker
-
-        mock = MockBrokerAPI()
+    def _reset(self):
         session_mod._brokers = {}
         session_mod._primary_key = ""
-        session_mod._broker_roles = {}
-        register_broker("fyers", mock, primary=True)
-        # Single broker: role entry may be absent (implicit 'both'), but it must
-        # still resolve as the data broker.
-        assert get_data_broker() is mock
+        session_mod._data_key = ""
+        session_mod._exec_key = ""
 
-    def test_zerodha_gets_execution_role_on_register(self):
-        from brokers.session import register_broker
-
-        fyers = MockBrokerAPI()
-        zerodha = MockBrokerAPI()
-        session_mod._brokers = {}
-        session_mod._primary_key = ""
-        session_mod._broker_roles = {}
-        register_broker("fyers", fyers, primary=True)
-        register_broker("zerodha", zerodha, primary=False)
-        # Two brokers: zerodha must have an explicit "execution" role.
-        assert session_mod._broker_roles.get("zerodha") == "execution"
-
-    def test_both_role_assigned_when_only_one_broker(self):
-        from brokers.session import register_broker
-
-        mock = MockBrokerAPI()
-        session_mod._brokers = {}
-        session_mod._primary_key = ""
-        session_mod._broker_roles = {}
-        register_broker("mock", mock, primary=True)
-        # Single broker gets "both" role
-        assert session_mod._broker_roles.get("mock") in ("both", "data", "execution", None)
-
-    def test_login_assigns_fyers_data_role(self, monkeypatch):
-        """login() with fyers only: fyers serves as data broker (implicit both)."""
+    def test_login_sets_broker_as_both_data_and_exec(self, monkeypatch):
+        """Single login: broker handles both data and execution."""
         from brokers.session import get_data_broker, get_execution_broker
 
-        session_mod._brokers = {}
-        session_mod._primary_key = ""
-        session_mod._broker_roles = {}
-
+        self._reset()
         mock = MockBrokerAPI()
         monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("fyers", mock))
         monkeypatch.setattr(mock, "is_authenticated", lambda: True)
 
-        session_mod.login("5")  # fyers only — must handle both routes
+        session_mod.login("5")
         assert get_data_broker() is mock
         assert get_execution_broker() is mock
 
-    def test_connect_broker_assigns_zerodha_execution_role(self, monkeypatch):
-        """connect_broker() should auto-assign 'execution' role to zerodha."""
+    def test_connect_moves_exec_pointer_only(self, monkeypatch):
+        """connect() moves _exec_key; _data_key stays on the login broker."""
+        from brokers.session import get_data_broker, get_execution_broker
+
         fyers_mock = MockBrokerAPI()
         zerodha_mock = MockBrokerAPI()
+        self._reset()
         session_mod._brokers = {"fyers": fyers_mock}
         session_mod._primary_key = "fyers"
-        session_mod._broker_roles = {"fyers": "data"}
+        session_mod._data_key = "fyers"
+        session_mod._exec_key = "fyers"
 
         monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("zerodha", zerodha_mock))
         monkeypatch.setattr(zerodha_mock, "is_authenticated", lambda: True)
         monkeypatch.setattr(session_mod, "_print_welcome", lambda *a, **kw: None)
 
-        session_mod.connect_broker("1")  # zerodha
-        assert session_mod._broker_roles.get("zerodha") == "execution"
+        session_mod.connect_broker("1")
+        assert get_data_broker() is fyers_mock  # data unchanged
+        assert get_execution_broker() is zerodha_mock  # exec moved
+
+    def test_register_broker_fills_empty_slots(self):
+        from brokers.session import register_broker, get_data_broker, get_execution_broker
+
+        self._reset()
+        mock = MockBrokerAPI()
+        register_broker("fyers", mock, primary=True)
+        assert get_data_broker() is mock
+        assert get_execution_broker() is mock
 
     def test_dual_broker_routing_after_login_and_connect(self, monkeypatch):
         """After fyers login + zerodha connect, routing resolves correctly."""
@@ -239,16 +227,12 @@ class TestAutoRoleAssignment:
 
         fyers_mock = MockBrokerAPI()
         zerodha_mock = MockBrokerAPI()
-        session_mod._brokers = {}
-        session_mod._primary_key = ""
-        session_mod._broker_roles = {}
+        self._reset()
 
-        # Simulate fyers login
         monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("fyers", fyers_mock))
         monkeypatch.setattr(fyers_mock, "is_authenticated", lambda: True)
         session_mod.login("5")
 
-        # Simulate zerodha connect
         monkeypatch.setattr(session_mod, "_make_broker", lambda choice: ("zerodha", zerodha_mock))
         monkeypatch.setattr(zerodha_mock, "is_authenticated", lambda: True)
         monkeypatch.setattr(session_mod, "_print_welcome", lambda *a, **kw: None)
@@ -258,75 +242,59 @@ class TestAutoRoleAssignment:
         assert get_execution_broker() is zerodha_mock
 
 
-# ── Role exclusivity invariant ────────────────────────────────
+# ── Independent pointer switching ────────────────────────────
 
 
-class TestRoleExclusivity:
-    """With two brokers connected, each must have a distinct role — never 'both'."""
+class TestIndependentPointers:
+    """_data_key and _exec_key are independent — moving one never touches the other."""
 
     def _setup(self):
-        session_mod._brokers = {}
-        session_mod._primary_key = ""
-        session_mod._broker_roles = {}
-
-    def test_no_both_role_when_two_brokers_registered(self):
-        from brokers.session import register_broker
-
-        self._setup()
-        a, b = MockBrokerAPI(), MockBrokerAPI()
-        register_broker("fyers", a, primary=True)
-        register_broker("zerodha", b)
-
-        for key in ("fyers", "zerodha"):
-            assert session_mod._broker_roles.get(key) != "both", (
-                f"{key} must not have 'both' role when two brokers are connected"
-            )
-
-    def test_roles_are_complementary(self):
-        from brokers.session import register_broker
-
-        self._setup()
-        register_broker("fyers", MockBrokerAPI(), primary=True)
-        register_broker("zerodha", MockBrokerAPI())
-
-        roles = {k: session_mod._broker_roles.get(k) for k in ("fyers", "zerodha")}
-        assert set(roles.values()) == {"data", "execution"}, (
-            f"Expected one data + one execution, got: {roles}"
-        )
-
-    def test_set_data_broker_makes_other_execution(self):
-        from brokers.session import set_data_broker
-
-        self._setup()
         session_mod._brokers = {"fyers": MockBrokerAPI(), "zerodha": MockBrokerAPI()}
         session_mod._primary_key = "fyers"
-        session_mod._broker_roles = {"fyers": "data", "zerodha": "execution"}
+        session_mod._data_key = "fyers"
+        session_mod._exec_key = "zerodha"
 
-        set_data_broker("zerodha")
-
-        assert session_mod._broker_roles["zerodha"] == "data"
-        assert session_mod._broker_roles["fyers"] == "execution"
-
-    def test_set_exec_broker_makes_other_data(self):
+    def test_set_exec_broker_does_not_change_data(self):
         from brokers.session import set_exec_broker
 
         self._setup()
-        session_mod._brokers = {"fyers": MockBrokerAPI(), "zerodha": MockBrokerAPI()}
-        session_mod._primary_key = "fyers"
-        session_mod._broker_roles = {"fyers": "data", "zerodha": "execution"}
-
         set_exec_broker("fyers")
 
-        assert session_mod._broker_roles["fyers"] == "execution"
-        assert session_mod._broker_roles["zerodha"] == "data"
+        assert session_mod._exec_key == "fyers"
+        assert session_mod._data_key == "fyers"  # unchanged
 
-    def test_single_broker_may_have_implicit_both(self):
-        from brokers.session import register_broker, get_data_broker, get_execution_broker
+    def test_set_data_broker_does_not_change_exec(self):
+        from brokers.session import set_data_broker
 
         self._setup()
-        mock = MockBrokerAPI()
-        register_broker("zerodha", mock, primary=True)
+        set_data_broker("zerodha")
 
-        # Single broker — both routes must resolve to it
-        assert get_data_broker() is mock
-        assert get_execution_broker() is mock
+        assert session_mod._data_key == "zerodha"
+        assert session_mod._exec_key == "zerodha"  # unchanged
+
+    def test_same_broker_can_be_both(self):
+        from brokers.session import set_exec_broker, get_data_broker, get_execution_broker
+
+        self._setup()
+        fyers = session_mod._brokers["fyers"]
+        set_exec_broker("fyers")
+
+        assert get_data_broker() is fyers
+        assert get_execution_broker() is fyers
+        assert session_mod.get_broker_role("fyers") == "both"
+
+    def test_get_broker_role_data(self):
+        self._setup()
+        assert session_mod.get_broker_role("fyers") == "data"
+        assert session_mod.get_broker_role("zerodha") == "execution"
+
+    def test_get_broker_role_both(self):
+        self._setup()
+        session_mod._exec_key = "fyers"  # both point to fyers
+        assert session_mod.get_broker_role("fyers") == "both"
+
+    def test_get_broker_role_unrouted(self):
+        self._setup()
+        session_mod._brokers["groww"] = MockBrokerAPI()
+        # groww is connected but not pointed to by either key
+        assert session_mod.get_broker_role("groww") == ""

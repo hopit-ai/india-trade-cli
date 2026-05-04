@@ -56,14 +56,12 @@ _brokers: dict[str, BrokerAPI] = {}
 # The "primary" broker — used by get_broker() for single-broker commands
 _primary_key: str = ""
 
-# Role-based routing: key → "data" | "execution" | "both"
-_broker_roles: dict[str, str] = {}
-
-# Default role auto-assignment when registering known brokers
-_DEFAULT_ROLES: dict[str, str] = {
-    "fyers": "data",
-    "zerodha": "execution",
-}
+# Role routing — two independent pointers, can point to the same broker.
+# login()  sets both to the logged-in broker.
+# connect() moves _exec_key to the newly connected broker.
+# set_data_broker() / set_exec_broker() move each pointer independently.
+_data_key: str = ""  # which broker supplies market data / quotes
+_exec_key: str = ""  # which broker receives orders
 
 # Human-readable names for display
 _BROKER_NAMES = {
@@ -123,19 +121,22 @@ def register_broker(
         broker:  Authenticated BrokerAPI instance.
         primary: If True, set as the primary broker.
         role:    Optional role: "data", "execution", or "both".
-                 If not provided, auto-assigns from _DEFAULT_ROLES
-                 (fyers→data, zerodha→execution) or leaves unset.
+                 If omitted, the broker fills whichever slot(s) are empty.
     """
-    global _brokers, _primary_key
+    global _brokers, _primary_key, _data_key, _exec_key
     _brokers[key] = broker
     if primary or not _primary_key:
         _primary_key = key
-    # Auto-assign role
-    if role:
-        _broker_roles[key] = role
-    elif key in _DEFAULT_ROLES and key not in _broker_roles:
-        _broker_roles[key] = _DEFAULT_ROLES[key]
-    _rebalance_roles()
+    if role in ("data", "both"):
+        _data_key = key
+    if role in ("execution", "both"):
+        _exec_key = key
+    # If no explicit role, fill empty slots so the broker is reachable
+    if role is None:
+        if not _data_key:
+            _data_key = key
+        if not _exec_key:
+            _exec_key = key
 
 
 def unregister_broker(key: str) -> None:
@@ -146,11 +147,14 @@ def unregister_broker(key: str) -> None:
     If the disconnected broker was primary and others are connected, the first
     remaining broker becomes the new primary.
     """
-    global _brokers, _primary_key
+    global _brokers, _primary_key, _data_key, _exec_key
     _brokers.pop(key, None)
-    _broker_roles.pop(key, None)
     if _primary_key == key:
         _primary_key = next(iter(_brokers), "")
+    if _data_key == key:
+        _data_key = _primary_key
+    if _exec_key == key:
+        _exec_key = _primary_key
 
 
 def get_broker() -> BrokerAPI:
@@ -173,74 +177,34 @@ def is_multi_broker() -> bool:
 
 
 # ── Role-based routing ───────────────────────────────────────────
-
-_VALID_ROLES = {"data", "execution", "both"}
-
-
-def set_broker_role(key: str, role: str) -> None:
-    """Set broker role. role must be 'data', 'execution', or 'both'."""
-    if role not in _VALID_ROLES:
-        raise ValueError(f"Invalid role {role!r}. Must be one of {_VALID_ROLES}")
-    _broker_roles[key] = role
+# Two independent pointers — can point to the same broker ("both").
+# Moving one never affects the other.
 
 
 def get_broker_role(key: str) -> str:
-    """Get role for a broker. Returns 'both' if not explicitly set."""
-    return _broker_roles.get(key, "both")
-
-
-def _rebalance_roles() -> None:
-    """Enforce role exclusivity after any broker add or role change.
-
-    Rules:
-    - Single broker   → it is the data broker; execution falls back to it
-                        via get_execution_broker()'s primary fallback.
-    - Two+ brokers    → exactly 1 "data" and 1 "execution", never "both".
-                        If a conflict exists (two brokers with the same role),
-                        the non-primary broker is demoted to the complement.
-    """
-    if len(_brokers) <= 1:
-        return  # nothing to balance; single broker uses primary fallback for execution
-
-    # Resolve any remaining 'both' or unset brokers
-    data_holder = next((k for k in _brokers if _broker_roles.get(k) == "data"), None)
-    exec_holder = next((k for k in _brokers if _broker_roles.get(k) == "execution"), None)
-
-    for key in list(_brokers):
-        role = _broker_roles.get(key, "both")
-        if role == "both":
-            if data_holder is None:
-                _broker_roles[key] = "data"
-                data_holder = key
-            else:
-                _broker_roles[key] = "execution"
-                exec_holder = key
-
-    # If two brokers share the same role, demote the non-primary one
-    for target_role, complement in (("data", "execution"), ("execution", "data")):
-        holders = [k for k in _brokers if _broker_roles.get(k) == target_role]
-        if len(holders) > 1:
-            keep = _primary_key if _primary_key in holders else holders[0]
-            for k in holders:
-                if k != keep:
-                    _broker_roles[k] = complement
+    """Return the display role for a broker: 'data', 'execution', 'both', or ''."""
+    is_data = key == _data_key
+    is_exec = key == _exec_key
+    if is_data and is_exec:
+        return "both"
+    if is_data:
+        return "data"
+    if is_exec:
+        return "execution"
+    return ""  # connected but not currently routed
 
 
 def get_data_broker() -> BrokerAPI:
-    """Return broker with role='data' or 'both'. Falls back to primary."""
-    for key, role in _broker_roles.items():
-        if role in ("data", "both") and key in _brokers:
-            return _brokers[key]
-    # Fallback to primary
+    """Return the current data broker. Falls back to primary if unset."""
+    if _data_key and _data_key in _brokers:
+        return _brokers[_data_key]
     return get_broker()
 
 
 def get_execution_broker() -> BrokerAPI:
-    """Return broker with role='execution' or 'both'. Falls back to primary."""
-    for key, role in _broker_roles.items():
-        if role in ("execution", "both") and key in _brokers:
-            return _brokers[key]
-    # Fallback to primary
+    """Return the current execution broker. Falls back to primary if unset."""
+    if _exec_key and _exec_key in _brokers:
+        return _brokers[_exec_key]
     return get_broker()
 
 
@@ -252,8 +216,9 @@ def list_connected_brokers() -> None:
 
     _ROLE_STYLES = {
         "data": "[bold blue]DATA[/bold blue]",
-        "execution": "[bold amber]EXEC[/bold amber]",
+        "execution": "[bold yellow]EXEC[/bold yellow]",
         "both": "[bold green]BOTH[/bold green]",
+        "": "[dim]—[/dim]",
     }
 
     t = Table(title="Connected Brokers", show_header=True, header_style="bold cyan")
@@ -285,23 +250,19 @@ def list_connected_brokers() -> None:
     console.print()
     console.print(t)
 
-    # Show routing summary
-    data_key = next((k for k in _brokers if get_broker_role(k) in ("data", "both")), None)
-    exec_key = next((k for k in _brokers if get_broker_role(k) in ("execution", "both")), None)
-    # Single-broker case: execution falls back to the data broker (primary)
-    exec_display = exec_key or _primary_key or "none"
-    if data_key or exec_key:
-        console.print(
-            f"  [dim]Data:[/dim] [bold]{(data_key or 'none').title()}[/bold]"
-            f"  [dim]Execution:[/dim] [bold]{exec_display.title()}[/bold]"
-            + (" [dim](fallback)[/dim]" if exec_key is None and exec_display != "none" else "")
-        )
+    # Footer: show the two independent routing pointers
+    data_label = _data_key.title() if _data_key else "none"
+    exec_label = _exec_key.title() if _exec_key else "none"
+    console.print(
+        f"  [dim]Data:[/dim] [bold]{data_label}[/bold]"
+        f"  [dim]Execution:[/dim] [bold]{exec_label}[/bold]"
+    )
     console.print()
 
 
 def set_data_broker(key: str) -> None:
-    """Set a broker as the data source. Only one data broker allowed.
-    Auto-login if not connected."""
+    """Move the data pointer to this broker. Execution pointer is unchanged."""
+    global _data_key
     key = _BROKER_NAMES.get(key.lower(), key.lower())
     if key not in _brokers:
         console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
@@ -309,21 +270,13 @@ def set_data_broker(key: str) -> None:
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
-    # Track what changes so we can inform the user
-    displaced = [k for k in _broker_roles if k != key and _broker_roles.get(k) in ("data", "both")]
-    # Demote any other broker that currently holds the data role to execution
-    for k in displaced:
-        _broker_roles[k] = "execution"
-    set_broker_role(key, "data")
-    _rebalance_roles()
-    console.print(f"[green]✓ Data broker set to {key.title()}[/green]")
-    for k in displaced:
-        console.print(f"  [dim]{k.title()} is now the execution broker[/dim]")
+    _data_key = key
+    console.print(f"[green]✓ Data broker → {key.title()}[/green]")
 
 
 def set_exec_broker(key: str) -> None:
-    """Set a broker as the execution target. Only one execution broker allowed.
-    Auto-login if not connected."""
+    """Move the execution pointer to this broker. Data pointer is unchanged."""
+    global _exec_key
     key = _BROKER_NAMES.get(key.lower(), key.lower())
     if key not in _brokers:
         console.print(f"[dim]{key.title()} not connected — starting login…[/dim]")
@@ -331,16 +284,8 @@ def set_exec_broker(key: str) -> None:
     if key not in _brokers:
         console.print(f"[red]Could not connect {key.title()}.[/red]")
         return
-    # Track what changes so we can inform the user
-    displaced = [k for k in _broker_roles if k != key and _broker_roles.get(k) in ("execution", "both")]
-    # Demote any other broker that currently holds the execution role to data
-    for k in displaced:
-        _broker_roles[k] = "data"
-    set_broker_role(key, "execution")
-    _rebalance_roles()
-    console.print(f"[green]✓ Execution broker set to {key.title()}[/green]")
-    for k in displaced:
-        console.print(f"  [dim]{k.title()} is now the data broker[/dim]")
+    _exec_key = key
+    console.print(f"[green]✓ Execution broker → {key.title()}[/green]")
 
 
 # ── Internal helpers ──────────────────────────────────────────
@@ -732,7 +677,7 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
     Returns:
         Authenticated BrokerAPI instance.
     """
-    global _brokers, _primary_key
+    global _brokers, _primary_key, _data_key, _exec_key
 
     if choice is None:
         console.print("\n[bold]Choose your primary broker:[/bold]")
@@ -748,7 +693,8 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
     if key == "mock":
         _brokers[key] = broker
         _primary_key = key
-        _broker_roles[key] = "data"  # login is always the data broker
+        _data_key = key  # login = data broker
+        _exec_key = key  # also handles execution until connect() is called
         _print_welcome(broker, role="primary")
         return broker
 
@@ -762,9 +708,8 @@ def login(choice: Optional[str] = None) -> BrokerAPI:
 
     _brokers[key] = broker
     _primary_key = key
-    # login() is always the data broker — role is not broker-name dependent
-    _broker_roles[key] = "data"
-    _rebalance_roles()
+    _data_key = key  # login = data broker
+    _exec_key = key  # also handles execution until connect() is called
 
     # Skip _print_welcome on resume (it makes slow API calls)
     # Just show broker name
@@ -800,7 +745,7 @@ def connect_broker(choice: Optional[str] = None) -> BrokerAPI:
     Returns:
         The newly connected BrokerAPI instance.
     """
-    global _brokers
+    global _brokers, _exec_key
 
     if not _brokers:
         console.print("[yellow]No primary broker yet. Use 'login' first.[/yellow]")
@@ -832,9 +777,7 @@ def connect_broker(choice: Optional[str] = None) -> BrokerAPI:
             _do_auth(key, broker)
 
     _brokers[key] = broker
-    # connect() is always the execution broker
-    _broker_roles[key] = "execution"
-    _rebalance_roles()
+    _exec_key = key  # connect = execution broker; data pointer unchanged
     _print_welcome(broker, role="connected")
 
     console.print(
