@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 import re
 
-from brokers.session import get_broker
+from brokers.session import get_execution_broker
 from brokers.base import Holding, Position, Funds
 
 
@@ -99,7 +99,7 @@ def get_portfolio_summary() -> PortfolioSummary:
     Full live portfolio snapshot from the primary broker.
     Fetches holdings, positions, funds, computes Greeks for options positions.
     """
-    broker = get_broker()
+    broker = get_execution_broker()
     funds = broker.get_funds()
     holdings = broker.get_holdings()
     positions = broker.get_positions()
@@ -220,7 +220,7 @@ def get_multi_broker_summary() -> PortfolioSummary:
 
 def get_position_greeks() -> PortfolioGreeks:
     """Compute net Greeks across all F&O positions (primary broker)."""
-    broker = get_broker()
+    broker = get_execution_broker()
     positions = broker.get_positions()
     rows = _build_position_rows(positions)
     return _compute_net_greeks(rows)
@@ -228,7 +228,7 @@ def get_position_greeks() -> PortfolioGreeks:
 
 def risk_meter() -> RiskMeter:
     """Capital deployment and risk assessment (primary broker)."""
-    broker = get_broker()
+    broker = get_execution_broker()
     funds = broker.get_funds()
     holdings = broker.get_holdings()
     positions = broker.get_positions()
@@ -425,7 +425,14 @@ def _compute_risk(
     deployed_cash = sum(r.value for r in holding_rows)
     used_margin = funds.used_margin
     free_cash = funds.available_cash
-    total_capital = funds.total_balance
+
+    # total_capital = everything you own: equity holdings + cash + margin in use.
+    # funds.total_balance is often just the *cash* segment from the broker API and
+    # does NOT include the market value of CNC holdings, so we take the larger of
+    # the two to avoid a >100 % deployment percentage.
+    broker_reported = funds.total_balance
+    true_total = deployed_cash + free_cash + used_margin
+    total_capital = max(broker_reported, true_total)
 
     deployment_pct = (
         (deployed_cash + used_margin) / total_capital * 100 if total_capital > 0 else 0.0

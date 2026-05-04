@@ -23,7 +23,8 @@ def _reset_session():
 
     sess._brokers.clear()
     sess._primary_key = ""
-    sess._broker_roles.clear()
+    sess._data_key = ""
+    sess._exec_key = ""
 
 
 @pytest.fixture(autouse=True)
@@ -58,22 +59,26 @@ def test_set_and_get_broker_role():
     assert get_broker_role("fyers") == "both"
 
 
-def test_get_broker_role_default():
+def test_get_broker_role_single_broker_is_both():
     from brokers.session import register_broker, get_broker_role
 
     b = _make_mock()
     register_broker("mock", b)
-    # Non-default broker with no explicit role — should return "both"
+    # Single broker fills both slots — role is "both"
     assert get_broker_role("mock") == "both"
 
 
-def test_get_broker_role_fyers_auto_assigns_data():
+def test_get_broker_role_unrouted_broker_is_empty():
     from brokers.session import register_broker, get_broker_role
 
-    b = _make_mock()
-    register_broker("fyers", b)
-    # fyers auto-assigns to "data"
-    assert get_broker_role("fyers") == "data"
+    fyers = _make_mock()
+    groww = _make_mock()
+    register_broker("fyers", fyers, primary=True)
+    # Manually add groww without touching pointers
+    import brokers.session as sess
+
+    sess._brokers["groww"] = groww
+    assert get_broker_role("groww") == ""
 
 
 def test_get_data_broker_returns_data_role():
@@ -109,7 +114,7 @@ def test_get_data_broker_falls_back_to_primary():
 
     b = _make_mock()
     register_broker("mock", b, primary=True)
-    # No roles set at all — should fall back to primary
+    # Single broker fills both slots — get_data_broker resolves to it
     assert get_data_broker() is b
 
 
@@ -121,15 +126,18 @@ def test_get_execution_broker_falls_back_to_primary():
     assert get_execution_broker() is b
 
 
-def test_auto_assign_roles_fyers_data_zerodha_execution():
-    from brokers.session import register_broker, get_broker_role
+def test_explicit_role_assignment_fyers_data_zerodha_execution():
+    from brokers.session import register_broker, set_broker_role, get_broker_role
 
     fyers_mock = _make_mock()
     zerodha_mock = _make_mock()
 
-    # register_broker should auto-assign roles based on broker key
-    register_broker("fyers", fyers_mock)
+    register_broker("fyers", fyers_mock, primary=True)
     register_broker("zerodha", zerodha_mock)
+
+    # Explicitly assign roles
+    set_broker_role("fyers", "data")
+    set_broker_role("zerodha", "execution")
 
     assert get_broker_role("fyers") == "data"
     assert get_broker_role("zerodha") == "execution"
@@ -151,17 +159,21 @@ def test_both_role_matches_data_and_execution():
     assert get_execution_broker() is b
 
 
-def test_unregister_clears_role():
-    from brokers.session import register_broker, set_broker_role, get_broker_role, unregister_broker
+def test_unregister_removes_broker_from_routing():
+    from brokers.session import register_broker, set_broker_role, unregister_broker
 
-    b = _make_mock()
-    register_broker("fyers", b)
+    fyers = _make_mock()
+    zerodha = _make_mock()
+    register_broker("fyers", fyers, primary=True)
+    register_broker("zerodha", zerodha)
     set_broker_role("fyers", "data")
-    assert get_broker_role("fyers") == "data"
+    set_broker_role("zerodha", "execution")
 
-    unregister_broker("fyers")
-    # After unregister, role should be gone (default "both")
-    assert get_broker_role("fyers") == "both"
+    unregister_broker("zerodha")
+    # After unregister, pointer falls back to primary
+    import brokers.session as sess
+
+    assert sess._exec_key == sess._primary_key
 
 
 def test_invalid_role_raises():
