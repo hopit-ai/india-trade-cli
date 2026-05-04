@@ -194,6 +194,29 @@ def get_broker_role(key: str) -> str:
     return ""  # connected but not currently routed
 
 
+def set_broker_role(key: str, role: str) -> None:
+    """Set a broker's role by moving the data/exec pointers.
+
+    role must be 'data', 'execution', or 'both'.
+    'data'      — _data_key = key; _exec_key cleared if it was pointing here
+    'execution' — _exec_key = key; _data_key cleared if it was pointing here
+    'both'      — both pointers set to key
+    """
+    global _data_key, _exec_key
+    if role not in ("data", "execution", "both"):
+        raise ValueError(f"Invalid role {role!r}. Must be 'data', 'execution', or 'both'.")
+    if role in ("data", "both"):
+        _data_key = key
+    elif _data_key == key:
+        # Explicitly NOT a data broker — clear if it was pointing here
+        _data_key = ""
+    if role in ("execution", "both"):
+        _exec_key = key
+    elif _exec_key == key:
+        # Explicitly NOT an exec broker — clear if it was pointing here
+        _exec_key = ""
+
+
 def get_data_broker() -> BrokerAPI:
     """Return the current data broker. Falls back to primary if unset."""
     if _data_key and _data_key in _brokers:
