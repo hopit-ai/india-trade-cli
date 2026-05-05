@@ -21,20 +21,22 @@ RUN useradd -m -u 1000 trader
 
 WORKDIR /app
 
-# Install Python dependencies first (layer cache)
-COPY pyproject.toml setup.py* requirements*.txt* ./
-RUN pip install --no-cache-dir -e . 2>/dev/null || pip install --no-cache-dir uvicorn fastapi pydantic || true
-RUN pip install --no-cache-dir passlib[bcrypt] uvicorn[standard] 2>/dev/null || true
-
 # Copy application source
 COPY --chown=trader:trader . .
 
-# Copy React web build from stage 1
-COPY --from=web-builder --chown=trader:trader /build/dist ./macos-app/dist
+# Install Python package after source is present, then add web runtime extras.
+RUN pip install --no-cache-dir -e . \
+    && pip install --no-cache-dir passlib[bcrypt] uvicorn[standard]
+
+# Copy React web assets from the builder. build-web.js writes outside the
+# Electron package so the FastAPI app can serve the generated frontend.
+COPY --from=web-builder --chown=trader:trader /web/static ./web/static
 
 # Data directory for SQLite + exports
 RUN mkdir -p /data && chown trader:trader /data
-ENV TRADING_PLATFORM_DATA=/data
+ENV TRADING_PLATFORM_HOME=/data \
+    TRADING_PLATFORM_DATA=/data \
+    TRADING_PLATFORM_PDF_DIR=/data/exports
 
 # Run as non-root
 USER trader
