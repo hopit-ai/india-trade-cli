@@ -129,16 +129,30 @@ class TestNseScraper:
                     {
                         "strikePrice": 22000,
                         "expiryDate": "29-May-2026",
-                        "CE": {"lastPrice": 100.0, "openInterest": 1000,
-                               "totalTradedVolume": 500, "impliedVolatility": 14.0,
-                               "delta": 0.5, "gamma": 0.01, "theta": -4.0, "vega": 9.0},
+                        "CE": {
+                            "lastPrice": 100.0,
+                            "openInterest": 1000,
+                            "totalTradedVolume": 500,
+                            "impliedVolatility": 14.0,
+                            "delta": 0.5,
+                            "gamma": 0.01,
+                            "theta": -4.0,
+                            "vega": 9.0,
+                        },
                     },
                     {
                         "strikePrice": 22000,
                         "expiryDate": "26-Jun-2026",
-                        "CE": {"lastPrice": 150.0, "openInterest": 2000,
-                               "totalTradedVolume": 800, "impliedVolatility": 15.0,
-                               "delta": 0.55, "gamma": 0.01, "theta": -3.5, "vega": 10.0},
+                        "CE": {
+                            "lastPrice": 150.0,
+                            "openInterest": 2000,
+                            "totalTradedVolume": 800,
+                            "impliedVolatility": 15.0,
+                            "delta": 0.55,
+                            "gamma": 0.01,
+                            "theta": -3.5,
+                            "vega": 10.0,
+                        },
                     },
                 ],
             }
@@ -301,10 +315,19 @@ class TestOhlcvCache:
             raise RuntimeError("no broker")
 
         monkeypatch.setattr("brokers.session.get_broker", _raise_broker)
-        monkeypatch.setattr("market.history._yfinance_fallback", lambda *a, **kw: [
-            {"date": datetime(2026, 1, 1), "open": 100.0, "high": 110.0,
-             "low": 95.0, "close": 105.0, "volume": 1000}
-        ])
+        monkeypatch.setattr(
+            "market.history._yfinance_fallback",
+            lambda *a, **kw: [
+                {
+                    "date": datetime(2026, 1, 1),
+                    "open": 100.0,
+                    "high": 110.0,
+                    "low": 95.0,
+                    "close": 105.0,
+                    "volume": 1000,
+                }
+            ],
+        )
         monkeypatch.setattr("market.history.save_ohlcv_cache", lambda *a, **kw: None)
 
         result = hist_mod.get_ohlcv("INFY", interval="day", days=30)
@@ -319,10 +342,19 @@ class TestOhlcvCache:
             raise RuntimeError("no broker")
 
         monkeypatch.setattr("brokers.session.get_broker", _raise_broker)
-        monkeypatch.setattr("market.history._yfinance_fallback", lambda *a, **kw: [
-            {"date": datetime(2026, 1, 1), "open": 100.0, "high": 110.0,
-             "low": 95.0, "close": 105.0, "volume": 1000}
-        ])
+        monkeypatch.setattr(
+            "market.history._yfinance_fallback",
+            lambda *a, **kw: [
+                {
+                    "date": datetime(2026, 1, 1),
+                    "open": 100.0,
+                    "high": 110.0,
+                    "low": 95.0,
+                    "close": 105.0,
+                    "volume": 1000,
+                }
+            ],
+        )
 
         saved = {}
 
@@ -345,8 +377,14 @@ class TestOhlcvCache:
         monkeypatch.setattr("market.history._yfinance_fallback", lambda *a, **kw: [])
 
         cached_rows = [
-            {"date": "2026-01-01T00:00:00", "open": 100.0, "high": 110.0,
-             "low": 95.0, "close": 105.0, "volume": 1000}
+            {
+                "date": "2026-01-01T00:00:00",
+                "open": 100.0,
+                "high": 110.0,
+                "low": 95.0,
+                "close": 105.0,
+                "volume": 1000,
+            }
         ]
 
         monkeypatch.setattr(

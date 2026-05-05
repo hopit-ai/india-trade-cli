@@ -42,8 +42,13 @@ _NSE_HEADERS = {
 }
 
 _INDEX_UNDERLYINGS = {
-    "NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY",
-    "NIFTYNXT50", "SENSEX", "BANKEX",
+    "NIFTY",
+    "BANKNIFTY",
+    "FINNIFTY",
+    "MIDCPNIFTY",
+    "NIFTYNXT50",
+    "SENSEX",
+    "BANKEX",
 }
 
 # Session is reused across calls (cookies persist)
@@ -165,9 +170,7 @@ def _parse_chain(raw: dict, underlying: str, expiry_filter: Optional[str]) -> li
     return sorted(contracts, key=lambda c: (c.strike, c.option_type))
 
 
-def nse_get_options_chain(
-    underlying: str, expiry: Optional[str] = None
-) -> list[OptionsContract]:
+def nse_get_options_chain(underlying: str, expiry: Optional[str] = None) -> list[OptionsContract]:
     """
     Fetch options chain from NSE public API.
 

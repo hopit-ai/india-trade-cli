@@ -49,9 +49,7 @@ def save_cache(key: str, data: list, cache_dir: Optional[Path] = None) -> None:
         pass  # Cache write failure is never fatal
 
 
-def load_cache(
-    key: str, cache_dir: Optional[Path] = None
-) -> tuple[list, Optional[datetime]]:
+def load_cache(key: str, cache_dir: Optional[Path] = None) -> tuple[list, Optional[datetime]]:
     """
     Load data from disk cache.
 
