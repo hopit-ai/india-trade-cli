@@ -84,7 +84,7 @@ function createTray() {
   icon.setTemplateImage(true)
 
   tray = new Tray(icon)
-  tray.setToolTip('India Trade')
+  tray.setToolTip('Vibe Trading')
   tray.setTitle('◆')
 
   tray.on('click', () => {
@@ -173,7 +173,7 @@ ipcMain.handle('reset-venv', async () => {
 // ---------------------------------------------------------------------------
 app.whenReady().then(() => {
   if (!app.isPackaged) {
-    app.setName('India Trade')
+    app.setName('Vibe Trading')
   }
 
   createTray()

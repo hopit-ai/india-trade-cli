@@ -56,12 +56,14 @@ from web.auth import auth_router, init_db as init_auth_db, get_session, user_cou
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
-load_dotenv(Path.home() / ".trading_platform" / ".env", override=False)
 from config.credentials import load_all as _load_keychain
+from config.paths import app_data_path
+
+load_dotenv(app_data_path(".env"), override=False)
 
 _load_keychain()
 
-app = FastAPI(title="india-trade-cli", docs_url=None, redoc_url=None)
+app = FastAPI(title="Vibe Trading", docs_url=None, redoc_url=None)
 
 # ── CORS — allow Electron renderer (Vite dev + packaged file://) ──────────
 from fastapi.middleware.cors import CORSMiddleware
@@ -349,7 +351,7 @@ def _page(title: str, body: str) -> str:
 </head>
 <body>
 <div class="container">
-  <div class="logo"><h1>TRADE</h1><p>Indian Stock &amp; Options Platform</p></div>
+  <div class="logo"><h1>Vibe Trading</h1><p>Indian stock &amp; options platform</p></div>
   {body}
   <div class="footer">
     Credentials stored in OS keychain &nbsp;·&nbsp;
@@ -1378,15 +1380,14 @@ class OnboardingCompleteRequest(BaseModel):
 async def onboarding_complete(req: OnboardingCompleteRequest):
     import os
     from config.credentials import set_credential
-    from pathlib import Path
 
     set_credential("TOTAL_CAPITAL", str(req.capital))
     set_credential("DEFAULT_RISK_PCT", str(req.risk_pct))
     set_credential("TRADING_MODE", req.trading_mode)
     set_credential("ONBOARDING_COMPLETE", "1")
 
-    # Also write to ~/.trading_platform/.env as backup for packaged mode
-    env_path = Path.home() / ".trading_platform" / ".env"
+    # Also write to app data .env as backup for packaged/container mode.
+    env_path = app_data_path(".env")
     env_path.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     if env_path.exists():
@@ -1455,11 +1456,11 @@ async def set_broker_role_endpoint(req: BrokerRoleRequest, request: Request):
 
 
 _BROKER_SESSION_FILES = {
-    "zerodha": Path.home() / ".trading_platform" / "zerodha.json",
-    "groww": Path.home() / ".trading_platform" / "groww.json",
-    "angel_one": Path.home() / ".trading_platform" / "angelone.json",
-    "upstox": Path.home() / ".trading_platform" / "upstox.json",
-    "fyers": Path.home() / ".trading_platform" / "fyers.json",
+    "zerodha": app_data_path("zerodha.json"),
+    "groww": app_data_path("groww.json"),
+    "angel_one": app_data_path("angelone.json"),
+    "upstox": app_data_path("upstox.json"),
+    "fyers": app_data_path("fyers.json"),
 }
 
 
