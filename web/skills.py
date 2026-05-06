@@ -1436,7 +1436,7 @@ async def analyze_followup(req: AnalyzeFollowupRequest):
 
 class ExportPdfRequest(BaseModel):
     content: str
-    title: str = "India Trade CLI Report"
+    title: str = "Vibe Trading Report"
 
 
 @router.post("/export-pdf")

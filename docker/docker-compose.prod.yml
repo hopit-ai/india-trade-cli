@@ -6,17 +6,15 @@
 #   2. Ensure port 80 and 443 are open
 #   3. DNS A record pointing to this server
 
-version: '3.9'
-
 services:
   app:
-    ports: []  # Remove direct 8765 exposure — traffic goes through Caddy
+    # Base compose binds the app to host localhost only; Caddy is the public edge.
     environment:
       - DEPLOY_MODE=cloud
 
   caddy:
     image: caddy:2-alpine
-    container_name: india-trade-caddy
+    container_name: vibe-trading-caddy
     ports:
       - "80:80"
       - "443:443"

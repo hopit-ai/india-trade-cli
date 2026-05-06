@@ -81,7 +81,7 @@ jobs:
       - name: Upload DMG as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: india-trade-dmg-${{ steps.version.outputs.version }}
+          name: vibe-trading-dmg-${{ steps.version.outputs.version }}
           path: macos-app/release/*.dmg
           if-no-files-found: warn
           retention-days: 30
@@ -90,9 +90,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          name: India Trade CLI ${{ steps.version.outputs.version }}
+          name: Vibe Trading ${{ steps.version.outputs.version }}
           body: |
-            ## India Trade CLI v${{ steps.version.outputs.version }}
+            ## Vibe Trading v${{ steps.version.outputs.version }}
 
             ### Installation
             1. Download the `.dmg` below

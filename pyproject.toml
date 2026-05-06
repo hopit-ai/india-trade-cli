@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "india-trade-cli"
 version = "0.1.0"
-description = "AI-powered multi-agent stock & options analysis platform for Indian markets"
+description = "Vibe Trading: AI-powered multi-agent stock & options analysis platform for Indian markets"
 requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}
@@ -68,6 +68,12 @@ dependencies = [
 
 [project.optional-dependencies]
 vollib = ["py_vollib>=1.0.1"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+    "pyyaml>=6.0",
+    "ruff>=0.8.0",
+]
 
 # ── Optional broker SDKs (install separately if needed) ─────────────
 # Angel One SmartAPI:  pip install smartapi-python logzero
