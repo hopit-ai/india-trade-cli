@@ -1,0 +1,7 @@
+{$DOMAIN} {
+    reverse_proxy app:8765
+}
+
+:80 {
+    reverse_proxy app:8765
+}

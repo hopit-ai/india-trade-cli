@@ -95,7 +95,7 @@ export default function OnboardingWizard({ port, onComplete }) {
         <div className="flex-1 flex items-center justify-center gap-2 pointer-events-none">
           <span className="text-amber text-[15px]">&#9670;</span>
           <span className="text-text text-[13px] font-semibold tracking-wide font-ui">
-            India Trade
+            Vibe Trading
           </span>
         </div>
         <div className="w-[76px] flex-shrink-0" />
