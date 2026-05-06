@@ -10,7 +10,7 @@ export default function SetupScreen({ phase, data }) {
       {/* Logo */}
       <div className="mb-8">
         <span className="text-4xl">◆</span>
-        <h1 className="text-text text-xl font-semibold mt-2">India Trade</h1>
+        <h1 className="text-text text-xl font-semibold mt-2">Vibe Trading</h1>
       </div>
 
       {/* Progress state */}
@@ -82,7 +82,7 @@ function PythonMissingView({ data }) {
       <div>
         <p className="text-amber text-lg font-semibold">Python 3.11+ Required</p>
         <p className="text-muted text-sm font-ui mt-2">
-          India Trade needs Python to run its analysis engine. Install it using one of the options below, then click Retry.
+          Vibe Trading needs Python to run its analysis engine. Install it using one of the options below, then click Retry.
         </p>
       </div>
 

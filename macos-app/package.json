@@ -1,8 +1,8 @@
 {
   "name": "india-trade",
-  "productName": "India Trade",
+  "productName": "Vibe Trading",
   "version": "0.2.0",
-  "description": "India Trade — macOS desktop app",
+  "description": "Vibe Trading — macOS desktop app",
   "author": "Hopit AI",
   "main": "out/main/index.js",
   "scripts": {
@@ -36,7 +36,7 @@
   },
   "build": {
     "appId": "ai.hopit.india-trade",
-    "productName": "India Trade",
+    "productName": "Vibe Trading",
     "files": [
       "out/**/*",
       "build/icon.icns"

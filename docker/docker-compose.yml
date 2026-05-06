@@ -1,19 +1,19 @@
-version: '3.9'
-
 services:
   app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: india-trade-cli:latest
-    container_name: india-trade-app
+    image: vibe-trading:latest
+    container_name: vibe-trading-app
     ports:
-      - "8765:8765"
+      - "127.0.0.1:8765:8765"
     volumes:
-      - india-trade-data:/data
-      - india-trade-exports:/root/Desktop
+      - vibe-trading-data:/data
     environment:
       - DEPLOY_MODE=self-hosted
+      - TRADING_PLATFORM_HOME=/data
+      - TRADING_PLATFORM_DATA=/data
+      - TRADING_PLATFORM_PDF_DIR=/data/exports
       - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
       - AI_PROVIDER=${AI_PROVIDER:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
@@ -47,7 +47,5 @@ services:
         max-file: "3"
 
 volumes:
-  india-trade-data:
-    driver: local
-  india-trade-exports:
+  vibe-trading-data:
     driver: local

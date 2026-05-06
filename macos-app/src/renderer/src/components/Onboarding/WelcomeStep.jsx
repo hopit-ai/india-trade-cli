@@ -3,7 +3,7 @@ export default function WelcomeStep({ onNext }) {
     <div className="flex flex-col items-center justify-center flex-1 gap-6 animate-fade-slide">
       <span className="text-amber text-6xl leading-none">&#9670;</span>
       <h1 className="text-text text-2xl font-semibold font-ui tracking-wide">
-        Welcome to India Trade
+        Welcome to Vibe Trading
       </h1>
       <p className="text-muted text-sm font-ui max-w-md text-center leading-relaxed">
         AI-powered trading terminal for Indian markets.

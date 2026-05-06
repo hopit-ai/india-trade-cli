@@ -50,6 +50,7 @@ from pathlib import Path
 from rich.console import Console
 
 from agent.core import get_provider
+from config.paths import app_data_path
 from engine.trade_executor import execute_trade_plan
 
 console = Console()
@@ -68,7 +69,7 @@ def harness_mode() -> str:
 
 # ── Hierarchical TRADER.md paths ──────────────────────────────
 
-TRADER_MD_GLOBAL = Path.home() / ".trading_platform" / "TRADER.md"
+TRADER_MD_GLOBAL = app_data_path("TRADER.md")
 TRADER_MD_PROJECT = Path.cwd() / "TRADER.md"
 TRADER_MD_LOCAL = Path.cwd() / "TRADER.local.md"
 
@@ -342,7 +343,7 @@ def _register_execute_tool(registry, broker) -> None:
 
 # ── Session history (JSONL persistence) ──────────────────────
 
-HISTORY_FILE = Path.home() / ".trading_platform" / "harness_history.jsonl"
+HISTORY_FILE = app_data_path("harness_history.jsonl")
 HISTORY_MAX_MESSAGES = 20  # default: keep last 10 user/assistant pairs
 
 
