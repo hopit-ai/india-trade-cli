@@ -18,16 +18,23 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 import hashlib
+from config.paths import app_data_path
 
 # ── Database ─────────────────────────────────────────────────────
 
-DB_PATH = Path(os.environ.get("AUTH_DB_PATH", Path.home() / ".trading_platform" / "users.db"))
+DB_PATH = Path(os.environ.get("AUTH_DB_PATH", app_data_path("users.db")))
+
+
+def _db_path() -> Path:
+    """Return the active auth DB path, allowing tests/containers to override it."""
+    return Path(os.environ.get("AUTH_DB_PATH", DB_PATH))
 
 
 def init_db() -> None:
     """Create the users table if it doesn't exist."""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+    db_path = _db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
@@ -43,14 +50,14 @@ def init_db() -> None:
 
 
 def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(_db_path()))
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def user_count() -> int:
     """Return the total number of registered users."""
-    if not DB_PATH.exists():
+    if not _db_path().exists():
         return 0
     conn = _get_conn()
     try:

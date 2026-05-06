@@ -53,7 +53,7 @@ BANNER = """
     ██║   ██║  ██║██║  ██║██████╔╝███████╗
     ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝
 [/bold cyan]
-[dim]  Indian Stock & Options Platform  |  Powered by Claude[/dim]
+[dim]  Vibe Trading  |  Indian stock & options platform[/dim]
 """
 
 

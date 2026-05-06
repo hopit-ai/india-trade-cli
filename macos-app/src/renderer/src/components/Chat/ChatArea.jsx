@@ -20,7 +20,7 @@ export default function ChatArea() {
       {messages.length === 0 && (
         <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
           <span className="text-amber text-4xl">◆</span>
-          <p className="text-text text-lg font-semibold font-ui">India Trade</p>
+          <p className="text-text text-lg font-semibold font-ui">Vibe Trading</p>
           {sidecarError ? (
             <p className="text-red text-sm max-w-sm font-ui">{sidecarError}</p>
           ) : port ? (

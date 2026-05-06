@@ -6,9 +6,17 @@ All fixtures produce deterministic, synthetic data — no network calls.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
+
+_TEST_DATA_DIR = Path(__file__).parent.parent / ".pytest_trading_platform"
+os.environ.setdefault("TRADING_PLATFORM_HOME", str(_TEST_DATA_DIR))
+os.environ.setdefault("TRADING_PLATFORM_DATA", str(_TEST_DATA_DIR))
+os.environ.setdefault("TRADING_PLATFORM_PDF_DIR", str(_TEST_DATA_DIR / "pdf"))
 
 
 @pytest.fixture

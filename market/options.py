@@ -2,6 +2,10 @@
 market/options.py
 ─────────────────
 Options chain and expiry utilities — broker-agnostic.
+
+Fallback chain:
+  1. Data broker (Fyers/Zerodha) — live, full Greeks
+  2. NSE public API scraper    — free, ~15 min delayed, no key required
 """
 
 from __future__ import annotations
@@ -12,6 +16,8 @@ import pandas as pd
 
 from brokers.base import OptionsContract
 from brokers.session import get_data_broker
+from market.nse_scraper import nse_get_options_chain
+from market.source_tracker import record_source, warn_fallback
 
 
 def get_options_chain(
@@ -21,6 +27,11 @@ def get_options_chain(
     """
     Full options chain for an underlying index or stock.
 
+    Fallback chain:
+      1. Data broker (live, full Greeks)
+      2. NSE public API scraper (delayed, basic Greeks)
+      3. Empty list (silent — never raises)
+
     Args:
         underlying: e.g. "NIFTY", "BANKNIFTY", "RELIANCE"
         expiry:     "YYYY-MM-DD" — nearest expiry if None
@@ -28,7 +39,18 @@ def get_options_chain(
     Returns:
         List of OptionsContract sorted by strike then type (CE/PE).
     """
-    return get_data_broker().get_options_chain(underlying, expiry)
+    # Tier 1: data broker
+    try:
+        chain = get_data_broker().get_options_chain(underlying, expiry)
+        record_source("options", "broker")
+        return chain
+    except Exception as e:
+        warn_fallback("options", str(e), "nse_scraper")
+
+    # Tier 2: NSE scraper
+    chain = nse_get_options_chain(underlying, expiry)
+    record_source("options", "nse_scraper" if chain else "none")
+    return chain
 
 
 def get_expiries(underlying: str) -> list[str]:

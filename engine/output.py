@@ -26,15 +26,15 @@ from __future__ import annotations
 import os
 import re
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from rich.console import Console
+from config.paths import app_data_path, pdf_output_dir
 
 console = Console()
 
-PDF_OUTPUT_DIR = Path.home() / "Desktop"
-EXPORTS_DIR = Path.home() / ".trading_platform" / "exports"
+PDF_OUTPUT_DIR = pdf_output_dir()
+EXPORTS_DIR = app_data_path("exports")
 
 
 # ── PDF Export ───────────────────────────────────────────────
