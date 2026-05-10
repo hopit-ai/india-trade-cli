@@ -469,10 +469,15 @@ class NewsMacroAnalyst(BaseAnalyst):
     def __init__(self, registry: ToolRegistry) -> None:
         super().__init__(registry)
         self._llm: Any = None
+        self._context_hint: str = ""  # user-injected focus (e.g. "AI deals")
 
     def set_llm(self, llm_provider: Any) -> None:
         """Enable LLM-powered sentiment analysis."""
         self._llm = llm_provider
+
+    def set_context_hint(self, hint: str) -> None:
+        """Set a user-supplied focus hint for web search queries."""
+        self._context_hint = hint.strip()
 
     def analyze(self, symbol: str, exchange: str = "NSE") -> AnalystReport:
         try:
@@ -542,6 +547,35 @@ class NewsMacroAnalyst(BaseAnalyst):
             if isinstance(events, dict) or isinstance(events, list):
                 data["events"] = events
                 points.append("Checked upcoming events (expiry, earnings, RBI)")
+
+            # ── Web search (Exa / Perplexity) — best-effort (#149) ──
+            try:
+                from agent.web_search import web_search, web_search_available, format_search_results
+
+                if web_search_available():
+                    # Build search queries: stock-specific + optional user hint
+                    queries = [f"{symbol} stock news India 2026"]
+                    if self._context_hint:
+                        queries.append(f"{symbol} {self._context_hint}")
+
+                    web_results = []
+                    for q in queries[:2]:  # max 2 queries to cap latency
+                        web_results.extend(web_search(q, max_results=2))
+
+                    if web_results:
+                        data["web_search"] = [
+                            {
+                                "title": r.title,
+                                "url": r.url,
+                                "text": r.text[:800],
+                                "date": r.published_date,
+                            }
+                            for r in web_results
+                        ]
+                        data["web_search_text"] = format_search_results(web_results)
+                        points.append(f"Web search: {len(web_results)} live articles found")
+            except Exception:
+                pass  # web search is always best-effort
 
             # ── Sentiment analysis ───────────────────────────────
 
@@ -628,6 +662,13 @@ class NewsMacroAnalyst(BaseAnalyst):
             macro_parts.append(f"Upcoming events: {events_str}")
 
         macro_text = "\n".join(macro_parts) if macro_parts else "No macro data available."
+
+        # Append web search results if available (#149)
+        web_text = data.get("web_search_text", "")
+        if web_text:
+            macro_text += f"\n\nLive web search results:\n{web_text[:2000]}"
+        if self._context_hint:
+            macro_text += f"\n\nUser focus: {self._context_hint}"
 
         prompt = NEWS_SENTIMENT_PROMPT.format(
             symbol=symbol,
@@ -1365,6 +1406,23 @@ class MultiAgentAnalyzer:
             reports = self._run_analysts_sequential(symbol, exchange)
 
         os.environ.pop("_CLI_BATCH_MODE", None)
+
+        # Log analyst results to scratchpad (#168)
+        try:
+            from agent.scratchpad import get_scratchpad
+
+            pad = get_scratchpad()
+            if pad.symbol == symbol or not pad.symbol:
+                for r in reports:
+                    if not r.error:
+                        summary = f"{r.verdict} conf={r.confidence}% score={r.score}"
+                        kp = getattr(r, "key_points", [])
+                        if kp:
+                            summary += " | " + "; ".join(kp[:2])
+                        pad.append(r.analyst, summary)
+        except Exception:
+            pass
+
         return reports
 
     def _run_analysts_parallel(self, symbol: str, exchange: str) -> list[AnalystReport]:
@@ -1834,12 +1892,23 @@ class MultiAgentAnalyzer:
                 f"  VIX: {risk_report.data.get('vix', 'N/A')}\n"
             )
 
-        # Memory: past analyses for this symbol
+        # Memory: past analyses for this symbol (#169)
         memory_context = ""
         try:
             from engine.memory import trade_memory
 
             memory_context = trade_memory.get_context_for_symbol(symbol)
+
+            # Also inject similar-conditions context using VIX from risk report
+            vix_val: float | None = None
+            if risk_report and not risk_report.error:
+                try:
+                    vix_val = float(risk_report.data.get("vix", 0) or 0) or None
+                except (TypeError, ValueError):
+                    vix_val = None
+            conditions_context = trade_memory.get_context_for_conditions(vix=vix_val)
+            if conditions_context and "No past trades" not in conditions_context:
+                memory_context = memory_context + "\n\n" + conditions_context
         except Exception:
             pass
 

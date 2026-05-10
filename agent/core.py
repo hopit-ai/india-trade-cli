@@ -2347,6 +2347,49 @@ def build_provider_from_env(registry=None, system_prompt=None) -> "LLMProvider":
     return prov_cls(model, reg, sys)
 
 
+def build_fast_provider_from_env(registry=None) -> "LLMProvider":
+    """
+    Build a *fast* (cheap) LLM provider for extraction/classification (#91).
+
+    Uses AI_FAST_MODEL + AI_FAST_PROVIDER env vars.
+    Falls back to the deep provider if neither is set, so the feature is
+    completely transparent when not configured.
+
+    Configure in .env or via credentials:
+        AI_FAST_PROVIDER=anthropic
+        AI_FAST_MODEL=claude-haiku-3-5
+        # or mix providers:
+        AI_FAST_PROVIDER=gemini
+        AI_FAST_MODEL=gemini-2.0-flash
+    """
+    fast_model = os.environ.get("AI_FAST_MODEL", "").strip()
+    fast_provider_name = os.environ.get("AI_FAST_PROVIDER", "").strip().lower()
+
+    # If neither is set, return the standard (deep) provider — no regression
+    if not fast_model and not fast_provider_name:
+        return build_provider_from_env(registry=registry)
+
+    reg = registry or build_registry()
+    sys = "You are a concise financial data extraction assistant."
+
+    # Provider to use for the fast model
+    chosen = fast_provider_name or os.environ.get("AI_PROVIDER", "").lower() or _auto_detect_provider()
+    model = fast_model or _default_model(chosen)
+
+    dispatch = {
+        PROVIDER_ANTHROPIC: AnthropicProvider,
+        PROVIDER_OPENAI: OpenAIProvider,
+        PROVIDER_GEMINI: GeminiProvider,
+        PROVIDER_CLAUDE_CLI: ClaudeCLIProvider,
+        PROVIDER_GEMINI_SUB: GeminiVertexProvider,
+    }
+    if chosen == PROVIDER_OLLAMA:
+        base = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        return OpenAIProvider(model, reg, sys, base_url=base, api_key="ollama")
+    prov_cls = dispatch.get(chosen, AnthropicProvider)
+    return prov_cls(model, reg, sys)
+
+
 # ── Singleton access ───────────────────────────────────────────
 
 _agent_instance: TradingAgent | None = None

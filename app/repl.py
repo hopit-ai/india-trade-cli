@@ -1410,10 +1410,17 @@ def run_repl(broker: BrokerAPI) -> None:
                         return _cb
 
                     from agent.multi_agent import MultiAgentAnalyzer
+                    from agent.core import build_fast_provider_from_env
+                    from agent.scratchpad import get_scratchpad
 
+                    # Reset scratchpad for this analysis run (#168)
+                    get_scratchpad(symbol=symbol)
+
+                    _fast_provider = build_fast_provider_from_env(registry=agent._registry)
                     _analyzer = MultiAgentAnalyzer(
                         registry=agent._registry,
                         llm_provider=agent._provider,
+                        fast_llm_provider=_fast_provider,
                         parallel=True,
                         verbose=True,
                         risk_debate=wants_risk_debate,
@@ -1437,6 +1444,11 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "clear":
                 agent = get_agent()
                 agent.clear_history()
+                # Also clear harness conversation history (#109)
+                from agent.harness import clear_history as clear_harness_history
+
+                clear_harness_history()
+                console.print("[dim]Context cleared.[/dim]")
 
             elif command in ("alert", "alerts"):
                 _handle_alert_command(args)

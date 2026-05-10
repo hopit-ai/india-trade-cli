@@ -238,6 +238,30 @@ class AnalysisSearch:
         row = conn.execute("SELECT COUNT(*) FROM analyses").fetchone()
         return row[0] if row else 0
 
+    def get_bm25_context(self, symbol: str, limit: int = 3) -> str:
+        """
+        Return BM25 search results for *symbol* formatted as LLM-injectable text (#90).
+
+        Searches the FTS5 index for the symbol name and returns a compact summary
+        of the top matching past analyses with their snippets.  Returns "" when the
+        index is empty or no results are found.
+        """
+        try:
+            results = self.search(symbol, limit=limit)
+        except Exception:
+            return ""
+        if not results:
+            return ""
+        parts = [f"BM25 search results for {symbol} ({len(results)} found):"]
+        for r in results:
+            line = f"  [{r.timestamp[:10]}] {r.symbol}: {r.verdict} (conf:{r.confidence}%)"
+            if r.strategy:
+                line += f" — {r.strategy}"
+            if r.snippet:
+                line += f" | {r.snippet[:80]}"
+            parts.append(line)
+        return "\n".join(parts)
+
     def close(self) -> None:
         """Close the database connection."""
         if self._conn:

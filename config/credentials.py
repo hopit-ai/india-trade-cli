@@ -68,6 +68,13 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     ("GOOGLE_CLOUD_PROJECT", "Google Cloud Project ID", False),
     # ── Data / News ───────────────────────────────────────────
     ("NEWSAPI_KEY", "NewsAPI.org Key", True),
+    # ── Web Search (used by News/Macro analyst) ───────────────
+    ("EXA_API_KEY", "Exa Search API Key (exa.ai)", True),
+    ("PERPLEXITY_API_KEY", "Perplexity Sonar API Key (fallback web search)", True),
+    # ── Dual LLM routing (#91) ────────────────────────────────
+    ("AI_DEEP_MODEL", "Deep model for reasoning/synthesis (e.g. claude-opus-4-5)", False),
+    ("AI_FAST_MODEL", "Fast model for extraction/classification (e.g. claude-haiku-3-5)", False),
+    ("AI_FAST_PROVIDER", "Provider for fast model if different from deep (anthropic/gemini/openai)", False),
     # ── Notifications ─────────────────────────────────────────
     ("TELEGRAM_BOT_TOKEN", "Telegram Bot Token", True),
 ]
