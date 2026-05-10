@@ -356,12 +356,57 @@ class FundamentalAnalyst(BaseAnalyst):
                 data=result,
             )
         except Exception as e:
+            # Fallback: try Perplexity Finance for fundamental data
+            return self._perplexity_fundamentals_fallback(symbol, fallback_error=str(e))
+
+    def _perplexity_fundamentals_fallback(
+        self, symbol: str, fallback_error: str = ""
+    ) -> AnalystReport:
+        """
+        Use Perplexity finance_search to fetch fundamental data when the broker
+        tool is unavailable or returns an error.
+
+        Returns a lightweight AnalystReport with a NEUTRAL verdict and the
+        finance_search summary as a key point (for the LLM debate to use).
+        """
+        try:
+            from agent.perplexity_finance import (
+                perplexity_finance_available,
+                finance_fundamentals_for_symbol,
+            )
+
+            if not perplexity_finance_available():
+                raise RuntimeError("no key")
+
+            result = finance_fundamentals_for_symbol(symbol)
+            if not result.ok or not result.summary:
+                raise RuntimeError(result.error or "empty response")
+
+            # Use the summary as context; score is conservative (50 = NEUTRAL)
+            # because we can't parse structured numbers from the text reliably
+            summary_snippet = result.summary.strip()[:400]
+            points = [
+                f"Perplexity Finance (fallback): {summary_snippet}",
+            ]
+            if result.citations:
+                points.append(f"Sources: {', '.join(result.citations[:2])}")
+
+            return AnalystReport(
+                analyst=self.name,
+                verdict="NEUTRAL",
+                confidence=40,  # lower confidence — LLM-parsed, not structured
+                score=50,
+                key_points=points,
+                data={"perplexity_finance": result.summary},
+            )
+        except Exception:
             return AnalystReport(
                 analyst=self.name,
                 verdict="UNKNOWN",
                 confidence=0,
                 score=0,
-                error=str(e),
+                error=fallback_error
+                or "fundamental_analyse failed and Perplexity Finance unavailable",
             )
 
 
@@ -548,7 +593,33 @@ class NewsMacroAnalyst(BaseAnalyst):
                 data["events"] = events
                 points.append("Checked upcoming events (expiry, earnings, RBI)")
 
-            # ── Web search (Exa / Perplexity) — best-effort (#149) ──
+            # ── Perplexity Finance Search — preferred source for India news ──
+            # Uses the Agent API with finance_search tool (licensed NSE/BSE data)
+            # Runs first; generic web search (Exa) fills in if this is unavailable.
+            try:
+                from agent.perplexity_finance import (
+                    perplexity_finance_available,
+                    finance_news_for_symbol,
+                )
+
+                if perplexity_finance_available():
+                    fin_result = finance_news_for_symbol(symbol, context_hint=self._context_hint)
+                    if fin_result.ok and fin_result.summary:
+                        data["finance_search_text"] = fin_result.as_prompt_text()
+                        data["finance_search_citations"] = fin_result.citations
+                        points.append(
+                            "Perplexity Finance: live data fetched"
+                            + (
+                                f" ({len(fin_result.citations)} sources)"
+                                if fin_result.citations
+                                else ""
+                            )
+                        )
+            except Exception:
+                pass  # finance search is always best-effort
+
+            # ── Generic web search (Exa / Perplexity Sonar) — best-effort (#149) ──
+            # Runs when Exa key is set; supplements finance_search with broader web.
             try:
                 from agent.web_search import web_search, web_search_available, format_search_results
 
@@ -663,10 +734,15 @@ class NewsMacroAnalyst(BaseAnalyst):
 
         macro_text = "\n".join(macro_parts) if macro_parts else "No macro data available."
 
-        # Append web search results if available (#149)
+        # Append Perplexity Finance results (licensed India data — preferred)
+        finance_text = data.get("finance_search_text", "")
+        if finance_text:
+            macro_text += f"\n\nPerplexity Finance (NSE/BSE licensed data):\n{finance_text[:2000]}"
+
+        # Append generic web search results if available (#149)
         web_text = data.get("web_search_text", "")
         if web_text:
-            macro_text += f"\n\nLive web search results:\n{web_text[:2000]}"
+            macro_text += f"\n\nLive web search results:\n{web_text[:1500]}"
         if self._context_hint:
             macro_text += f"\n\nUser focus: {self._context_hint}"
 

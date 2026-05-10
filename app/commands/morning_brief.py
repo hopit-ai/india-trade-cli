@@ -108,6 +108,25 @@ def _run_raw() -> None:
     except Exception as e:
         console.print(f"[red]Events unavailable: {e}[/red]")
 
+    # ── Perplexity Finance macro context (best-effort) ────────
+    try:
+        from agent.perplexity_finance import perplexity_finance_available, finance_macro_india
+
+        if perplexity_finance_available():
+            console.print()
+            console.print("[bold cyan]◆ Perplexity Finance — India Market Context[/bold cyan]")
+            result = finance_macro_india()
+            if result.ok and result.summary:
+                console.print(result.summary[:1500])
+                if result.citations:
+                    console.print(
+                        "\n[dim]Sources: " + "  |  ".join(result.citations[:3]) + "[/dim]"
+                    )
+            else:
+                console.print(f"[dim]Finance data unavailable: {result.error}[/dim]")
+    except Exception:
+        pass  # finance context is always best-effort
+
 
 # ── Raw display helpers ───────────────────────────────────────
 
