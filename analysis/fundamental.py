@@ -8,7 +8,9 @@ Screener.in API:
     GET https://www.screener.in/api/company/{symbol}/
     Returns JSON with financial data (no auth for basic fields).
 
-Main entry point: analyse(symbol) → FundamentalSnapshot
+Main entry points:
+  analyse(symbol)           → FundamentalSnapshot  (full report)
+  score_fundamentals(symbol)→ FundamentalsScore    (structured per-metric scorer, #171)
 """
 
 from __future__ import annotations
@@ -1072,4 +1074,264 @@ def analyse(symbol: str, **_kwargs) -> FundamentalSnapshot:
         score=score,
         verdict=verdict,
         summary=summary,
+    )
+
+
+# ── Structured Fundamentals Scorer (#171) ────────────────────────
+
+
+@dataclass
+class MetricResult:
+    """Score for a single fundamental metric."""
+
+    metric: str
+    value: Optional[float]  # raw value (None if unavailable)
+    weight: float  # contribution to overall score (0–1)
+    threshold_met: str  # "BULLISH" | "NEUTRAL" | "BEARISH" | "N/A"
+    score: float  # weighted contribution: weight * (+1 / 0 / -1)
+    label: str  # human-readable value e.g. "22.5%" or "N/A"
+    detail: str = ""  # threshold description
+
+
+@dataclass
+class FundamentalsScore:
+    """
+    Structured per-metric fundamentals score for an India-listed stock (#171).
+
+    overall_score: -1.0 to +1.0 (sum of weighted metric scores)
+    signal:        "STRONG" | "NEUTRAL" | "WEAK"
+    metrics:       per-metric breakdown
+    """
+
+    symbol: str
+    overall_score: float  # -1.0 (all bearish) to +1.0 (all bullish)
+    signal: str  # "STRONG" | "NEUTRAL" | "WEAK"
+    metrics: dict[str, MetricResult]
+    data_quality: str  # "screener" | "yfinance" | "unavailable"
+    quarter: str = ""  # e.g. "Q3 FY25" (from shareholding data if available)
+
+    def as_text(self) -> str:
+        """Compact text for CLI or LLM consumption."""
+        lines = [
+            f"Fundamentals Score: {self.symbol}",
+            f"Signal: {self.signal}  |  Score: {self.overall_score:+.2f}  |  "
+            f"Data: {self.data_quality}",
+            "",
+        ]
+        for name, m in self.metrics.items():
+            icon = {"BULLISH": "▲", "BEARISH": "▼", "NEUTRAL": "◆", "N/A": "—"}[m.threshold_met]
+            lines.append(f"  {icon} {name:<28} {m.label:<12} {m.threshold_met} ({m.detail})")
+        return "\n".join(lines)
+
+
+# India-adjusted rubric from #171
+_RUBRIC: list[tuple[str, str, float, float, float, str, str, str]] = [
+    # (display_name, parsed_key, weight, bull_threshold, bear_threshold,
+    #  unit, bull_msg, bear_msg)
+    (
+        "ROE",
+        "roe",
+        0.20,
+        15.0,
+        8.0,
+        "%",
+        ">15% — strong return on equity",
+        "<8% — weak equity returns",
+    ),
+    (
+        "Net Profit Margin",
+        "npm",
+        0.15,
+        15.0,
+        5.0,
+        "%",
+        ">15% — healthy margins",
+        "<5% — thin margins",
+    ),
+    (
+        "Revenue Growth (3Y)",
+        "sales_growth",
+        0.15,
+        15.0,
+        5.0,
+        "%",
+        ">15% CAGR — strong growth",
+        "<5% — slow/declining revenue",
+    ),
+    (
+        "Debt/Equity",
+        "debt_equity",
+        0.15,
+        None,  # lower is better → inverted logic
+        None,
+        "x",
+        "<0.5 — low leverage",
+        ">1.5 — high leverage",
+    ),
+    (
+        "Promoter Holding",
+        "promoter_holding",
+        0.10,
+        50.0,
+        25.0,
+        "%",
+        ">50% — high promoter confidence",
+        "<25% — low promoter stake",
+    ),
+    (
+        "Pledged %",
+        "pledged_pct",
+        0.10,
+        None,
+        None,
+        "%",
+        "<10% — low pledging risk",
+        ">30% — high pledging risk",
+    ),
+    (
+        "Dividend Yield",
+        "dividend_yield",
+        0.05,
+        2.0,
+        0.0,
+        "%",
+        ">2% — income generating",
+        "No dividend — growth or distress",
+    ),
+    (
+        "P/E Ratio",
+        "pe",
+        0.10,
+        None,
+        None,
+        "x",
+        "<20 — undervalued",
+        ">40 — expensive",
+    ),
+]
+
+
+def _score_metric(key: str, value: Optional[float]) -> tuple[str, float, str, str]:
+    """
+    Apply India rubric for a given metric key.
+
+    Returns: (threshold_met, weighted_contribution, label, detail)
+    Debt/Equity, Pledged%, and P/E use inverted (lower=better) logic.
+    """
+    if value is None:
+        return "N/A", 0.0, "N/A", "data unavailable"
+
+    # ── Inverted metrics (lower = better) ────────────────────
+    if key == "debt_equity":
+        if value <= 0.5:
+            return "BULLISH", 1.0, f"{value:.2f}x", "<0.5 — low leverage"
+        if value > 1.5:
+            return "BEARISH", -1.0, f"{value:.2f}x", ">1.5 — high leverage"
+        return "NEUTRAL", 0.0, f"{value:.2f}x", "moderate leverage (0.5–1.5)"
+
+    if key == "pledged_pct":
+        if value < 10.0:
+            return "BULLISH", 1.0, f"{value:.1f}%", "<10% pledging risk"
+        if value > 30.0:
+            return "BEARISH", -1.0, f"{value:.1f}%", ">30% pledging risk"
+        return "NEUTRAL", 0.0, f"{value:.1f}%", "moderate pledging (10–30%)"
+
+    if key == "pe":
+        if value <= 0:
+            return "BEARISH", -1.0, f"{value:.1f}x", "negative PE — loss-making"
+        if value < 20:
+            return "BULLISH", 1.0, f"{value:.1f}x", "<20 — undervalued"
+        if value > 40:
+            return "BEARISH", -1.0, f"{value:.1f}x", ">40 — expensive"
+        return "NEUTRAL", 0.0, f"{value:.1f}x", "fairly valued (20–40)"
+
+    # ── Standard metrics (higher = better) ───────────────────
+    # Find thresholds from rubric
+    bull_thresh, bear_thresh, unit = None, None, "%"
+    detail_bull, detail_bear = "", ""
+    for _name, rkey, _w, bt, brt, u, db, dbr in _RUBRIC:
+        if rkey == key:
+            bull_thresh, bear_thresh = bt, brt
+            unit = u
+            detail_bull, detail_bear = db, dbr
+            break
+
+    if bull_thresh is None:
+        return "NEUTRAL", 0.0, f"{value:.1f}{unit}", "no threshold defined"
+
+    if value >= bull_thresh:
+        return "BULLISH", 1.0, f"{value:.1f}{unit}", detail_bull
+    if value < bear_thresh:
+        return "BEARISH", -1.0, f"{value:.1f}{unit}", detail_bear
+    return "NEUTRAL", 0.0, f"{value:.1f}{unit}", f"between {bear_thresh}–{bull_thresh}{unit}"
+
+
+def score_fundamentals(symbol: str) -> FundamentalsScore:
+    """
+    Score an India-listed stock on the structured 8-metric rubric (#171).
+
+    Uses the same data cascade as analyse() (Screener.in → yfinance).
+    Returns a FundamentalsScore with per-metric breakdown and an
+    overall signal: STRONG (+0.30 to +1.0) | NEUTRAL | WEAK (-1.0 to -0.30).
+
+    Args:
+        symbol: NSE/BSE trading symbol e.g. "RELIANCE", "HDFCBANK"
+    """
+    snap = analyse(symbol)
+
+    # Map FundamentalSnapshot fields to parsed dict for rubric
+    parsed = {
+        "roe": snap.roe,
+        "npm": snap.npm,
+        "sales_growth": snap.sales_growth,
+        "debt_equity": snap.debt_equity,
+        "promoter_holding": snap.promoter_holding,
+        "pledged_pct": snap.pledged_pct,
+        "dividend_yield": snap.dividend_yield,
+        "pe": snap.pe,
+    }
+
+    metrics: dict[str, MetricResult] = {}
+    total_score = 0.0
+
+    for display_name, key, weight, *_ in _RUBRIC:
+        value = parsed.get(key)
+        threshold_met, contrib, label, detail = _score_metric(key, value)
+        weighted = contrib * weight
+        total_score += weighted
+        metrics[display_name] = MetricResult(
+            metric=display_name,
+            value=value,
+            weight=weight,
+            threshold_met=threshold_met,
+            score=weighted,
+            label=label,
+            detail=detail,
+        )
+
+    # Signal thresholds
+    if total_score >= 0.20:
+        signal = "STRONG"
+    elif total_score <= -0.20:
+        signal = "WEAK"
+    else:
+        signal = "NEUTRAL"
+
+    # Data quality tag
+    if snap.roe is not None and snap.roce is not None:
+        data_quality = "screener"
+    elif snap.roe is not None or snap.pe is not None:
+        data_quality = "yfinance"
+    else:
+        data_quality = "unavailable"
+
+    quarter = getattr(snap, "shareholding_quarter", "") or ""
+
+    return FundamentalsScore(
+        symbol=snap.symbol,
+        overall_score=round(total_score, 3),
+        signal=signal,
+        metrics=metrics,
+        data_quality=data_quality,
+        quarter=quarter,
     )

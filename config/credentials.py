@@ -66,8 +66,28 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     ("GEMINI_API_KEY", "Google Gemini API Key", True),
     ("OPENAI_SESSION_TOKEN", "OpenAI Session Token (ChatGPT Plus)", True),
     ("GOOGLE_CLOUD_PROJECT", "Google Cloud Project ID", False),
+    # ── Web Search ────────────────────────────────────────────
+    ("EXA_API_KEY", "Exa API Key (neural search, exa.ai)", True),
+    ("TAVILY_API_KEY", "Tavily API Key (research search, tavily.com)", True),
     # ── Data / News ───────────────────────────────────────────
     ("NEWSAPI_KEY", "NewsAPI.org Key", True),
+    # ── Web Search (used by News/Macro analyst) ───────────────
+    # Priority: Exa → Tavily → Perplexity Sonar. One key is enough.
+    ("EXA_API_KEY", "Exa Search API Key — semantic search, best for finance news (exa.ai)", True),
+    ("TAVILY_API_KEY", "Tavily API Key — free 1k/month, no CC required (app.tavily.com)", True),
+    (
+        "PERPLEXITY_API_KEY",
+        "Perplexity API Key — Sonar web search + Finance Agent for India NSE/BSE data",
+        True,
+    ),
+    # ── Dual LLM routing (#91) ────────────────────────────────
+    ("AI_DEEP_MODEL", "Deep model for reasoning/synthesis (e.g. claude-opus-4-5)", False),
+    ("AI_FAST_MODEL", "Fast model for extraction/classification (e.g. claude-haiku-3-5)", False),
+    (
+        "AI_FAST_PROVIDER",
+        "Provider for fast model if different from deep (anthropic/gemini/openai)",
+        False,
+    ),
     # ── Notifications ─────────────────────────────────────────
     ("TELEGRAM_BOT_TOKEN", "Telegram Bot Token", True),
 ]

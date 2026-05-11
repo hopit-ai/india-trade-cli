@@ -219,6 +219,32 @@ def _serialise(obj: Any) -> Any:
     return obj
 
 
+# ── Signal ensemble helper ────────────────────────────────────
+
+
+def _run_signal_ensemble(symbol: str, days: int = 250) -> dict:
+    """Fetch OHLCV and run the 5-strategy ensemble for the given symbol."""
+    from market.history import get_ohlcv
+    from engine.signal_ensemble import ensemble_signal
+
+    df = get_ohlcv(symbol, days=days)
+    sig = ensemble_signal(df)
+    return {
+        "symbol": symbol,
+        "verdict": sig.verdict,
+        "signal": sig.signal,
+        "confidence": sig.confidence,
+        "bull_score": sig.bull_score,
+        "bear_score": sig.bear_score,
+        "hurst": sig.hurst,
+        "adx": sig.adx,
+        "breakdown": {
+            name: {"signal": v.signal, "label": v.label, "detail": v.detail}
+            for name, v in sig.breakdown.items()
+        },
+    }
+
+
 # ── Tool builder ──────────────────────────────────────────────
 
 
@@ -286,10 +312,34 @@ def build_registry() -> ToolRegistry:
         name="get_market_snapshot",
         description=(
             "Get a full market snapshot: NIFTY 50, BANKNIFTY, India VIX, SENSEX levels, "
-            "day change %, and an overall market posture (BULLISH/BEARISH/NEUTRAL/VOLATILE)."
+            "day change %, and an overall market posture (BULLISH/BEARISH/NEUTRAL/VOLATILE). "
+            "Also includes GIFT NIFTY pre-market indicator when available."
         ),
         parameters={"type": "object", "properties": {}, "required": []},
         fn=lambda: get_market_snapshot(),
+    )
+
+    from market.gift_nifty import get_gift_nifty
+
+    reg.register(
+        name="get_gift_nifty",
+        description=(
+            "Get GIFT NIFTY (NSE IFSC futures) price — the primary pre-market indicator for NSE. "
+            "GIFT NIFTY trades when NSE is closed (evenings, early morning, weekends) and is the "
+            "best predictor of gap-up / gap-down opens. Returns LTP, change, and implied gap % "
+            "vs NIFTY spot when nifty_spot is provided."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "nifty_spot": {
+                    "type": "number",
+                    "description": "Current NIFTY 50 spot price to compute premium/discount. Optional.",
+                },
+            },
+            "required": [],
+        },
+        fn=lambda nifty_spot=None: get_gift_nifty(nifty_spot),
     )
 
     reg.register(
@@ -365,7 +415,7 @@ def build_registry() -> ToolRegistry:
 
     # ── Analysis ──────────────────────────────────────────────
     from analysis.technical import analyse as tech_analyse
-    from analysis.fundamental import analyse as fund_analyse
+    from analysis.fundamental import analyse as fund_analyse, score_fundamentals
     from analysis.options import (
         compute_greeks,
         payoff as calc_payoff,
@@ -406,6 +456,49 @@ def build_registry() -> ToolRegistry:
             "required": ["symbol"],
         },
         fn=lambda symbol: fund_analyse(symbol),
+    )
+
+    reg.register(
+        name="score_fundamentals",
+        description=(
+            "Structured India fundamentals scorer (#171). Returns a per-metric breakdown "
+            "using India-adjusted thresholds: ROE (>15% bull, <8% bear, weight 20%), "
+            "Net Profit Margin (>15%/>5%, 15%), Revenue Growth 3Y CAGR (>15%/<5%, 15%), "
+            "Debt/Equity (<0.5/>1.5, 15%), Promoter Holding (>50%/<25%, 10%), "
+            "Pledged % (<10%/>30%, 10%), Dividend Yield (>2%, 5%), PE (<20/>40, 10%). "
+            "Overall score -1.0 to +1.0; signal STRONG / NEUTRAL / WEAK."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol: score_fundamentals(symbol),
+    )
+
+    reg.register(
+        name="signal_ensemble",
+        description=(
+            "Weighted multi-strategy signal ensemble (#167). Runs 5 strategies on OHLCV data: "
+            "Trend (EMA+ADX, 25%), Mean Reversion (RSI+Bollinger, 20%), Momentum (1M/3M/6M, 25%), "
+            "Volatility regime (ATR, 15%), Statistical (Hurst exponent, 15%). "
+            "Returns BULLISH/NEUTRAL/BEARISH with confidence score and per-strategy breakdown."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'NIFTY'"},
+                "days": {
+                    "type": "integer",
+                    "description": "Lookback window in trading days (default 250)",
+                    "default": 250,
+                },
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol, days=250: _run_signal_ensemble(symbol, days),
     )
 
     reg.register(
@@ -491,10 +584,65 @@ def build_registry() -> ToolRegistry:
         ),
     )
 
+    # ── Web Search ────────────────────────────────────────────
+    from agent.web_search import web_search as _web_search, available_providers
+
+    def _do_web_search(query: str, n: int = 5, provider: str = "") -> dict:
+        provider_arg = provider.lower() if provider else None
+        results = _web_search(query, n=n, provider=provider_arg)
+        return {
+            "query": query,
+            "provider_used": results[0].source if results else "none",
+            "available_providers": available_providers(),
+            "results": [
+                {
+                    "title": r.title,
+                    "url": r.url,
+                    "snippet": r.snippet,
+                    "published_date": r.published_date,
+                }
+                for r in results
+            ],
+        }
+
+    reg.register(
+        name="web_search",
+        description=(
+            "Search the web for live market news, company information, macro events, or "
+            "anything requiring up-to-date information. "
+            "Uses Exa (neural search) when EXA_API_KEY is set, Tavily when TAVILY_API_KEY is set, "
+            "or DuckDuckGo as a free fallback. "
+            "Good for: overnight news, recent earnings reports, RBI announcements, "
+            "analyst upgrades/downgrades, sector developments."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural-language search query, e.g. 'HDFC Bank Q4 results 2025'",
+                },
+                "n": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "Number of results to return (default 5, max 10)",
+                },
+                "provider": {
+                    "type": "string",
+                    "enum": ["exa", "tavily", "duckduckgo", ""],
+                    "default": "",
+                    "description": "Force a specific provider. Leave blank for auto-selection.",
+                },
+            },
+            "required": ["query"],
+        },
+        fn=_do_web_search,
+    )
+
     # ── News & Events ─────────────────────────────────────────
     from market.news import get_market_news, get_stock_news
     from market.events import get_upcoming_events, get_earnings_calendar
-    from market.sentiment import get_fii_dii_data, get_market_breadth
+    from market.sentiment import get_fii_dii_data, get_market_breadth, get_sentiment
 
     reg.register(
         name="get_market_news",
@@ -564,6 +712,24 @@ def build_registry() -> ToolRegistry:
         ),
         parameters={"type": "object", "properties": {}, "required": []},
         fn=lambda: get_market_breadth(),
+    )
+
+    reg.register(
+        name="get_sentiment",
+        description=(
+            "India market sentiment aggregator for a symbol (#172). Combines four signals: "
+            "FII/DII net flows (30%), news sentiment (25%), bulk deals (25%), "
+            "market breadth (20%). Returns BULLISH/NEUTRAL/BEARISH with breakdown."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'INFY'"},
+                "exchange": {"type": "string", "default": "NSE"},
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol, exchange="NSE": get_sentiment(symbol, exchange),
     )
 
     # ── Alerts ─────────────────────────────────────────────────

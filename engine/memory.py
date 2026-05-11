@@ -295,6 +295,14 @@ class TradeMemory:
                 pass
 
         self._save()
+        # Auto-reflect on outcome so the lesson is captured immediately (#92)
+        try:
+            from agent.core import build_fast_provider_from_env
+
+            provider = build_fast_provider_from_env()
+            self.reflect_and_remember(trade_id, llm_provider=provider)
+        except Exception:
+            pass  # reflect is best-effort — never block outcome recording
         return True
 
     def reflect_and_remember(self, trade_id: str, llm_provider=None) -> str:
@@ -681,6 +689,13 @@ class TradeMemory:
             MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
             data = [asdict(r) for r in self._records]
             MEMORY_FILE.write_text(json.dumps(data, indent=2, default=str))
+        except Exception:
+            pass
+        # Auto-index into FTS5 search DB so `search` command stays fresh (#90)
+        try:
+            from engine.search import analysis_search
+
+            analysis_search.index_records(self._records)
         except Exception:
             pass
 

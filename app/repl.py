@@ -91,6 +91,9 @@ COMMANDS = [
     "dcf",
     "deals",
     "delta-hedge",
+    "ensemble",
+    "fundamentals",
+    "sentiment",
     "earnings",
     "events",
     "exports",
@@ -636,6 +639,9 @@ def cmd_help() -> None:
             ("strategy new [--simple]", "Build a strategy from plain English"),
             ("strategy list", "List saved strategies"),
             ("morning-brief", "Daily market context + AI narrative"),
+            ("fundamentals <SYM>", "India fundamentals scorer (ROE/NPM/D-E/pledge rubric)"),
+            ("ensemble <SYM>", "5-strategy weighted signal ensemble (trend+momentum+Hurst)"),
+            ("sentiment <SYM>", "India sentiment pipeline (FII flows+news+bulk deals)"),
         ],
         "Market Data": [
             ("quote <SYM> [SYM...]", "Live price, OHLC, volume, and change"),
@@ -1410,10 +1416,17 @@ def run_repl(broker: BrokerAPI) -> None:
                         return _cb
 
                     from agent.multi_agent import MultiAgentAnalyzer
+                    from agent.core import build_fast_provider_from_env
+                    from agent.scratchpad import get_scratchpad
 
+                    # Reset scratchpad for this analysis run (#168)
+                    get_scratchpad(symbol=symbol)
+
+                    _fast_provider = build_fast_provider_from_env(registry=agent._registry)
                     _analyzer = MultiAgentAnalyzer(
                         registry=agent._registry,
                         llm_provider=agent._provider,
+                        fast_llm_provider=_fast_provider,
                         parallel=True,
                         verbose=True,
                         risk_debate=wants_risk_debate,
@@ -1437,6 +1450,11 @@ def run_repl(broker: BrokerAPI) -> None:
             elif command == "clear":
                 agent = get_agent()
                 agent.clear_history()
+                # Also clear harness conversation history (#109)
+                from agent.harness import clear_history as clear_harness_history
+
+                clear_harness_history()
+                console.print("[dim]Context cleared.[/dim]")
 
             elif command in ("alert", "alerts"):
                 _handle_alert_command(args)
@@ -2336,6 +2354,51 @@ def run_repl(broker: BrokerAPI) -> None:
                 from config.credentials import cmd_credentials
 
                 cmd_credentials(args)
+
+            elif command == "sentiment":
+                if not args:
+                    console.print("[red]Usage: sentiment SYMBOL[/red]")
+                else:
+                    from market.sentiment import get_sentiment
+
+                    sym = args[0].upper()
+                    with console.status(f"[dim]Gathering sentiment for {sym}...[/dim]"):
+                        sig = get_sentiment(sym)
+                    icon = {"BULLISH": "▲", "BEARISH": "▼", "NEUTRAL": "◆"}[sig.overall_signal]
+                    console.print(
+                        f"\n{icon} [bold]{sig.overall_signal}[/bold]  "
+                        f"confidence {sig.confidence}%  |  score {sig.score:+.2f}"
+                    )
+                    console.print(f"  Key driver: {sig.key_driver}")
+                    for component, verdict in sig.breakdown.items():
+                        c_icon = {"BULLISH": "▲", "BEARISH": "▼", "NEUTRAL": "◆"}[verdict]
+                        console.print(f"  {c_icon} {component:<12} {verdict}")
+                    if sig.sources:
+                        console.print("\n  [dim]" + "\n  ".join(sig.sources) + "[/dim]")
+
+            elif command == "fundamentals":
+                if not args:
+                    console.print("[red]Usage: fundamentals SYMBOL[/red]")
+                else:
+                    from analysis.fundamental import score_fundamentals
+
+                    sym = args[0].upper()
+                    with console.status(f"[dim]Scoring fundamentals for {sym}...[/dim]"):
+                        fs = score_fundamentals(sym)
+                    console.print(fs.as_text())
+
+            elif command == "ensemble":
+                if not args:
+                    console.print("[red]Usage: ensemble SYMBOL[/red]")
+                else:
+                    from market.history import get_ohlcv
+                    from engine.signal_ensemble import ensemble_signal, format_ensemble
+
+                    sym = args[0].upper()
+                    with console.status(f"[dim]Computing signal ensemble for {sym}...[/dim]"):
+                        df = get_ohlcv(sym, days=250)
+                        sig = ensemble_signal(df)
+                    console.print(format_ensemble(sig, sym))
 
             else:
                 console.print(
