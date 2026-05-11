@@ -219,6 +219,32 @@ def _serialise(obj: Any) -> Any:
     return obj
 
 
+# ── Signal ensemble helper ────────────────────────────────────
+
+
+def _run_signal_ensemble(symbol: str, days: int = 250) -> dict:
+    """Fetch OHLCV and run the 5-strategy ensemble for the given symbol."""
+    from market.history import get_ohlcv
+    from engine.signal_ensemble import ensemble_signal
+
+    df = get_ohlcv(symbol, days=days)
+    sig = ensemble_signal(df)
+    return {
+        "symbol": symbol,
+        "verdict": sig.verdict,
+        "signal": sig.signal,
+        "confidence": sig.confidence,
+        "bull_score": sig.bull_score,
+        "bear_score": sig.bear_score,
+        "hurst": sig.hurst,
+        "adx": sig.adx,
+        "breakdown": {
+            name: {"signal": v.signal, "label": v.label, "detail": v.detail}
+            for name, v in sig.breakdown.items()
+        },
+    }
+
+
 # ── Tool builder ──────────────────────────────────────────────
 
 
@@ -365,7 +391,7 @@ def build_registry() -> ToolRegistry:
 
     # ── Analysis ──────────────────────────────────────────────
     from analysis.technical import analyse as tech_analyse
-    from analysis.fundamental import analyse as fund_analyse
+    from analysis.fundamental import analyse as fund_analyse, score_fundamentals
     from analysis.options import (
         compute_greeks,
         payoff as calc_payoff,
@@ -406,6 +432,49 @@ def build_registry() -> ToolRegistry:
             "required": ["symbol"],
         },
         fn=lambda symbol: fund_analyse(symbol),
+    )
+
+    reg.register(
+        name="score_fundamentals",
+        description=(
+            "Structured India fundamentals scorer (#171). Returns a per-metric breakdown "
+            "using India-adjusted thresholds: ROE (>15% bull, <8% bear, weight 20%), "
+            "Net Profit Margin (>15%/>5%, 15%), Revenue Growth 3Y CAGR (>15%/<5%, 15%), "
+            "Debt/Equity (<0.5/>1.5, 15%), Promoter Holding (>50%/<25%, 10%), "
+            "Pledged % (<10%/>30%, 10%), Dividend Yield (>2%, 5%), PE (<20/>40, 10%). "
+            "Overall score -1.0 to +1.0; signal STRONG / NEUTRAL / WEAK."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'RELIANCE'"},
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol: score_fundamentals(symbol),
+    )
+
+    reg.register(
+        name="signal_ensemble",
+        description=(
+            "Weighted multi-strategy signal ensemble (#167). Runs 5 strategies on OHLCV data: "
+            "Trend (EMA+ADX, 25%), Mean Reversion (RSI+Bollinger, 20%), Momentum (1M/3M/6M, 25%), "
+            "Volatility regime (ATR, 15%), Statistical (Hurst exponent, 15%). "
+            "Returns BULLISH/NEUTRAL/BEARISH with confidence score and per-strategy breakdown."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'NIFTY'"},
+                "days": {
+                    "type": "integer",
+                    "description": "Lookback window in trading days (default 250)",
+                    "default": 250,
+                },
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol, days=250: _run_signal_ensemble(symbol, days),
     )
 
     reg.register(

@@ -91,6 +91,8 @@ COMMANDS = [
     "dcf",
     "deals",
     "delta-hedge",
+    "ensemble",
+    "fundamentals",
     "earnings",
     "events",
     "exports",
@@ -636,6 +638,8 @@ def cmd_help() -> None:
             ("strategy new [--simple]", "Build a strategy from plain English"),
             ("strategy list", "List saved strategies"),
             ("morning-brief", "Daily market context + AI narrative"),
+            ("fundamentals <SYM>", "India fundamentals scorer (ROE/NPM/D-E/pledge rubric)"),
+            ("ensemble <SYM>", "5-strategy weighted signal ensemble (trend+momentum+Hurst)"),
         ],
         "Market Data": [
             ("quote <SYM> [SYM...]", "Live price, OHLC, volume, and change"),
@@ -2348,6 +2352,30 @@ def run_repl(broker: BrokerAPI) -> None:
                 from config.credentials import cmd_credentials
 
                 cmd_credentials(args)
+
+            elif command == "fundamentals":
+                if not args:
+                    console.print("[red]Usage: fundamentals SYMBOL[/red]")
+                else:
+                    from analysis.fundamental import score_fundamentals
+
+                    sym = args[0].upper()
+                    with console.status(f"[dim]Scoring fundamentals for {sym}...[/dim]"):
+                        fs = score_fundamentals(sym)
+                    console.print(fs.as_text())
+
+            elif command == "ensemble":
+                if not args:
+                    console.print("[red]Usage: ensemble SYMBOL[/red]")
+                else:
+                    from market.history import get_ohlcv
+                    from engine.signal_ensemble import ensemble_signal, format_ensemble
+
+                    sym = args[0].upper()
+                    with console.status(f"[dim]Computing signal ensemble for {sym}...[/dim]"):
+                        df = get_ohlcv(sym, days=250)
+                        sig = ensemble_signal(df)
+                    console.print(format_ensemble(sig, sym))
 
             else:
                 console.print(
