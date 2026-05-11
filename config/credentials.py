@@ -69,8 +69,10 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     # ── Data / News ───────────────────────────────────────────
     ("NEWSAPI_KEY", "NewsAPI.org Key", True),
     # ── Web Search (used by News/Macro analyst) ───────────────
-    ("EXA_API_KEY", "Exa Search API Key (exa.ai)", True),
-    ("PERPLEXITY_API_KEY", "Perplexity API Key (Sonar web search + Finance Agent for India NSE/BSE data)", True),
+    # Priority: Exa → Tavily → Perplexity Sonar. One key is enough.
+    ("EXA_API_KEY", "Exa Search API Key — semantic search, best for finance news (exa.ai)", True),
+    ("TAVILY_API_KEY", "Tavily API Key — free 1k/month, no CC required (app.tavily.com)", True),
+    ("PERPLEXITY_API_KEY", "Perplexity API Key — Sonar web search + Finance Agent for India NSE/BSE data", True),
     # ── Dual LLM routing (#91) ────────────────────────────────
     ("AI_DEEP_MODEL", "Deep model for reasoning/synthesis (e.g. claude-opus-4-5)", False),
     ("AI_FAST_MODEL", "Fast model for extraction/classification (e.g. claude-haiku-3-5)", False),

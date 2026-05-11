@@ -356,23 +356,89 @@ class FundamentalAnalyst(BaseAnalyst):
                 data=result,
             )
         except Exception as e:
-            # Fallback: try Perplexity Finance for fundamental data
-            return self._perplexity_fundamentals_fallback(symbol, fallback_error=str(e))
+            # Fallback chain: yfinance (free) → Perplexity Finance (optional)
+            return self._fundamentals_fallback(symbol, fallback_error=str(e))
 
-    def _perplexity_fundamentals_fallback(
-        self, symbol: str, fallback_error: str = ""
-    ) -> AnalystReport:
+    def _fundamentals_fallback(self, symbol: str, fallback_error: str = "") -> AnalystReport:
         """
-        Use Perplexity finance_search to fetch fundamental data when the broker
-        tool is unavailable or returns an error.
+        Fallback for fundamental data when the broker tool fails.
 
-        Returns a lightweight AnalystReport with a NEUTRAL verdict and the
-        finance_search summary as a key point (for the LLM debate to use).
+        Tier 1 (free, no key): yfinance — PE, ROE, debt/equity, revenue growth
+          for NSE stocks via the .NS suffix.
+
+        Tier 2 (optional, requires PERPLEXITY_API_KEY): Perplexity Finance
+          Agent API — licensed NSE/BSE data with citations.
         """
+        # ── Tier 1: yfinance (free, no API key needed) ────────────
+        try:
+            import yfinance as yf
+
+            ns_symbol = symbol if symbol.endswith(".NS") else f"{symbol}.NS"
+            info = yf.Ticker(ns_symbol).info or {}
+
+            pe = info.get("trailingPE") or info.get("forwardPE")
+            roe = info.get("returnOnEquity")  # decimal e.g. 0.28 = 28%
+            pb = info.get("priceToBook")
+            d_e = info.get("debtToEquity")
+            rev_growth = info.get("revenueGrowth")  # decimal
+            profit_margin = info.get("profitMargins")
+
+            if pe is not None or roe is not None:
+                points: list[str] = []
+                data: dict = {"source": "yfinance"}
+
+                if pe is not None:
+                    points.append(f"PE: {pe:.1f}")
+                    data["pe"] = pe
+                if roe is not None:
+                    roe_pct = roe * 100
+                    points.append(f"ROE: {roe_pct:.1f}%")
+                    data["roe"] = roe_pct
+                if pb is not None:
+                    points.append(f"P/B: {pb:.1f}x")
+                    data["pb"] = pb
+                if d_e is not None:
+                    points.append(f"Debt/Equity: {d_e:.2f}")
+                    data["debt_to_equity"] = d_e
+                if rev_growth is not None:
+                    rg_pct = rev_growth * 100
+                    points.append(f"Revenue Growth: {rg_pct:.1f}%")
+                    data["revenue_growth"] = rg_pct
+                if profit_margin is not None:
+                    pm_pct = profit_margin * 100
+                    points.append(f"Profit Margin: {pm_pct:.1f}%")
+                    data["profit_margin"] = pm_pct
+
+                points.append("Source: yfinance (broker data unavailable)")
+
+                # Heuristic score: ROE-driven with PE adjustment
+                score = 50.0
+                if roe is not None:
+                    score += min((roe * 100 - 15) * 1.5, 20)
+                if pe is not None and pe > 0:
+                    if pe < 15:
+                        score += 10
+                    elif pe > 40:
+                        score -= 10
+                score = max(10.0, min(score, 80.0))
+
+                verdict = "BULLISH" if score >= 60 else "BEARISH" if score <= 40 else "NEUTRAL"
+                return AnalystReport(
+                    analyst=self.name,
+                    verdict=verdict,
+                    confidence=50,  # moderate — yfinance NSE data can be stale
+                    score=score,
+                    key_points=points,
+                    data=data,
+                )
+        except Exception:
+            pass  # yfinance unavailable — try Perplexity
+
+        # ── Tier 2: Perplexity Finance (optional, requires key) ───
         try:
             from agent.perplexity_finance import (
-                perplexity_finance_available,
                 finance_fundamentals_for_symbol,
+                perplexity_finance_available,
             )
 
             if not perplexity_finance_available():
@@ -382,32 +448,31 @@ class FundamentalAnalyst(BaseAnalyst):
             if not result.ok or not result.summary:
                 raise RuntimeError(result.error or "empty response")
 
-            # Use the summary as context; score is conservative (50 = NEUTRAL)
-            # because we can't parse structured numbers from the text reliably
-            summary_snippet = result.summary.strip()[:400]
-            points = [
-                f"Perplexity Finance (fallback): {summary_snippet}",
-            ]
+            snippet = result.summary.strip()[:400]
+            points = [f"Perplexity Finance (fallback): {snippet}"]
             if result.citations:
                 points.append(f"Sources: {', '.join(result.citations[:2])}")
 
             return AnalystReport(
                 analyst=self.name,
                 verdict="NEUTRAL",
-                confidence=40,  # lower confidence — LLM-parsed, not structured
+                confidence=40,  # lower — text-parsed, not structured numbers
                 score=50,
                 key_points=points,
                 data={"perplexity_finance": result.summary},
             )
         except Exception:
-            return AnalystReport(
-                analyst=self.name,
-                verdict="UNKNOWN",
-                confidence=0,
-                score=0,
-                error=fallback_error
-                or "fundamental_analyse failed and Perplexity Finance unavailable",
-            )
+            pass
+
+        # ── Total failure ─────────────────────────────────────────
+        return AnalystReport(
+            analyst=self.name,
+            verdict="UNKNOWN",
+            confidence=0,
+            score=0,
+            error=fallback_error
+            or "fundamental_analyse failed; yfinance and Perplexity Finance also unavailable",
+        )
 
 
 class OptionsAnalyst(BaseAnalyst):

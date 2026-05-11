@@ -3,12 +3,17 @@ agent/web_search.py
 ───────────────────
 Web search tool for the News/Macro analyst (#149).
 
-Primary provider: Exa (exa.ai) — semantic search returning full page content.
-Fallback provider: Perplexity Sonar — summarised answers with citations.
+Provider priority (first available key wins, each falls back to the next):
+  1. Exa         — semantic search, full page content (EXA_API_KEY)
+  2. Tavily      — AI-native search, structured results  (TAVILY_API_KEY)
+  3. Perplexity  — summarised answer + citations        (PERPLEXITY_API_KEY)
 
 Configure via credentials / .env:
-    EXA_API_KEY=<your key>          # primary (exa.ai)
-    PERPLEXITY_API_KEY=<your key>   # fallback
+    EXA_API_KEY=<your key>          # primary — best for finance news
+    TAVILY_API_KEY=<your key>       # free tier: 1 000 searches/month (no CC)
+    PERPLEXITY_API_KEY=<your key>   # fallback — also used for Finance Agent API
+
+Only one key is needed; having multiple gives automatic failover.
 
 Usage (within analyst):
     from agent.web_search import web_search, web_search_available
@@ -82,6 +87,49 @@ def _exa_search(query: str, max_results: int = 3) -> list[SearchResult]:
     return results
 
 
+# ── Provider: Tavily ─────────────────────────────────────────────
+
+
+def _tavily_search(query: str, max_results: int = 3) -> list[SearchResult]:
+    """
+    Search using Tavily (AI-native search, returns structured results).
+    Free tier: 1 000 searches/month at https://app.tavily.com — no credit card.
+    Requires TAVILY_API_KEY.
+    """
+    try:
+        from tavily import TavilyClient  # pip install tavily-python
+    except ImportError:
+        raise RuntimeError(
+            "tavily-python not installed. Run: pip install tavily-python\n"
+            "Get a free key at https://app.tavily.com — no credit card required."
+        )
+
+    api_key = os.environ.get("TAVILY_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("TAVILY_API_KEY not set. Run: credentials set TAVILY_API_KEY")
+
+    client = TavilyClient(api_key=api_key)
+    response = client.search(
+        query,
+        search_depth="basic",  # "advanced" is slower but more thorough
+        max_results=max_results,
+        include_answer=False,  # raw results, not a synthesised answer
+    )
+
+    results = []
+    for item in response.get("results", []):
+        results.append(
+            SearchResult(
+                title=item.get("title", ""),
+                url=item.get("url", ""),
+                text=item.get("content", "")[:1500],
+                published_date=item.get("published_date"),
+                score=float(item.get("score", 0.0)),
+            )
+        )
+    return results
+
+
 # ── Provider: Perplexity Sonar ────────────────────────────────────
 
 
@@ -90,7 +138,6 @@ def _perplexity_search(query: str, max_results: int = 3) -> list[SearchResult]:
     Search using Perplexity Sonar API (returns summarised answer + citations).
     Requires PERPLEXITY_API_KEY.
     """
-
     import requests
 
     api_key = os.environ.get("PERPLEXITY_API_KEY", "")
@@ -139,10 +186,34 @@ def _perplexity_search(query: str, max_results: int = 3) -> list[SearchResult]:
 
 MAX_SEARCHES_PER_ANALYSIS = 3  # cap to limit latency + cost
 
+# Priority order for auto-detection
+_PROVIDER_PRIORITY = [
+    ("exa", "EXA_API_KEY"),
+    ("tavily", "TAVILY_API_KEY"),
+    ("perplexity", "PERPLEXITY_API_KEY"),
+]
+
 
 def web_search_available() -> bool:
     """Return True if at least one search provider is configured."""
-    return bool(os.environ.get("EXA_API_KEY") or os.environ.get("PERPLEXITY_API_KEY"))
+    return any(os.environ.get(key) for _, key in _PROVIDER_PRIORITY)
+
+
+def _detect_provider() -> str:
+    """Return the name of the first configured provider."""
+    for name, key in _PROVIDER_PRIORITY:
+        if os.environ.get(key):
+            return name
+    return "exa"  # will fail gracefully
+
+
+def _call_provider(name: str, query: str, max_results: int) -> list[SearchResult]:
+    """Dispatch to the named provider function."""
+    if name == "exa":
+        return _exa_search(query, max_results)
+    if name == "tavily":
+        return _tavily_search(query, max_results)
+    return _perplexity_search(query, max_results)
 
 
 def web_search(
@@ -153,36 +224,37 @@ def web_search(
     """
     Search the web for the given query.
 
-    Tries Exa first (if EXA_API_KEY set), falls back to Perplexity Sonar.
+    Auto-detects available provider (Exa → Tavily → Perplexity).
     Returns [] on any failure — web search is always best-effort.
 
     Args:
         query:       Natural language search query
         max_results: Maximum results to return (capped at 5)
-        provider:    Force "exa" or "perplexity"; auto-detect if None
+        provider:    Force "exa", "tavily", or "perplexity"; auto-detect if None
 
     Returns:
         List of SearchResult objects, empty on failure.
     """
     max_results = min(max_results, 5)
 
-    # Determine which provider to use
-    use_provider = (provider or "").lower()
-    if not use_provider:
-        use_provider = "exa" if os.environ.get("EXA_API_KEY") else "perplexity"
+    primary = (provider or "").lower() or _detect_provider()
 
+    # Try primary provider
     try:
-        if use_provider == "exa":
-            return _exa_search(query, max_results)
-        return _perplexity_search(query, max_results)
+        return _call_provider(primary, query, max_results)
     except Exception:
-        # Try the other provider as fallback
+        pass
+
+    # Fallback through remaining providers in priority order
+    for name, key in _PROVIDER_PRIORITY:
+        if name == primary or not os.environ.get(key):
+            continue
         try:
-            if use_provider == "exa":
-                return _perplexity_search(query, max_results)
-            return _exa_search(query, max_results)
+            return _call_provider(name, query, max_results)
         except Exception:
-            return []
+            continue
+
+    return []
 
 
 def format_search_results(results: list[SearchResult]) -> str:

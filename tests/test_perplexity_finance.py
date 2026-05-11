@@ -264,6 +264,7 @@ class TestFundamentalFallback:
         return FundamentalAnalyst(registry)
 
     def test_fallback_returns_neutral_verdict_on_success(self, monkeypatch):
+        """Perplexity Finance path is used when yfinance returns no structured data."""
         monkeypatch.setenv("PERPLEXITY_API_KEY", "pplx-test")
         from agent.perplexity_finance import FinanceSearchResult
 
@@ -271,21 +272,30 @@ class TestFundamentalFallback:
             query="test",
             summary="INFY PE=25 ROE=28% revenue growth 12%",
         )
-        with patch("agent.perplexity_finance.perplexity_finance_available", return_value=True):
-            with patch(
-                "agent.perplexity_finance.finance_fundamentals_for_symbol", return_value=good
-            ):
-                analyst = self._make_analyst()
-                report = analyst.analyze("INFY", "NSE")
+        # Make yfinance return empty info so it falls through to Perplexity
+        empty_ticker = MagicMock()
+        empty_ticker.info = {}
+
+        with patch("yfinance.Ticker", return_value=empty_ticker):
+            with patch("agent.perplexity_finance.perplexity_finance_available", return_value=True):
+                with patch(
+                    "agent.perplexity_finance.finance_fundamentals_for_symbol", return_value=good
+                ):
+                    analyst = self._make_analyst()
+                    report = analyst.analyze("INFY", "NSE")
 
         assert report.verdict == "NEUTRAL"
         assert report.confidence == 40
         assert any("Perplexity" in p for p in report.key_points)
 
-    def test_fallback_returns_unknown_when_perplexity_unavailable(self, monkeypatch):
+    def test_fallback_returns_unknown_when_both_unavailable(self, monkeypatch):
+        """UNKNOWN only when both yfinance (empty) and Perplexity (no key) fail."""
         monkeypatch.delenv("PERPLEXITY_API_KEY", raising=False)
-        analyst = self._make_analyst()
-        report = analyst.analyze("INFY", "NSE")
+        empty_ticker = MagicMock()
+        empty_ticker.info = {}
+        with patch("yfinance.Ticker", return_value=empty_ticker):
+            analyst = self._make_analyst()
+            report = analyst.analyze("INFY", "NSE")
         assert report.verdict == "UNKNOWN"
         assert report.error != ""
 
@@ -294,12 +304,15 @@ class TestFundamentalFallback:
         from agent.perplexity_finance import FinanceSearchResult
 
         bad = FinanceSearchResult(query="test", summary="", error="HTTP 500")
-        with patch("agent.perplexity_finance.perplexity_finance_available", return_value=True):
-            with patch(
-                "agent.perplexity_finance.finance_fundamentals_for_symbol", return_value=bad
-            ):
-                analyst = self._make_analyst()
-                report = analyst.analyze("INFY", "NSE")
+        empty_ticker = MagicMock()
+        empty_ticker.info = {}
+        with patch("yfinance.Ticker", return_value=empty_ticker):
+            with patch("agent.perplexity_finance.perplexity_finance_available", return_value=True):
+                with patch(
+                    "agent.perplexity_finance.finance_fundamentals_for_symbol", return_value=bad
+                ):
+                    analyst = self._make_analyst()
+                    report = analyst.analyze("INFY", "NSE")
 
         assert report.verdict == "UNKNOWN"
         assert report.error != ""
