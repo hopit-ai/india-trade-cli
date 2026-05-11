@@ -156,15 +156,33 @@ def _print_snapshot(snap) -> None:
         sign = "+" if chg >= 0 else ""
         t.add_row(name, f"{val:,.2f}", f"[{color}]{sign}{chg:.2f}%[/{color}]")
 
-    if snap.nifty:
-        row("NIFTY 50", snap.nifty, snap.nifty_chg)
-    if snap.banknifty:
-        row("BANKNIFTY", snap.banknifty, snap.banknifty_chg)
-    if snap.sensex:
-        row("SENSEX", snap.sensex, snap.sensex_chg)
-    if snap.india_vix:
-        vix_color = "red" if snap.india_vix > 20 else "yellow" if snap.india_vix > 15 else "green"
-        t.add_row("India VIX", f"[{vix_color}]{snap.india_vix:.2f}[/{vix_color}]", "")
+    # Each field on MarketSnapshot is an IndexSnapshot with .ltp / .change_pct
+    if snap.nifty and snap.nifty.ltp:
+        row("NIFTY 50", snap.nifty.ltp, snap.nifty.change_pct)
+    if snap.banknifty and snap.banknifty.ltp:
+        row("BANKNIFTY", snap.banknifty.ltp, snap.banknifty.change_pct)
+    if snap.sensex and snap.sensex.ltp:
+        row("SENSEX", snap.sensex.ltp, snap.sensex.change_pct)
+    if snap.vix and snap.vix.ltp:
+        vix_val = snap.vix.ltp
+        vix_color = "red" if vix_val > 20 else "yellow" if vix_val > 15 else "green"
+        t.add_row("India VIX", f"[{vix_color}]{vix_val:.2f}[/{vix_color}]", "")
+
+    # GIFT NIFTY pre-market indicator (#106)
+    g = getattr(snap, "gift_nifty", None)
+    if g and g.ltp:
+        g_color = "green" if g.change >= 0 else "red"
+        sign = "+" if g.change >= 0 else ""
+        gap_str = ""
+        if g.premium_pts is not None:
+            gap_sign = "+" if g.premium_pct >= 0 else ""
+            gap_label = "gap up" if g.premium_pct >= 0 else "gap down"
+            gap_str = f" [dim]({gap_sign}{g.premium_pct:.2f}% {gap_label} implied)[/dim]"
+        t.add_row(
+            "GIFT NIFTY",
+            f"{g.ltp:,.0f}",
+            f"[{g_color}]{sign}{g.change:+.0f}pts, {sign}{g.change_pct:.2f}%[/{g_color}]{gap_str}",
+        )
 
     posture_color = {"BULLISH": "green", "BEARISH": "red", "VOLATILE": "yellow"}.get(
         snap.posture, "white"

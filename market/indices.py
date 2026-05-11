@@ -50,6 +50,7 @@ class MarketSnapshot:
     sensex: Optional[IndexSnapshot]
     posture: str  # "BULLISH" | "BEARISH" | "NEUTRAL" | "VOLATILE"
     posture_reason: str
+    gift_nifty: Optional[object] = None  # GiftNiftySnapshot | None (#106)
 
 
 def get_index(name: str) -> IndexSnapshot:
@@ -120,6 +121,15 @@ def get_market_snapshot() -> MarketSnapshot:
 
     posture, reason = _market_posture(nifty, vix)
 
+    # GIFT NIFTY pre-market indicator (#106) — best-effort, never blocks
+    gift_nifty = None
+    try:
+        from market.gift_nifty import get_gift_nifty
+
+        gift_nifty = get_gift_nifty(nifty_spot=nifty.ltp if nifty.ltp else None)
+    except Exception:
+        pass
+
     return MarketSnapshot(
         nifty=nifty,
         banknifty=banknifty,
@@ -127,6 +137,7 @@ def get_market_snapshot() -> MarketSnapshot:
         sensex=sensex,
         posture=posture,
         posture_reason=reason,
+        gift_nifty=gift_nifty,
     )
 
 

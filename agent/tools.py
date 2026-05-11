@@ -312,10 +312,34 @@ def build_registry() -> ToolRegistry:
         name="get_market_snapshot",
         description=(
             "Get a full market snapshot: NIFTY 50, BANKNIFTY, India VIX, SENSEX levels, "
-            "day change %, and an overall market posture (BULLISH/BEARISH/NEUTRAL/VOLATILE)."
+            "day change %, and an overall market posture (BULLISH/BEARISH/NEUTRAL/VOLATILE). "
+            "Also includes GIFT NIFTY pre-market indicator when available."
         ),
         parameters={"type": "object", "properties": {}, "required": []},
         fn=lambda: get_market_snapshot(),
+    )
+
+    from market.gift_nifty import get_gift_nifty
+
+    reg.register(
+        name="get_gift_nifty",
+        description=(
+            "Get GIFT NIFTY (NSE IFSC futures) price — the primary pre-market indicator for NSE. "
+            "GIFT NIFTY trades when NSE is closed (evenings, early morning, weekends) and is the "
+            "best predictor of gap-up / gap-down opens. Returns LTP, change, and implied gap % "
+            "vs NIFTY spot when nifty_spot is provided."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "nifty_spot": {
+                    "type": "number",
+                    "description": "Current NIFTY 50 spot price to compute premium/discount. Optional.",
+                },
+            },
+            "required": [],
+        },
+        fn=lambda nifty_spot=None: get_gift_nifty(nifty_spot),
     )
 
     reg.register(
