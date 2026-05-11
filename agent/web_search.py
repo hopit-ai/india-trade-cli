@@ -41,11 +41,34 @@ class WebSearchResult:
     snippet: str
     published_date: Optional[str] = None
     source: str = ""  # "exa" | "tavily" | "duckduckgo"
+    score: float = 0.0
+
+    @property
+    def text(self) -> str:
+        """Backward-compat alias for snippet."""
+        return self.snippet
 
     def as_text(self) -> str:
         """One-liner for terminal display."""
         date_str = f"  [{self.published_date}]" if self.published_date else ""
         return f"• {self.title}{date_str}\n  {self.url}\n  {self.snippet[:200]}"
+
+
+@dataclass
+class SearchResult:
+    """Backward-compat class (PR #202 API) — uses 'text' field name instead of 'snippet'."""
+
+    title: str = ""
+    url: str = ""
+    text: str = ""
+    score: float = 0.0
+    published_date: Optional[str] = None
+    source: str = ""
+
+    @property
+    def snippet(self) -> str:
+        """Alias for text — lets format_search_results work with both classes."""
+        return self.text
 
 
 # ── Public API ────────────────────────────────────────────────
@@ -69,9 +92,16 @@ def web_search(
     Returns:
         List of WebSearchResult (may be empty if all providers fail).
     """
-    limit = max_results if max_results is not None else n
+    limit = min(max_results if max_results is not None else n, 5)
     if provider:
-        return _dispatch(provider.lower(), query, limit)
+        # Try explicit provider; if it raises, fall through to auto-select.
+        # Return immediately on success (even empty — caller chose the provider).
+        try:
+            return _dispatch(provider.lower(), query, limit)
+        except ValueError:
+            raise  # unknown provider name → propagate
+        except Exception:
+            pass  # provider failed (network / key error) → try auto-select below
 
     # Auto-select: first provider whose API key is configured
     for name, key_env in [
@@ -135,13 +165,13 @@ def format_search_results(results: list[WebSearchResult]) -> str:
 
 def _dispatch(provider: str, query: str, n: int) -> list[WebSearchResult]:
     if provider == "exa":
-        return _search_exa(query, n)
+        return _exa_search(query, n)
     elif provider == "tavily":
-        return _search_tavily(query, n)
+        return _tavily_search(query, n)
     elif provider == "duckduckgo":
         return _search_duckduckgo(query, n)
     elif provider == "perplexity":
-        return _search_perplexity(query, n)
+        return _perplexity_search(query, n)
     else:
         raise ValueError(
             f"Unknown search provider: {provider!r}. "
@@ -152,7 +182,7 @@ def _dispatch(provider: str, query: str, n: int) -> list[WebSearchResult]:
 # ── Exa ───────────────────────────────────────────────────────
 
 
-def _search_exa(query: str, n: int) -> list[WebSearchResult]:
+def _exa_search(query: str, n: int) -> list[WebSearchResult]:
     """
     Exa neural search (exa.ai).
     Uses semantic / neural search — far better than keyword search for
@@ -194,7 +224,9 @@ def _search_exa(query: str, n: int) -> list[WebSearchResult]:
 # ── Tavily ────────────────────────────────────────────────────
 
 
-def _search_tavily(query: str, n: int) -> list[WebSearchResult]:
+def _tavily_search(
+    query: str, n: int = 5, *, max_results: Optional[int] = None
+) -> list[WebSearchResult]:
     """
     Tavily research-focused search (tavily.com).
     Returns well-structured results with content snippets.
@@ -203,7 +235,9 @@ def _search_tavily(query: str, n: int) -> list[WebSearchResult]:
     """
     key = os.environ.get("TAVILY_API_KEY")
     if not key:
-        raise ValueError("TAVILY_API_KEY not set")
+        raise RuntimeError("TAVILY_API_KEY not set")
+
+    limit = max_results if max_results is not None else n
 
     try:
         from tavily import TavilyClient
@@ -211,7 +245,7 @@ def _search_tavily(query: str, n: int) -> list[WebSearchResult]:
         raise ImportError("tavily-python not installed. Run: pip install tavily-python") from e
 
     client = TavilyClient(api_key=key)
-    response = client.search(query, max_results=n, search_depth="basic")
+    response = client.search(query, max_results=limit, search_depth="basic")
 
     results = []
     for r in response.get("results", []):
@@ -222,6 +256,7 @@ def _search_tavily(query: str, n: int) -> list[WebSearchResult]:
                 snippet=r.get("content", ""),
                 published_date=r.get("published_date"),
                 source="tavily",
+                score=r.get("score", 0.0),
             )
         )
     return results
@@ -283,7 +318,7 @@ def _search_duckduckgo(query: str, n: int) -> list[WebSearchResult]:
 # ── Perplexity Sonar ──────────────────────────────────────────
 
 
-def _search_perplexity(query: str, n: int) -> list[WebSearchResult]:
+def _perplexity_search(query: str, n: int) -> list[WebSearchResult]:
     """
     Perplexity Sonar search (perplexity.ai).
     Returns an AI-synthesised answer with citations.
@@ -344,3 +379,12 @@ def _search_perplexity(query: str, n: int) -> list[WebSearchResult]:
                 )
             )
     return results
+
+
+# ── Backward-compat aliases ───────────────────────────────────
+# PR #202 tests reference the older _search_* naming convention.
+# These aliases let both test suites pass without duplication.
+
+_search_exa = _exa_search
+_search_tavily = _tavily_search
+_search_perplexity = _perplexity_search
