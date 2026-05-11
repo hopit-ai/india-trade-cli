@@ -563,7 +563,7 @@ def build_registry() -> ToolRegistry:
     # ── News & Events ─────────────────────────────────────────
     from market.news import get_market_news, get_stock_news
     from market.events import get_upcoming_events, get_earnings_calendar
-    from market.sentiment import get_fii_dii_data, get_market_breadth
+    from market.sentiment import get_fii_dii_data, get_market_breadth, get_sentiment
 
     reg.register(
         name="get_market_news",
@@ -633,6 +633,24 @@ def build_registry() -> ToolRegistry:
         ),
         parameters={"type": "object", "properties": {}, "required": []},
         fn=lambda: get_market_breadth(),
+    )
+
+    reg.register(
+        name="get_sentiment",
+        description=(
+            "India market sentiment aggregator for a symbol (#172). Combines four signals: "
+            "FII/DII net flows (30%), news sentiment (25%), bulk deals (25%), "
+            "market breadth (20%). Returns BULLISH/NEUTRAL/BEARISH with breakdown."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "NSE symbol e.g. 'INFY'"},
+                "exchange": {"type": "string", "default": "NSE"},
+            },
+            "required": ["symbol"],
+        },
+        fn=lambda symbol, exchange="NSE": get_sentiment(symbol, exchange),
     )
 
     # ── Alerts ─────────────────────────────────────────────────

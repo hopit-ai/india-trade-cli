@@ -281,3 +281,239 @@ def _build_breadth(adv: int, dec: int, unch: int) -> MarketBreadth:
         ad_ratio=round(ratio, 2),
         verdict=verdict,
     )
+
+
+# ── Unified Sentiment Signal (#172) ──────────────────────────────
+
+
+@dataclass
+class SentimentSignal:
+    """
+    Aggregated India market sentiment for a symbol (#172).
+
+    Combines FII/DII flows, news sentiment, bulk deals, and market
+    breadth into a single weighted directional signal.
+    """
+
+    symbol: str
+    overall_signal: str  # "BULLISH" | "NEUTRAL" | "BEARISH"
+    confidence: int  # 0-100
+    breakdown: dict[str, str]  # {"fii_dii": "BULLISH", "news": "NEUTRAL", ...}
+    key_driver: str  # Most influential component
+    sources: list[str]  # Data points used in scoring
+    score: float  # -1.0 to +1.0 (raw weighted sum)
+
+
+# Component weights
+_COMPONENT_WEIGHTS = {
+    "fii_dii": 0.30,
+    "news": 0.25,
+    "bulk_deals": 0.25,
+    "breadth": 0.20,
+}
+
+
+def _fii_dii_signal(days: int = 5) -> tuple[str, float, list[str]]:
+    """
+    FII net flows over last N days.
+
+    Returns (signal, score, sources_used).
+    Bullish: cumulative FII net > +2000 Cr · Bearish: < -2000 Cr.
+    """
+    try:
+        flows = get_fii_dii_data(days=days)
+    except Exception:
+        return "NEUTRAL", 0.0, []
+
+    if not flows:
+        return "NEUTRAL", 0.0, []
+
+    cum_fii_net = sum(f.fii_net for f in flows)
+    sources = [
+        f"FII net {days}d: ₹{cum_fii_net:+,.0f} Cr (DII: ₹{sum(f.dii_net for f in flows):+,.0f} Cr)"
+    ]
+
+    if cum_fii_net > 2000:
+        return "BULLISH", 1.0, sources
+    if cum_fii_net > 500:
+        return "BULLISH", 0.5, sources
+    if cum_fii_net < -2000:
+        return "BEARISH", -1.0, sources
+    if cum_fii_net < -500:
+        return "BEARISH", -0.5, sources
+    return "NEUTRAL", 0.0, sources
+
+
+def _news_signal(symbol: str) -> tuple[str, float, list[str]]:
+    """
+    News sentiment for the symbol.
+
+    Returns (signal, score, sources_used).
+    Uses keyword scoring from score_news_batch().
+    """
+    try:
+        from market.news import get_stock_news
+
+        items = get_stock_news(symbol, n=10)
+    except Exception:
+        return "NEUTRAL", 0.0, []
+
+    if not items:
+        return "NEUTRAL", 0.0, []
+
+    result = score_news_batch(items)
+    # score_news_batch returns: "overall", "score", "bullish_count", "bearish_count", "neutral_count"
+    verdict = result.get("overall", "NEUTRAL")
+    bull_count = result.get("bullish_count", 0)
+    bear_count = result.get("bearish_count", 0)
+    total = bull_count + bear_count + result.get("neutral_count", 0)
+
+    bull_pct = bull_count / max(total, 1)
+    bear_pct = bear_count / max(total, 1)
+
+    sources = [
+        f"News: {total} articles — {bull_pct * 100:.0f}% bullish, {bear_pct * 100:.0f}% bearish"
+    ]
+
+    if verdict == "BULLISH":
+        score = 0.5 + 0.5 * max(0.0, bull_pct - bear_pct)
+        return "BULLISH", min(1.0, score), sources
+    if verdict == "BEARISH":
+        score = -(0.5 + 0.5 * max(0.0, bear_pct - bull_pct))
+        return "BEARISH", max(-1.0, score), sources
+    return "NEUTRAL", 0.0, sources
+
+
+def _bulk_deals_signal(symbol: str, days: int = 10) -> tuple[str, float, list[str]]:
+    """
+    Bulk/block deal direction for the symbol.
+
+    Returns (signal, score, sources_used).
+    Net institutional buying (BUY qty > SELL qty) → BULLISH.
+    """
+    try:
+        from market.bulk_deals import get_bulk_deals
+
+        deals = get_bulk_deals(days=days, symbol=symbol)
+    except Exception:
+        return "NEUTRAL", 0.0, []
+
+    if not deals:
+        return "NEUTRAL", 0.0, []
+
+    buy_qty = sum(d.quantity for d in deals if d.deal_type == "BUY")
+    sell_qty = sum(d.quantity for d in deals if d.deal_type == "SELL")
+    sources = [
+        f"Bulk deals {days}d: {len(deals)} deals (buy:{buy_qty:,} vs sell:{sell_qty:,} shares)"
+    ]
+
+    total = buy_qty + sell_qty
+    if total == 0:
+        return "NEUTRAL", 0.0, sources
+
+    net_pct = (buy_qty - sell_qty) / total  # -1 to +1
+    if net_pct > 0.30:
+        return "BULLISH", min(1.0, net_pct), sources
+    if net_pct < -0.30:
+        return "BEARISH", max(-1.0, net_pct), sources
+    return "NEUTRAL", net_pct, sources
+
+
+def _breadth_signal() -> tuple[str, float, list[str]]:
+    """
+    Market breadth (advance/decline) as a macro context signal.
+
+    Returns (signal, score, sources_used).
+    BROAD_RALLY → BULLISH · BROAD_DECLINE → BEARISH · MIXED → NEUTRAL.
+    """
+    try:
+        breadth = get_market_breadth()
+    except Exception:
+        return "NEUTRAL", 0.0, []
+
+    if breadth.verdict == "UNAVAILABLE" or breadth.advances == 0:
+        return "NEUTRAL", 0.0, []
+
+    sources = [
+        f"Breadth: {breadth.advances} adv / {breadth.declines} dec (A/D={breadth.ad_ratio:.2f})"
+    ]
+
+    if breadth.verdict == "BROAD_RALLY":
+        return "BULLISH", min(1.0, breadth.ad_ratio / 2.0), sources
+    if breadth.verdict == "BROAD_DECLINE":
+        return "BEARISH", max(-1.0, -1.0 / max(breadth.ad_ratio, 0.1)), sources
+    return "NEUTRAL", 0.0, sources
+
+
+def get_sentiment(symbol: str, exchange: str = "NSE") -> SentimentSignal:
+    """
+    Aggregate India market sentiment for a symbol (#172).
+
+    Combines four data signals with fixed weights:
+      FII/DII flows  30% — net institutional flows over last 5 days
+      News sentiment 25% — keyword scoring on last 10 headlines
+      Bulk deals     25% — net buy vs sell in bulk/block deals (10 days)
+      Market breadth 20% — NSE advance/decline ratio
+
+    Returns a SentimentSignal with BULLISH / NEUTRAL / BEARISH verdict
+    and 0-100 confidence.
+    """
+    sym = symbol.upper().replace(".NS", "").replace(".BO", "")
+
+    # Gather signals from each component
+    fii_signal, fii_score, fii_sources = _fii_dii_signal(days=5)
+    news_signal, news_score, news_sources = _news_signal(sym)
+    deal_signal, deal_score, deal_sources = _bulk_deals_signal(sym, days=10)
+    breadth_signal, breadth_score, breadth_sources = _breadth_signal()
+
+    component_signals = {
+        "fii_dii": fii_signal,
+        "news": news_signal,
+        "bulk_deals": deal_signal,
+        "breadth": breadth_signal,
+    }
+    component_scores = {
+        "fii_dii": fii_score,
+        "news": news_score,
+        "bulk_deals": deal_score,
+        "breadth": breadth_score,
+    }
+
+    # Weighted total score
+    total_score = sum(component_scores[k] * _COMPONENT_WEIGHTS[k] for k in _COMPONENT_WEIGHTS)
+
+    # Overall verdict
+    if total_score >= 0.15:
+        overall = "BULLISH"
+    elif total_score <= -0.15:
+        overall = "BEARISH"
+    else:
+        overall = "NEUTRAL"
+
+    # Confidence: how strongly does the weighted score lean?
+    confidence = int(min(100, abs(total_score) / 0.3 * 100))
+
+    # Key driver: highest absolute weighted contribution
+    weighted_contribs = {
+        k: abs(component_scores[k] * _COMPONENT_WEIGHTS[k]) for k in _COMPONENT_WEIGHTS
+    }
+    key_driver_key = max(weighted_contribs, key=weighted_contribs.get)
+    key_driver_labels = {
+        "fii_dii": "FII/DII flows",
+        "news": "news sentiment",
+        "bulk_deals": "bulk deals",
+        "breadth": "market breadth",
+    }
+    key_driver = f"{key_driver_labels[key_driver_key]} ({component_signals[key_driver_key]})"
+
+    all_sources = fii_sources + news_sources + deal_sources + breadth_sources
+
+    return SentimentSignal(
+        symbol=sym,
+        overall_signal=overall,
+        confidence=confidence,
+        breakdown=component_signals,
+        key_driver=key_driver,
+        sources=all_sources,
+        score=round(total_score, 3),
+    )
