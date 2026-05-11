@@ -2373,7 +2373,9 @@ def build_fast_provider_from_env(registry=None) -> "LLMProvider":
     sys = "You are a concise financial data extraction assistant."
 
     # Provider to use for the fast model
-    chosen = fast_provider_name or os.environ.get("AI_PROVIDER", "").lower() or _auto_detect_provider()
+    chosen = (
+        fast_provider_name or os.environ.get("AI_PROVIDER", "").lower() or _auto_detect_provider()
+    )
     model = fast_model or _default_model(chosen)
 
     dispatch = {
