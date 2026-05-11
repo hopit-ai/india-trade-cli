@@ -66,6 +66,9 @@ KNOWN_CREDENTIALS: list[tuple[str, str, bool]] = [
     ("GEMINI_API_KEY", "Google Gemini API Key", True),
     ("OPENAI_SESSION_TOKEN", "OpenAI Session Token (ChatGPT Plus)", True),
     ("GOOGLE_CLOUD_PROJECT", "Google Cloud Project ID", False),
+    # ── Web Search ────────────────────────────────────────────
+    ("EXA_API_KEY", "Exa API Key (neural search, exa.ai)", True),
+    ("TAVILY_API_KEY", "Tavily API Key (research search, tavily.com)", True),
     # ── Data / News ───────────────────────────────────────────
     ("NEWSAPI_KEY", "NewsAPI.org Key", True),
     # ── Web Search (used by News/Macro analyst) ───────────────

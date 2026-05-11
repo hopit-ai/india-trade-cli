@@ -88,16 +88,18 @@ def _run_raw() -> None:
         console.print(f"[red]News unavailable: {e}[/red]")
 
     # ── FII / DII ─────────────────────────────────────────────
+    fii_data = None
     try:
-        fii = get_fii_dii_data(3)
-        _print_fii(fii)
+        fii_data = get_fii_dii_data(5)  # 5 days for consecutive-day analysis
+        _print_fii(fii_data[:3])  # display last 3 days
     except Exception as e:
         console.print(f"[red]FII/DII data unavailable: {e}[/red]")
 
     # ── Market breadth ────────────────────────────────────────
+    breadth_data = None
     try:
-        breadth = get_market_breadth()
-        _print_breadth(breadth)
+        breadth_data = get_market_breadth()
+        _print_breadth(breadth_data)
     except Exception as e:
         console.print(f"[red]Breadth data unavailable: {e}[/red]")
 
@@ -108,9 +110,21 @@ def _run_raw() -> None:
     except Exception as e:
         console.print(f"[red]Events unavailable: {e}[/red]")
 
+    # ── Personal watchlist (from memory) ──────────────────────
+    try:
+        _print_memory_watchlist()
+    except Exception:
+        pass  # non-blocking
+
+    # ── Actionable agenda ─────────────────────────────────────
+    try:
+        _print_actionable_agenda(fii_data, breadth_data)
+    except Exception:
+        pass  # non-blocking
+
     # ── Perplexity Finance macro context (best-effort) ────────
     try:
-        from agent.perplexity_finance import perplexity_finance_available, finance_macro_india
+        from agent.perplexity_finance import finance_macro_india, perplexity_finance_available
 
         if perplexity_finance_available():
             console.print()
@@ -142,15 +156,33 @@ def _print_snapshot(snap) -> None:
         sign = "+" if chg >= 0 else ""
         t.add_row(name, f"{val:,.2f}", f"[{color}]{sign}{chg:.2f}%[/{color}]")
 
-    if snap.nifty:
-        row("NIFTY 50", snap.nifty, snap.nifty_chg)
-    if snap.banknifty:
-        row("BANKNIFTY", snap.banknifty, snap.banknifty_chg)
-    if snap.sensex:
-        row("SENSEX", snap.sensex, snap.sensex_chg)
-    if snap.india_vix:
-        vix_color = "red" if snap.india_vix > 20 else "yellow" if snap.india_vix > 15 else "green"
-        t.add_row("India VIX", f"[{vix_color}]{snap.india_vix:.2f}[/{vix_color}]", "")
+    # Each field on MarketSnapshot is an IndexSnapshot with .ltp / .change_pct
+    if snap.nifty and snap.nifty.ltp:
+        row("NIFTY 50", snap.nifty.ltp, snap.nifty.change_pct)
+    if snap.banknifty and snap.banknifty.ltp:
+        row("BANKNIFTY", snap.banknifty.ltp, snap.banknifty.change_pct)
+    if snap.sensex and snap.sensex.ltp:
+        row("SENSEX", snap.sensex.ltp, snap.sensex.change_pct)
+    if snap.vix and snap.vix.ltp:
+        vix_val = snap.vix.ltp
+        vix_color = "red" if vix_val > 20 else "yellow" if vix_val > 15 else "green"
+        t.add_row("India VIX", f"[{vix_color}]{vix_val:.2f}[/{vix_color}]", "")
+
+    # GIFT NIFTY pre-market indicator (#106)
+    g = getattr(snap, "gift_nifty", None)
+    if g and g.ltp:
+        g_color = "green" if g.change >= 0 else "red"
+        sign = "+" if g.change >= 0 else ""
+        gap_str = ""
+        if g.premium_pts is not None:
+            gap_sign = "+" if g.premium_pct >= 0 else ""
+            gap_label = "gap up" if g.premium_pct >= 0 else "gap down"
+            gap_str = f" [dim]({gap_sign}{g.premium_pct:.2f}% {gap_label} implied)[/dim]"
+        t.add_row(
+            "GIFT NIFTY",
+            f"{g.ltp:,.0f}",
+            f"[{g_color}]{sign}{g.change:+.0f}pts, {sign}{g.change_pct:.2f}%[/{g_color}]{gap_str}",
+        )
 
     posture_color = {"BULLISH": "green", "BEARISH": "red", "VOLATILE": "yellow"}.get(
         snap.posture, "white"
@@ -217,4 +249,125 @@ def _print_events(events: dict) -> None:
     for ev in events.get("rbi", [])[:1]:
         console.print(f"  🏦 RBI MPC: {ev.get('date', '')} — {ev.get('description', '')}")
 
+    console.print()
+
+
+def _print_memory_watchlist() -> None:
+    """
+    Show recently-analyzed symbols from trade memory as a personal watchlist.
+    Groups by symbol and shows last verdict + how long ago (#121).
+    """
+    try:
+        from engine.memory import TradeMemory
+        from datetime import datetime
+
+        mem = TradeMemory()
+        records = mem.query(limit=50)  # last 50 analyses
+    except Exception:
+        return  # non-blocking: if memory unavailable, skip silently
+
+    if not records:
+        return
+
+    # Deduplicate by symbol — keep most recent record per symbol
+    seen: dict[str, object] = {}
+    for rec in records:
+        if rec.symbol not in seen:
+            seen[rec.symbol] = rec
+
+    if not seen:
+        return
+
+    console.print("[bold cyan]🔭  Your Watchlist (from memory)[/bold cyan]")
+
+    now = datetime.now()
+    for sym, rec in list(seen.items())[:8]:  # show max 8 symbols
+        verdict = rec.verdict or "—"
+        verdict_color = (
+            "green" if verdict == "BULLISH" else "red" if verdict == "BEARISH" else "yellow"
+        )
+
+        # Days since analysis
+        try:
+            ts = datetime.fromisoformat(rec.timestamp)
+            days_ago = (now - ts).days
+            age = f"{days_ago}d ago" if days_ago > 0 else "today"
+        except Exception:
+            age = "—"
+
+        conf = f"({rec.confidence}%)" if rec.confidence else ""
+        console.print(
+            f"  [{verdict_color}]{verdict:<8}[/{verdict_color}] {sym:<12} {conf:<7} [dim]{age}[/dim]"
+        )
+
+    console.print()
+
+
+def _print_actionable_agenda(fii_data=None, breadth_data=None) -> None:
+    """
+    Generate a prioritised action agenda for the trading day (#121).
+    Based on FII flows, market breadth, and memory patterns.
+    """
+    from datetime import date
+
+    agenda: list[tuple[str, str]] = []  # (priority_icon, action)
+
+    # ── FII consecutive selling analysis ─────────────────────
+    if fii_data:
+        selling_streak = sum(1 for f in fii_data if getattr(f, "fii_net", 0) < -500)
+        buying_streak = sum(1 for f in fii_data if getattr(f, "fii_net", 0) > 500)
+        if selling_streak >= 3:
+            agenda.append(
+                (
+                    "⚠️",
+                    f"FII sold for {selling_streak} consecutive days — consider reducing long exposure",
+                )
+            )
+        elif buying_streak >= 3:
+            agenda.append(
+                (
+                    "✅",
+                    f"FII buying streak ({buying_streak} days) — market has institutional support",
+                )
+            )
+
+    # ── Market breadth agenda ─────────────────────────────────
+    if breadth_data:
+        verdict = getattr(breadth_data, "verdict", "") or ""
+        ad = getattr(breadth_data, "ad_ratio", 0) or 0
+        if verdict == "BROAD_DECLINE":
+            agenda.append(("⚠️", f"Broad market decline (A/D={ad:.2f}) — avoid new longs today"))
+        elif verdict == "BROAD_RALLY":
+            agenda.append(("✅", f"Broad rally (A/D={ad:.2f}) — momentum is with the bulls"))
+
+    # ── Day-of-week agenda ────────────────────────────────────
+    today = date.today()
+    weekday = today.weekday()  # 0=Mon, 4=Fri
+    if weekday == 0:  # Monday
+        agenda.append(("📋", "Monday: gap-and-go setups common — check pre-market ADRs"))
+    elif weekday == 4:  # Friday
+        agenda.append(("📋", "Friday expiry risk: roll or close short-dated positions"))
+    elif weekday == 2:  # Wednesday
+        agenda.append(("📋", "Mid-week: check open positions vs. key support/resistance"))
+
+    # ── Memory-based agenda ───────────────────────────────────
+    try:
+        from engine.memory import TradeMemory
+
+        mem = TradeMemory()
+        recent = mem.query(limit=10)
+        # Positions with stop/target set: check if worth revisiting
+        with_targets = [r for r in recent if r.stop_loss or r.target_price]
+        if with_targets:
+            sym = with_targets[0].symbol
+            agenda.append(("📍", f"Revisit open setup: {sym} — stop/target was set at analysis"))
+    except Exception:
+        pass
+
+    if not agenda:
+        return
+
+    console.print("[bold cyan]📋  Today's Agenda[/bold cyan]")
+    for icon, action in agenda[:5]:  # max 5 items
+        console.print(f"  {icon}  {action}")
     console.print()

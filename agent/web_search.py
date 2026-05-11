@@ -1,28 +1,25 @@
 """
 agent/web_search.py
-───────────────────
-Web search tool for the News/Macro analyst (#149).
+────────────────────
+Web search integration for the trading agent.
 
-Provider priority (first available key wins, each falls back to the next):
-  1. Exa         — semantic search, full page content (EXA_API_KEY)
-  2. Tavily      — AI-native search, structured results  (TAVILY_API_KEY)
-  3. Perplexity  — summarised answer + citations        (PERPLEXITY_API_KEY)
+Providers (tried in priority order when no provider is specified):
+  1. Exa         — neural search, excellent for financial / news queries (EXA_API_KEY)
+  2. Tavily      — research-focused, well-structured results (TAVILY_API_KEY)
+  3. DuckDuckGo  — free, no key required, lower fidelity fallback (httpx)
 
-Configure via credentials / .env:
-    EXA_API_KEY=<your key>          # primary — best for finance news
-    TAVILY_API_KEY=<your key>       # free tier: 1 000 searches/month (no CC)
-    PERPLEXITY_API_KEY=<your key>   # fallback — also used for Finance Agent API
+Usage:
+    from agent.web_search import web_search
 
-Only one key is needed; having multiple gives automatic failover.
+    results = web_search("NIFTY 50 outlook this week", n=5)
+    for r in results:
+        print(r.title)
+        print(r.snippet[:200])
 
-Usage (within analyst):
-    from agent.web_search import web_search, web_search_available
+    # Explicit provider:
+    results = web_search("RELIANCE Q4 results", n=3, provider="tavily")
 
-    if web_search_available():
-        results = web_search("Infosys AI deal Topaz revenue Q4 2026", max_results=3)
-        for r in results:
-            print(r.title, r.url)
-            print(r.text[:500])
+The function never raises — it returns an empty list on total failure.
 """
 
 from __future__ import annotations
@@ -32,120 +29,313 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+# ── Data model ────────────────────────────────────────────────
+
+
 @dataclass
-class SearchResult:
-    """A single web search result."""
+class WebSearchResult:
+    """A single search result from any provider."""
 
     title: str
     url: str
-    text: str  # Full or summarised page content
+    snippet: str
     published_date: Optional[str] = None
-    author: Optional[str] = None
-    score: float = 0.0  # Relevance score (provider-specific)
+    source: str = ""  # "exa" | "tavily" | "duckduckgo"
+    score: float = 0.0
+
+    @property
+    def text(self) -> str:
+        """Backward-compat alias for snippet."""
+        return self.snippet
+
+    def as_text(self) -> str:
+        """One-liner for terminal display."""
+        date_str = f"  [{self.published_date}]" if self.published_date else ""
+        return f"• {self.title}{date_str}\n  {self.url}\n  {self.snippet[:200]}"
 
 
-# ── Provider: Exa ────────────────────────────────────────────────
+@dataclass
+class SearchResult:
+    """Backward-compat class (PR #202 API) — uses 'text' field name instead of 'snippet'."""
+
+    title: str = ""
+    url: str = ""
+    text: str = ""
+    score: float = 0.0
+    published_date: Optional[str] = None
+    source: str = ""
+
+    @property
+    def snippet(self) -> str:
+        """Alias for text — lets format_search_results work with both classes."""
+        return self.text
 
 
-def _exa_search(query: str, max_results: int = 3) -> list[SearchResult]:
+# ── Public API ────────────────────────────────────────────────
+
+
+def web_search(
+    query: str,
+    n: int = 5,
+    provider: Optional[str] = None,
+    *,
+    max_results: Optional[int] = None,  # alias for n — used by multi_agent.py
+) -> list[WebSearchResult]:
     """
-    Search using Exa (semantic search, returns full page content).
-    Requires EXA_API_KEY.
+    Search the web and return up to *n* results.
+
+    Args:
+        query:       Natural-language search query.
+        n:           Max results (default 5). Also accepted as max_results=.
+        provider:    "exa" | "tavily" | "duckduckgo" | "perplexity" | None (auto-select).
+
+    Returns:
+        List of WebSearchResult (may be empty if all providers fail).
     """
+    limit = min(max_results if max_results is not None else n, 5)
+    if provider:
+        # Try explicit provider; if it raises, fall through to auto-select.
+        # Return immediately on success (even empty — caller chose the provider).
+        try:
+            return _dispatch(provider.lower(), query, limit)
+        except ValueError:
+            raise  # unknown provider name → propagate
+        except Exception:
+            pass  # provider failed (network / key error) → try auto-select below
+
+    # Auto-select: first provider whose API key is configured
+    for name, key_env in [
+        ("exa", "EXA_API_KEY"),
+        ("tavily", "TAVILY_API_KEY"),
+        ("perplexity", "PERPLEXITY_API_KEY"),
+    ]:
+        if os.environ.get(key_env):
+            try:
+                results = _dispatch(name, query, limit)
+                if results:
+                    return results
+            except Exception:
+                continue  # fall through to next provider
+
+    # Free fallback — always try even without a key
     try:
-        from exa_py import Exa  # pip install exa-py
-    except ImportError:
-        raise RuntimeError(
-            "exa-py not installed. Run: pip install exa-py\n"
-            "Then set EXA_API_KEY via: credentials set EXA_API_KEY"
+        return _search_duckduckgo(query, limit)
+    except Exception:
+        return []
+
+
+def available_providers() -> list[str]:
+    """Return list of providers whose API keys are currently configured."""
+    providers = []
+    if os.environ.get("EXA_API_KEY"):
+        providers.append("exa")
+    if os.environ.get("TAVILY_API_KEY"):
+        providers.append("tavily")
+    if os.environ.get("PERPLEXITY_API_KEY"):
+        providers.append("perplexity")
+    providers.append("duckduckgo")  # always available (free)
+    return providers
+
+
+def web_search_available() -> bool:
+    """Return True if at least one keyed provider (Exa/Tavily/Perplexity) is configured."""
+    return bool(
+        os.environ.get("EXA_API_KEY")
+        or os.environ.get("TAVILY_API_KEY")
+        or os.environ.get("PERPLEXITY_API_KEY")
+    )
+
+
+def format_search_results(results: list[WebSearchResult]) -> str:
+    """Format a list of results into a compact text block for LLM prompts."""
+    if not results:
+        return ""
+    lines = []
+    for i, r in enumerate(results, 1):
+        date = f" [{r.published_date}]" if r.published_date else ""
+        lines.append(f"{i}. {r.title}{date}")
+        lines.append(f"   {r.url}")
+        if r.snippet:
+            lines.append(f"   {r.snippet[:300]}")
+    return "\n".join(lines)
+
+
+# ── Dispatcher ────────────────────────────────────────────────
+
+
+def _dispatch(provider: str, query: str, n: int) -> list[WebSearchResult]:
+    if provider == "exa":
+        return _exa_search(query, n)
+    elif provider == "tavily":
+        return _tavily_search(query, n)
+    elif provider == "duckduckgo":
+        return _search_duckduckgo(query, n)
+    elif provider == "perplexity":
+        return _perplexity_search(query, n)
+    else:
+        raise ValueError(
+            f"Unknown search provider: {provider!r}. "
+            "Use 'exa', 'tavily', 'duckduckgo', or 'perplexity'."
         )
 
-    api_key = os.environ.get("EXA_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("EXA_API_KEY not set. Run: credentials set EXA_API_KEY")
 
-    exa = Exa(api_key=api_key)
+# ── Exa ───────────────────────────────────────────────────────
+
+
+def _exa_search(query: str, n: int) -> list[WebSearchResult]:
+    """
+    Exa neural search (exa.ai).
+    Uses semantic / neural search — far better than keyword search for
+    financial queries like 'NIFTY support levels this week'.
+
+    Requires: EXA_API_KEY env var, exa-py package.
+    """
+    key = os.environ.get("EXA_API_KEY")
+    if not key:
+        raise ValueError("EXA_API_KEY not set")
+
+    try:
+        from exa_py import Exa
+    except ImportError as e:
+        raise ImportError("exa-py not installed. Run: pip install exa-py") from e
+
+    exa = Exa(api_key=key)
     response = exa.search_and_contents(
         query,
-        num_results=max_results,
-        text={"max_characters": 1500},  # enough context without token bloat
-        use_autoprompt=True,  # Exa rewrites query for better results
+        num_results=n,
+        text={"max_characters": 500},
+        type="neural",
     )
 
     results = []
-    for item in response.results:
+    for r in response.results:
         results.append(
-            SearchResult(
-                title=getattr(item, "title", "") or "",
-                url=getattr(item, "url", "") or "",
-                text=getattr(item, "text", "") or "",
-                published_date=getattr(item, "published_date", None),
-                author=getattr(item, "author", None),
-                score=getattr(item, "score", 0.0) or 0.0,
+            WebSearchResult(
+                title=r.title or "",
+                url=r.url or "",
+                snippet=(r.text or "")[:500],
+                published_date=getattr(r, "published_date", None),
+                source="exa",
             )
         )
     return results
 
 
-# ── Provider: Tavily ─────────────────────────────────────────────
+# ── Tavily ────────────────────────────────────────────────────
 
 
-def _tavily_search(query: str, max_results: int = 3) -> list[SearchResult]:
+def _tavily_search(
+    query: str, n: int = 5, *, max_results: Optional[int] = None
+) -> list[WebSearchResult]:
     """
-    Search using Tavily (AI-native search, returns structured results).
-    Free tier: 1 000 searches/month at https://app.tavily.com — no credit card.
-    Requires TAVILY_API_KEY.
+    Tavily research-focused search (tavily.com).
+    Returns well-structured results with content snippets.
+
+    Requires: TAVILY_API_KEY env var, tavily-python package.
     """
+    key = os.environ.get("TAVILY_API_KEY")
+    if not key:
+        raise RuntimeError("TAVILY_API_KEY not set")
+
+    limit = max_results if max_results is not None else n
+
     try:
-        from tavily import TavilyClient  # pip install tavily-python
-    except ImportError:
-        raise RuntimeError(
-            "tavily-python not installed. Run: pip install tavily-python\n"
-            "Get a free key at https://app.tavily.com — no credit card required."
-        )
+        from tavily import TavilyClient
+    except ImportError as e:
+        raise ImportError("tavily-python not installed. Run: pip install tavily-python") from e
 
-    api_key = os.environ.get("TAVILY_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("TAVILY_API_KEY not set. Run: credentials set TAVILY_API_KEY")
-
-    client = TavilyClient(api_key=api_key)
-    response = client.search(
-        query,
-        search_depth="basic",  # "advanced" is slower but more thorough
-        max_results=max_results,
-        include_answer=False,  # raw results, not a synthesised answer
-    )
+    client = TavilyClient(api_key=key)
+    response = client.search(query, max_results=limit, search_depth="basic")
 
     results = []
-    for item in response.get("results", []):
+    for r in response.get("results", []):
         results.append(
-            SearchResult(
-                title=item.get("title", ""),
-                url=item.get("url", ""),
-                text=item.get("content", "")[:1500],
-                published_date=item.get("published_date"),
-                score=float(item.get("score", 0.0)),
+            WebSearchResult(
+                title=r.get("title", ""),
+                url=r.get("url", ""),
+                snippet=r.get("content", ""),
+                published_date=r.get("published_date"),
+                source="tavily",
+                score=r.get("score", 0.0),
             )
         )
     return results
 
 
-# ── Provider: Perplexity Sonar ────────────────────────────────────
+# ── DuckDuckGo (free fallback) ────────────────────────────────
 
 
-def _perplexity_search(query: str, max_results: int = 3) -> list[SearchResult]:
+def _search_duckduckgo(query: str, n: int) -> list[WebSearchResult]:
     """
-    Search using Perplexity Sonar API (returns summarised answer + citations).
-    Requires PERPLEXITY_API_KEY.
+    DuckDuckGo Instant Answer API — free, no key needed.
+    Returns fewer / lower-quality results than Exa/Tavily but always available.
+    Hits the public DDG JSON API (no scraping).
     """
-    import requests
+    import urllib.parse
 
-    api_key = os.environ.get("PERPLEXITY_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("PERPLEXITY_API_KEY not set.")
+    try:
+        import httpx
+    except ImportError as e:
+        raise ImportError("httpx not installed. Run: pip install httpx") from e
+
+    encoded = urllib.parse.quote_plus(query)
+    url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
+    resp = httpx.get(url, timeout=10.0, follow_redirects=True)
+    resp.raise_for_status()
+    data = resp.json()
+
+    results = []
+
+    # Abstract (single top result)
+    if data.get("AbstractText") and data.get("AbstractURL"):
+        results.append(
+            WebSearchResult(
+                title=data.get("Heading", query),
+                url=data["AbstractURL"],
+                snippet=data["AbstractText"][:500],
+                source="duckduckgo",
+            )
+        )
+
+    # Related topics as additional results
+    for topic in data.get("RelatedTopics", []):
+        if len(results) >= n:
+            break
+        if not isinstance(topic, dict) or "Text" not in topic:
+            continue
+        results.append(
+            WebSearchResult(
+                title=topic.get("Text", "")[:120],
+                url=topic.get("FirstURL", ""),
+                snippet=topic.get("Text", ""),
+                source="duckduckgo",
+            )
+        )
+
+    return results[:n]
+
+
+# ── Perplexity Sonar ──────────────────────────────────────────
+
+
+def _perplexity_search(query: str, n: int) -> list[WebSearchResult]:
+    """
+    Perplexity Sonar search (perplexity.ai).
+    Returns an AI-synthesised answer with citations.
+
+    Requires: PERPLEXITY_API_KEY env var, requests package.
+    """
+    key = os.environ.get("PERPLEXITY_API_KEY")
+    if not key:
+        raise ValueError("PERPLEXITY_API_KEY not set")
+
+    try:
+        import requests
+    except ImportError as e:
+        raise ImportError("requests not installed. Run: pip install requests") from e
 
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
     }
     payload = {
@@ -166,113 +356,35 @@ def _perplexity_search(query: str, max_results: int = 3) -> list[SearchResult]:
     answer = data["choices"][0]["message"]["content"]
     citations = data.get("citations", [])
 
-    # Return main answer as first result, citations as additional
-    results = [SearchResult(title="Perplexity answer", url="", text=answer)]
-    for cite in citations[: max_results - 1]:
+    results: list[WebSearchResult] = [
+        WebSearchResult(
+            title="Perplexity answer",
+            url="",
+            snippet=answer[:500],
+            source="perplexity",
+        )
+    ]
+    for cite in citations[: n - 1]:
         if isinstance(cite, str):
-            results.append(SearchResult(title="Citation", url=cite, text=""))
+            results.append(
+                WebSearchResult(title="Citation", url=cite, snippet="", source="perplexity")
+            )
         elif isinstance(cite, dict):
             results.append(
-                SearchResult(
+                WebSearchResult(
                     title=cite.get("title", ""),
                     url=cite.get("url", ""),
-                    text=cite.get("snippet", ""),
+                    snippet=cite.get("snippet", ""),
+                    source="perplexity",
                 )
             )
     return results
 
 
-# ── Public API ───────────────────────────────────────────────────
+# ── Backward-compat aliases ───────────────────────────────────
+# PR #202 tests reference the older _search_* naming convention.
+# These aliases let both test suites pass without duplication.
 
-MAX_SEARCHES_PER_ANALYSIS = 3  # cap to limit latency + cost
-
-# Priority order for auto-detection
-_PROVIDER_PRIORITY = [
-    ("exa", "EXA_API_KEY"),
-    ("tavily", "TAVILY_API_KEY"),
-    ("perplexity", "PERPLEXITY_API_KEY"),
-]
-
-
-def web_search_available() -> bool:
-    """Return True if at least one search provider is configured."""
-    return any(os.environ.get(key) for _, key in _PROVIDER_PRIORITY)
-
-
-def _detect_provider() -> str:
-    """Return the name of the first configured provider."""
-    for name, key in _PROVIDER_PRIORITY:
-        if os.environ.get(key):
-            return name
-    return "exa"  # will fail gracefully
-
-
-def _call_provider(name: str, query: str, max_results: int) -> list[SearchResult]:
-    """Dispatch to the named provider function."""
-    if name == "exa":
-        return _exa_search(query, max_results)
-    if name == "tavily":
-        return _tavily_search(query, max_results)
-    return _perplexity_search(query, max_results)
-
-
-def web_search(
-    query: str,
-    max_results: int = 3,
-    provider: Optional[str] = None,
-) -> list[SearchResult]:
-    """
-    Search the web for the given query.
-
-    Auto-detects available provider (Exa → Tavily → Perplexity).
-    Returns [] on any failure — web search is always best-effort.
-
-    Args:
-        query:       Natural language search query
-        max_results: Maximum results to return (capped at 5)
-        provider:    Force "exa", "tavily", or "perplexity"; auto-detect if None
-
-    Returns:
-        List of SearchResult objects, empty on failure.
-    """
-    max_results = min(max_results, 5)
-
-    primary = (provider or "").lower() or _detect_provider()
-
-    # Try primary provider
-    try:
-        return _call_provider(primary, query, max_results)
-    except Exception:
-        pass
-
-    # Fallback through remaining providers in priority order
-    for name, key in _PROVIDER_PRIORITY:
-        if name == primary or not os.environ.get(key):
-            continue
-        try:
-            return _call_provider(name, query, max_results)
-        except Exception:
-            continue
-
-    return []
-
-
-def format_search_results(results: list[SearchResult]) -> str:
-    """
-    Format search results as compact text for LLM consumption.
-    Strips excessive whitespace; caps each result at 1200 chars.
-    """
-    if not results:
-        return ""
-
-    parts = []
-    for i, r in enumerate(results, 1):
-        header = f"[{i}] {r.title}"
-        if r.url:
-            header += f"\nSource: {r.url}"
-        if r.published_date:
-            header += f" ({r.published_date[:10]})"
-        text = (r.text or "").strip()[:1200]
-        parts.append(f"{header}\n{text}")
-
-    return "\n\n---\n\n".join(parts)
+_search_exa = _exa_search
+_search_tavily = _tavily_search
+_search_perplexity = _perplexity_search
