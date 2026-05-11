@@ -25,7 +25,7 @@ The function never raises — it returns an empty list on total failure.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -244,10 +244,7 @@ def _search_duckduckgo(query: str, n: int) -> list[WebSearchResult]:
         raise ImportError("httpx not installed. Run: pip install httpx") from e
 
     encoded = urllib.parse.quote_plus(query)
-    url = (
-        f"https://api.duckduckgo.com/"
-        f"?q={encoded}&format=json&no_html=1&skip_disambig=1"
-    )
+    url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
     resp = httpx.get(url, timeout=10.0, follow_redirects=True)
     resp.raise_for_status()
     data = resp.json()

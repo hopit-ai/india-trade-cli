@@ -19,7 +19,9 @@ class TestWebSearchResult:
     def test_basic_fields(self):
         from agent.web_search import WebSearchResult
 
-        r = WebSearchResult(title="NIFTY update", url="https://example.com", snippet="Markets rose today")
+        r = WebSearchResult(
+            title="NIFTY update", url="https://example.com", snippet="Markets rose today"
+        )
         assert r.title == "NIFTY update"
         assert r.url == "https://example.com"
         assert r.snippet == "Markets rose today"
@@ -171,10 +173,17 @@ class TestSearchTavily:
         from agent.web_search import _search_tavily
 
         mock_client = MagicMock()
-        mock_client.search.return_value = self._tavily_response([
-            {"title": "RELIANCE Q4", "url": "https://c.com", "content": "Strong results", "published_date": "2025-04-15"},
-            {"title": "Sensex rally", "url": "https://d.com", "content": "Up 500 pts"},
-        ])
+        mock_client.search.return_value = self._tavily_response(
+            [
+                {
+                    "title": "RELIANCE Q4",
+                    "url": "https://c.com",
+                    "content": "Strong results",
+                    "published_date": "2025-04-15",
+                },
+                {"title": "Sensex rally", "url": "https://d.com", "content": "Up 500 pts"},
+            ]
+        )
 
         with patch.dict("sys.modules", {"tavily": _mock_tavily_module(mock_client)}):
             with patch.dict("os.environ", {"TAVILY_API_KEY": "test-key"}):
@@ -285,10 +294,7 @@ class TestSearchDuckDuckGo:
         mock_resp.json.return_value = self._ddg_response(
             abstract="abstract",
             abstract_url="https://x.com",
-            topics=[
-                {"Text": f"Topic {i}", "FirstURL": f"https://t{i}.com"}
-                for i in range(10)
-            ],
+            topics=[{"Text": f"Topic {i}", "FirstURL": f"https://t{i}.com"} for i in range(10)],
         )
 
         with patch("httpx.get", return_value=mock_resp):
@@ -334,21 +340,41 @@ class TestSearchDuckDuckGo:
 class TestWebSearch:
     def _make_exa_result(self):
         from agent.web_search import WebSearchResult
-        return [WebSearchResult(title="Exa result", url="https://exa.com", snippet="from exa", source="exa")]
+
+        return [
+            WebSearchResult(
+                title="Exa result", url="https://exa.com", snippet="from exa", source="exa"
+            )
+        ]
 
     def _make_tavily_result(self):
         from agent.web_search import WebSearchResult
-        return [WebSearchResult(title="Tavily result", url="https://tavily.com", snippet="from tavily", source="tavily")]
+
+        return [
+            WebSearchResult(
+                title="Tavily result",
+                url="https://tavily.com",
+                snippet="from tavily",
+                source="tavily",
+            )
+        ]
 
     def _make_ddg_result(self):
         from agent.web_search import WebSearchResult
-        return [WebSearchResult(title="DDG result", url="https://ddg.com", snippet="from ddg", source="duckduckgo")]
+
+        return [
+            WebSearchResult(
+                title="DDG result", url="https://ddg.com", snippet="from ddg", source="duckduckgo"
+            )
+        ]
 
     def test_uses_exa_when_key_present(self):
         from agent.web_search import web_search
 
         with patch.dict("os.environ", {"EXA_API_KEY": "key", "TAVILY_API_KEY": ""}):
-            with patch("agent.web_search._search_exa", return_value=self._make_exa_result()) as mock_exa:
+            with patch(
+                "agent.web_search._search_exa", return_value=self._make_exa_result()
+            ) as mock_exa:
                 results = web_search("NIFTY")
 
         mock_exa.assert_called_once()
@@ -359,7 +385,9 @@ class TestWebSearch:
 
         with patch.dict("os.environ", {"EXA_API_KEY": "", "TAVILY_API_KEY": "key"}):
             with patch("agent.web_search._search_exa") as mock_exa:
-                with patch("agent.web_search._search_tavily", return_value=self._make_tavily_result()) as mock_tavily:
+                with patch(
+                    "agent.web_search._search_tavily", return_value=self._make_tavily_result()
+                ) as mock_tavily:
                     results = web_search("NIFTY")
 
         mock_exa.assert_not_called()
@@ -371,7 +399,9 @@ class TestWebSearch:
 
         with patch.dict("os.environ", {"EXA_API_KEY": "key", "TAVILY_API_KEY": "key2"}):
             with patch("agent.web_search._search_exa", side_effect=Exception("network error")):
-                with patch("agent.web_search._search_tavily", return_value=self._make_tavily_result()):
+                with patch(
+                    "agent.web_search._search_tavily", return_value=self._make_tavily_result()
+                ):
                     results = web_search("NIFTY")
 
         assert results[0].source == "tavily"
@@ -382,7 +412,9 @@ class TestWebSearch:
         with patch.dict("os.environ", {"EXA_API_KEY": "key", "TAVILY_API_KEY": "key2"}):
             with patch("agent.web_search._search_exa", side_effect=Exception("fail")):
                 with patch("agent.web_search._search_tavily", side_effect=Exception("fail")):
-                    with patch("agent.web_search._search_duckduckgo", return_value=self._make_ddg_result()):
+                    with patch(
+                        "agent.web_search._search_duckduckgo", return_value=self._make_ddg_result()
+                    ):
                         results = web_search("NIFTY")
 
         assert results[0].source == "duckduckgo"
@@ -400,9 +432,11 @@ class TestWebSearch:
         from agent.web_search import web_search
 
         with patch.dict("os.environ", {"EXA_API_KEY": "key"}):
-            with patch("agent.web_search._search_exa", return_value=self._make_exa_result()) as mock_exa:
+            with patch(
+                "agent.web_search._search_exa", return_value=self._make_exa_result()
+            ) as mock_exa:
                 with patch("agent.web_search._search_tavily") as mock_tavily:
-                    results = web_search("test", provider="exa")
+                    web_search("test", provider="exa")
 
         mock_exa.assert_called_once()
         mock_tavily.assert_not_called()
@@ -412,8 +446,10 @@ class TestWebSearch:
 
         with patch.dict("os.environ", {"TAVILY_API_KEY": "key"}):
             with patch("agent.web_search._search_exa") as mock_exa:
-                with patch("agent.web_search._search_tavily", return_value=self._make_tavily_result()) as mock_tavily:
-                    results = web_search("test", provider="tavily")
+                with patch(
+                    "agent.web_search._search_tavily", return_value=self._make_tavily_result()
+                ) as mock_tavily:
+                    web_search("test", provider="tavily")
 
         mock_exa.assert_not_called()
         mock_tavily.assert_called_once()
@@ -429,7 +465,9 @@ class TestWebSearch:
 
         with patch.dict("os.environ", {"EXA_API_KEY": "key", "TAVILY_API_KEY": "key2"}):
             with patch("agent.web_search._search_exa", return_value=[]):  # empty, not exception
-                with patch("agent.web_search._search_tavily", return_value=self._make_tavily_result()) as mock_tavily:
+                with patch(
+                    "agent.web_search._search_tavily", return_value=self._make_tavily_result()
+                ) as mock_tavily:
                     results = web_search("NIFTY")
 
         mock_tavily.assert_called_once()

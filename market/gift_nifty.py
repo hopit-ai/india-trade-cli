@@ -52,9 +52,7 @@ class GiftNiftySnapshot:
         gap_text = ""
         if self.premium_pts is not None:
             direction2 = "+" if self.premium_pct >= 0 else ""
-            gap_text = (
-                f" — {direction2}{self.premium_pct:.2f}% gap {'up' if self.premium_pct >= 0 else 'down'} open implied"
-            )
+            gap_text = f" — {direction2}{self.premium_pct:.2f}% gap {'up' if self.premium_pct >= 0 else 'down'} open implied"
         return (
             f"GIFT NIFTY: {self.ltp:,.0f}  "
             f"({direction}{self.change:+.0f} pts, {direction}{self.change_pct:.2f}%)"

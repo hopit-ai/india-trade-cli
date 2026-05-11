@@ -13,7 +13,7 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -288,8 +288,14 @@ class TestMarketSnapshotIntegration:
         from market.indices import IndexSnapshot
 
         return IndexSnapshot(
-            name=name, instrument=f"NSE:{name}", ltp=ltp, change=100.0, change_pct=0.42,
-            open=23900.0, high=24100.0, low=23800.0,
+            name=name,
+            instrument=f"NSE:{name}",
+            ltp=ltp,
+            change=100.0,
+            change_pct=0.42,
+            open=23900.0,
+            high=24100.0,
+            low=23800.0,
         )
 
     def test_gift_nifty_field_exists_on_market_snapshot(self):
@@ -339,13 +345,17 @@ class TestMarketSnapshotIntegration:
         fake_gift = GiftNiftySnapshot(ltp=24150.0, change=150.0, change_pct=0.63, source="yfinance")
 
         with (
-            patch("market.quotes.get_quote", return_value={
-                "NSE:NIFTY 50": fake_quote,
-                "NSE:NIFTY BANK": fake_quote,
-                "NSE:INDIA VIX": MagicMock(last_price=14.5, change=0.1, change_pct=0.69,
-                                            open=14.4, high=14.6, low=14.2),
-                "BSE:SENSEX": fake_quote,
-            }),
+            patch(
+                "market.quotes.get_quote",
+                return_value={
+                    "NSE:NIFTY 50": fake_quote,
+                    "NSE:NIFTY BANK": fake_quote,
+                    "NSE:INDIA VIX": MagicMock(
+                        last_price=14.5, change=0.1, change_pct=0.69, open=14.4, high=14.6, low=14.2
+                    ),
+                    "BSE:SENSEX": fake_quote,
+                },
+            ),
             patch("market.gift_nifty.get_gift_nifty", return_value=fake_gift),
         ):
             snap = get_market_snapshot()
@@ -366,13 +376,17 @@ class TestMarketSnapshotIntegration:
         fake_quote.low = 23800.0
 
         with (
-            patch("market.quotes.get_quote", return_value={
-                "NSE:NIFTY 50": fake_quote,
-                "NSE:NIFTY BANK": fake_quote,
-                "NSE:INDIA VIX": MagicMock(last_price=14.5, change=0.1, change_pct=0.69,
-                                            open=14.4, high=14.6, low=14.2),
-                "BSE:SENSEX": fake_quote,
-            }),
+            patch(
+                "market.quotes.get_quote",
+                return_value={
+                    "NSE:NIFTY 50": fake_quote,
+                    "NSE:NIFTY BANK": fake_quote,
+                    "NSE:INDIA VIX": MagicMock(
+                        last_price=14.5, change=0.1, change_pct=0.69, open=14.4, high=14.6, low=14.2
+                    ),
+                    "BSE:SENSEX": fake_quote,
+                },
+            ),
             patch("market.gift_nifty.get_gift_nifty", side_effect=Exception("timeout")),
         ):
             snap = get_market_snapshot()  # must not raise

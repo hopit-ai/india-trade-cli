@@ -197,7 +197,12 @@ class TestPrintActionableAgenda:
         _print_actionable_agenda(fii, breadth)
         captured = capsys.readouterr()
         # Count bullet icons
-        icons = captured.out.count("⚠️") + captured.out.count("✅") + captured.out.count("📋") + captured.out.count("📍")
+        icons = (
+            captured.out.count("⚠️")
+            + captured.out.count("✅")
+            + captured.out.count("📋")
+            + captured.out.count("📍")
+        )
         assert icons <= 5
 
     def test_handles_empty_fii_list(self, capsys):

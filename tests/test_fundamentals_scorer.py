@@ -18,7 +18,6 @@ from unittest.mock import patch
 import pytest
 
 from analysis.fundamental import (
-    FundamentalFlag,
     FundamentalSnapshot,
     FundamentalsScore,
     MetricResult,

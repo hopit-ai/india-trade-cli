@@ -51,7 +51,9 @@ def _fii(net: float, days: int = 1) -> list[FIIDIIData]:
 def _breadth(adv: int, dec: int) -> MarketBreadth:
     ratio = adv / max(dec, 1)
     v = "BROAD_RALLY" if ratio > 2.0 else "BROAD_DECLINE" if ratio < 0.5 else "MIXED"
-    return MarketBreadth(advances=adv, declines=dec, unchanged=0, ad_ratio=round(ratio, 2), verdict=v)
+    return MarketBreadth(
+        advances=adv, declines=dec, unchanged=0, ad_ratio=round(ratio, 2), verdict=v
+    )
 
 
 # ── SentimentSignal dataclass ─────────────────────────────────────
@@ -381,9 +383,7 @@ class TestGetSentiment:
             patch(
                 "market.sentiment._fii_dii_signal", return_value=("BULLISH", 1.0, ["fii source"])
             ),
-            patch(
-                "market.sentiment._news_signal", return_value=("BULLISH", 1.0, ["news source"])
-            ),
+            patch("market.sentiment._news_signal", return_value=("BULLISH", 1.0, ["news source"])),
             patch(
                 "market.sentiment._bulk_deals_signal",
                 return_value=("BULLISH", 1.0, ["deals source"]),
