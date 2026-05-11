@@ -231,6 +231,23 @@ def get_execution_broker() -> BrokerAPI:
     return get_broker()
 
 
+def auto_assign_roles() -> bool:
+    """Auto-assign Fyers as data broker and Zerodha as execution broker.
+
+    Called automatically after connect_broker() when both are present.
+
+    Returns:
+        True if auto-assignment was performed (both brokers present), False otherwise.
+    """
+    global _data_key, _exec_key
+    if "fyers" in _brokers and "zerodha" in _brokers:
+        _data_key = "fyers"
+        _exec_key = "zerodha"
+        console.print("[cyan]Auto-assigned:[/cyan] Fyers → DATA, Zerodha → EXECUTION")
+        return True
+    return False
+
+
 def list_connected_brokers() -> None:
     """Pretty-print a table of all connected brokers with role routing."""
     if not _brokers:
@@ -812,6 +829,7 @@ def connect_broker(choice: Optional[str] = None) -> BrokerAPI:
         f"Primary: [bold]{_primary_key.title()}[/bold]  |  "
         f"Type [bold]brokers[/bold] to see all.\n"
     )
+    auto_assign_roles()
     return broker
 
 
