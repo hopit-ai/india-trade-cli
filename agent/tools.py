@@ -584,6 +584,61 @@ def build_registry() -> ToolRegistry:
         ),
     )
 
+    # ── Web Search ────────────────────────────────────────────
+    from agent.web_search import web_search as _web_search, available_providers
+
+    def _do_web_search(query: str, n: int = 5, provider: str = "") -> dict:
+        provider_arg = provider.lower() if provider else None
+        results = _web_search(query, n=n, provider=provider_arg)
+        return {
+            "query": query,
+            "provider_used": results[0].source if results else "none",
+            "available_providers": available_providers(),
+            "results": [
+                {
+                    "title": r.title,
+                    "url": r.url,
+                    "snippet": r.snippet,
+                    "published_date": r.published_date,
+                }
+                for r in results
+            ],
+        }
+
+    reg.register(
+        name="web_search",
+        description=(
+            "Search the web for live market news, company information, macro events, or "
+            "anything requiring up-to-date information. "
+            "Uses Exa (neural search) when EXA_API_KEY is set, Tavily when TAVILY_API_KEY is set, "
+            "or DuckDuckGo as a free fallback. "
+            "Good for: overnight news, recent earnings reports, RBI announcements, "
+            "analyst upgrades/downgrades, sector developments."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural-language search query, e.g. 'HDFC Bank Q4 results 2025'",
+                },
+                "n": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "Number of results to return (default 5, max 10)",
+                },
+                "provider": {
+                    "type": "string",
+                    "enum": ["exa", "tavily", "duckduckgo", ""],
+                    "default": "",
+                    "description": "Force a specific provider. Leave blank for auto-selection.",
+                },
+            },
+            "required": ["query"],
+        },
+        fn=_do_web_search,
+    )
+
     # ── News & Events ─────────────────────────────────────────
     from market.news import get_market_news, get_stock_news
     from market.events import get_upcoming_events, get_earnings_calendar
