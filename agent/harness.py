@@ -352,6 +352,19 @@ def _history_path() -> Path:
     return HISTORY_FILE
 
 
+def clear_history(history_file: Path | None = None) -> None:
+    """
+    Clear the harness conversation history (JSONL file).
+    Called when the user types `clear` in the REPL.
+    """
+    path = history_file if history_file is not None else HISTORY_FILE
+    try:
+        if path.exists():
+            path.write_text("", encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _load_history(
     max_messages: int = HISTORY_MAX_MESSAGES,
     history_file: Path | None = None,

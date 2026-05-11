@@ -356,13 +356,123 @@ class FundamentalAnalyst(BaseAnalyst):
                 data=result,
             )
         except Exception as e:
+            # Fallback chain: yfinance (free) → Perplexity Finance (optional)
+            return self._fundamentals_fallback(symbol, fallback_error=str(e))
+
+    def _fundamentals_fallback(self, symbol: str, fallback_error: str = "") -> AnalystReport:
+        """
+        Fallback for fundamental data when the broker tool fails.
+
+        Tier 1 (free, no key): yfinance — PE, ROE, debt/equity, revenue growth
+          for NSE stocks via the .NS suffix.
+
+        Tier 2 (optional, requires PERPLEXITY_API_KEY): Perplexity Finance
+          Agent API — licensed NSE/BSE data with citations.
+        """
+        # ── Tier 1: yfinance (free, no API key needed) ────────────
+        try:
+            import yfinance as yf
+
+            ns_symbol = symbol if symbol.endswith(".NS") else f"{symbol}.NS"
+            info = yf.Ticker(ns_symbol).info or {}
+
+            pe = info.get("trailingPE") or info.get("forwardPE")
+            roe = info.get("returnOnEquity")  # decimal e.g. 0.28 = 28%
+            pb = info.get("priceToBook")
+            d_e = info.get("debtToEquity")
+            rev_growth = info.get("revenueGrowth")  # decimal
+            profit_margin = info.get("profitMargins")
+
+            if pe is not None or roe is not None:
+                points: list[str] = []
+                data: dict = {"source": "yfinance"}
+
+                if pe is not None:
+                    points.append(f"PE: {pe:.1f}")
+                    data["pe"] = pe
+                if roe is not None:
+                    roe_pct = roe * 100
+                    points.append(f"ROE: {roe_pct:.1f}%")
+                    data["roe"] = roe_pct
+                if pb is not None:
+                    points.append(f"P/B: {pb:.1f}x")
+                    data["pb"] = pb
+                if d_e is not None:
+                    points.append(f"Debt/Equity: {d_e:.2f}")
+                    data["debt_to_equity"] = d_e
+                if rev_growth is not None:
+                    rg_pct = rev_growth * 100
+                    points.append(f"Revenue Growth: {rg_pct:.1f}%")
+                    data["revenue_growth"] = rg_pct
+                if profit_margin is not None:
+                    pm_pct = profit_margin * 100
+                    points.append(f"Profit Margin: {pm_pct:.1f}%")
+                    data["profit_margin"] = pm_pct
+
+                points.append("Source: yfinance (broker data unavailable)")
+
+                # Heuristic score: ROE-driven with PE adjustment
+                score = 50.0
+                if roe is not None:
+                    score += min((roe * 100 - 15) * 1.5, 20)
+                if pe is not None and pe > 0:
+                    if pe < 15:
+                        score += 10
+                    elif pe > 40:
+                        score -= 10
+                score = max(10.0, min(score, 80.0))
+
+                verdict = "BULLISH" if score >= 60 else "BEARISH" if score <= 40 else "NEUTRAL"
+                return AnalystReport(
+                    analyst=self.name,
+                    verdict=verdict,
+                    confidence=50,  # moderate — yfinance NSE data can be stale
+                    score=score,
+                    key_points=points,
+                    data=data,
+                )
+        except Exception:
+            pass  # yfinance unavailable — try Perplexity
+
+        # ── Tier 2: Perplexity Finance (optional, requires key) ───
+        try:
+            from agent.perplexity_finance import (
+                finance_fundamentals_for_symbol,
+                perplexity_finance_available,
+            )
+
+            if not perplexity_finance_available():
+                raise RuntimeError("no key")
+
+            result = finance_fundamentals_for_symbol(symbol)
+            if not result.ok or not result.summary:
+                raise RuntimeError(result.error or "empty response")
+
+            snippet = result.summary.strip()[:400]
+            points = [f"Perplexity Finance (fallback): {snippet}"]
+            if result.citations:
+                points.append(f"Sources: {', '.join(result.citations[:2])}")
+
             return AnalystReport(
                 analyst=self.name,
-                verdict="UNKNOWN",
-                confidence=0,
-                score=0,
-                error=str(e),
+                verdict="NEUTRAL",
+                confidence=40,  # lower — text-parsed, not structured numbers
+                score=50,
+                key_points=points,
+                data={"perplexity_finance": result.summary},
             )
+        except Exception:
+            pass
+
+        # ── Total failure ─────────────────────────────────────────
+        return AnalystReport(
+            analyst=self.name,
+            verdict="UNKNOWN",
+            confidence=0,
+            score=0,
+            error=fallback_error
+            or "fundamental_analyse failed; yfinance and Perplexity Finance also unavailable",
+        )
 
 
 class OptionsAnalyst(BaseAnalyst):
@@ -469,10 +579,15 @@ class NewsMacroAnalyst(BaseAnalyst):
     def __init__(self, registry: ToolRegistry) -> None:
         super().__init__(registry)
         self._llm: Any = None
+        self._context_hint: str = ""  # user-injected focus (e.g. "AI deals")
 
     def set_llm(self, llm_provider: Any) -> None:
         """Enable LLM-powered sentiment analysis."""
         self._llm = llm_provider
+
+    def set_context_hint(self, hint: str) -> None:
+        """Set a user-supplied focus hint for web search queries."""
+        self._context_hint = hint.strip()
 
     def analyze(self, symbol: str, exchange: str = "NSE") -> AnalystReport:
         try:
@@ -542,6 +657,61 @@ class NewsMacroAnalyst(BaseAnalyst):
             if isinstance(events, dict) or isinstance(events, list):
                 data["events"] = events
                 points.append("Checked upcoming events (expiry, earnings, RBI)")
+
+            # ── Perplexity Finance Search — preferred source for India news ──
+            # Uses the Agent API with finance_search tool (licensed NSE/BSE data)
+            # Runs first; generic web search (Exa) fills in if this is unavailable.
+            try:
+                from agent.perplexity_finance import (
+                    perplexity_finance_available,
+                    finance_news_for_symbol,
+                )
+
+                if perplexity_finance_available():
+                    fin_result = finance_news_for_symbol(symbol, context_hint=self._context_hint)
+                    if fin_result.ok and fin_result.summary:
+                        data["finance_search_text"] = fin_result.as_prompt_text()
+                        data["finance_search_citations"] = fin_result.citations
+                        points.append(
+                            "Perplexity Finance: live data fetched"
+                            + (
+                                f" ({len(fin_result.citations)} sources)"
+                                if fin_result.citations
+                                else ""
+                            )
+                        )
+            except Exception:
+                pass  # finance search is always best-effort
+
+            # ── Generic web search (Exa / Perplexity Sonar) — best-effort (#149) ──
+            # Runs when Exa key is set; supplements finance_search with broader web.
+            try:
+                from agent.web_search import web_search, web_search_available, format_search_results
+
+                if web_search_available():
+                    # Build search queries: stock-specific + optional user hint
+                    queries = [f"{symbol} stock news India 2026"]
+                    if self._context_hint:
+                        queries.append(f"{symbol} {self._context_hint}")
+
+                    web_results = []
+                    for q in queries[:2]:  # max 2 queries to cap latency
+                        web_results.extend(web_search(q, max_results=2))
+
+                    if web_results:
+                        data["web_search"] = [
+                            {
+                                "title": r.title,
+                                "url": r.url,
+                                "text": r.text[:800],
+                                "date": r.published_date,
+                            }
+                            for r in web_results
+                        ]
+                        data["web_search_text"] = format_search_results(web_results)
+                        points.append(f"Web search: {len(web_results)} live articles found")
+            except Exception:
+                pass  # web search is always best-effort
 
             # ── Sentiment analysis ───────────────────────────────
 
@@ -628,6 +798,18 @@ class NewsMacroAnalyst(BaseAnalyst):
             macro_parts.append(f"Upcoming events: {events_str}")
 
         macro_text = "\n".join(macro_parts) if macro_parts else "No macro data available."
+
+        # Append Perplexity Finance results (licensed India data — preferred)
+        finance_text = data.get("finance_search_text", "")
+        if finance_text:
+            macro_text += f"\n\nPerplexity Finance (NSE/BSE licensed data):\n{finance_text[:2000]}"
+
+        # Append generic web search results if available (#149)
+        web_text = data.get("web_search_text", "")
+        if web_text:
+            macro_text += f"\n\nLive web search results:\n{web_text[:1500]}"
+        if self._context_hint:
+            macro_text += f"\n\nUser focus: {self._context_hint}"
 
         prompt = NEWS_SENTIMENT_PROMPT.format(
             symbol=symbol,
@@ -1365,6 +1547,23 @@ class MultiAgentAnalyzer:
             reports = self._run_analysts_sequential(symbol, exchange)
 
         os.environ.pop("_CLI_BATCH_MODE", None)
+
+        # Log analyst results to scratchpad (#168)
+        try:
+            from agent.scratchpad import get_scratchpad
+
+            pad = get_scratchpad()
+            if pad.symbol == symbol or not pad.symbol:
+                for r in reports:
+                    if not r.error:
+                        summary = f"{r.verdict} conf={r.confidence}% score={r.score}"
+                        kp = getattr(r, "key_points", [])
+                        if kp:
+                            summary += " | " + "; ".join(kp[:2])
+                        pad.append(r.analyst, summary)
+        except Exception:
+            pass
+
         return reports
 
     def _run_analysts_parallel(self, symbol: str, exchange: str) -> list[AnalystReport]:
@@ -1834,12 +2033,23 @@ class MultiAgentAnalyzer:
                 f"  VIX: {risk_report.data.get('vix', 'N/A')}\n"
             )
 
-        # Memory: past analyses for this symbol
+        # Memory: past analyses for this symbol (#169)
         memory_context = ""
         try:
             from engine.memory import trade_memory
 
             memory_context = trade_memory.get_context_for_symbol(symbol)
+
+            # Also inject similar-conditions context using VIX from risk report
+            vix_val: float | None = None
+            if risk_report and not risk_report.error:
+                try:
+                    vix_val = float(risk_report.data.get("vix", 0) or 0) or None
+                except (TypeError, ValueError):
+                    vix_val = None
+            conditions_context = trade_memory.get_context_for_conditions(vix=vix_val)
+            if conditions_context and "No past trades" not in conditions_context:
+                memory_context = memory_context + "\n\n" + conditions_context
         except Exception:
             pass
 
