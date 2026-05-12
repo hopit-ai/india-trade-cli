@@ -307,13 +307,22 @@ class TestSSEEventBus:
 
 
 class TestSSEEndpoints:
-    """Integration tests for /stream/prices and /stream/alerts endpoints."""
+    """Integration tests for /stream/prices and /stream/alerts endpoints.
+
+    Fast tests (always run): verify routes are registered with correct
+    StreamingResponse type — no live HTTP connection needed.
+
+    Slow tests (marked @pytest.mark.slow): open a real SSE connection via
+    TestClient to verify status code, content-type, and cache-control headers.
+    Excluded from the default CI run; run nightly via the slow-tests workflow.
+    """
 
     @pytest.fixture(autouse=True)
     def _reset_event_bus(self):
         """Reset the module-level event_bus between tests."""
-        from web import sse as _sse_mod
         from collections import defaultdict
+
+        from web import sse as _sse_mod
 
         _sse_mod.event_bus._channels = defaultdict(list)
         _sse_mod.event_bus._lock = None
@@ -321,64 +330,88 @@ class TestSSEEndpoints:
         _sse_mod.event_bus._channels = defaultdict(list)
         _sse_mod.event_bus._lock = None
 
-    def _make_app(self):
+    # ── Fast: route registration checks (no HTTP connection) ─────────────
+
+    def test_prices_route_registered(self):
+        """GET /stream/prices route must be registered on the FastAPI app."""
         from web.api import app
 
-        return app
+        paths = [r.path for r in app.routes]
+        assert "/stream/prices" in paths, f"/stream/prices not found in routes: {paths}"
 
+    def test_alerts_route_registered(self):
+        """GET /stream/alerts route must be registered on the FastAPI app."""
+        from web.api import app
+
+        paths = [r.path for r in app.routes]
+        assert "/stream/alerts" in paths, f"/stream/alerts not found in routes: {paths}"
+
+    # ── Slow: live connection tests (excluded from default CI run) ────────
+
+    @pytest.mark.slow
     def test_stream_prices_returns_200(self):
         """GET /stream/prices should return 200."""
         from fastapi.testclient import TestClient
 
-        app = self._make_app()
+        from web.api import app
+
         with TestClient(app, raise_server_exceptions=False) as client:
             with client.stream("GET", "/stream/prices") as resp:
                 assert resp.status_code == 200
-                # Just check status; don't consume stream
 
+    @pytest.mark.slow
     def test_stream_prices_content_type(self):
         """GET /stream/prices must respond with text/event-stream content type."""
         from fastapi.testclient import TestClient
 
-        app = self._make_app()
+        from web.api import app
+
         with TestClient(app, raise_server_exceptions=False) as client:
             with client.stream("GET", "/stream/prices") as resp:
                 content_type = resp.headers.get("content-type", "")
                 assert "text/event-stream" in content_type
 
+    @pytest.mark.slow
     def test_stream_alerts_returns_200(self):
         """GET /stream/alerts should return 200."""
         from fastapi.testclient import TestClient
 
-        app = self._make_app()
+        from web.api import app
+
         with TestClient(app, raise_server_exceptions=False) as client:
             with client.stream("GET", "/stream/alerts") as resp:
                 assert resp.status_code == 200
 
+    @pytest.mark.slow
     def test_stream_alerts_content_type(self):
         """GET /stream/alerts must respond with text/event-stream content type."""
         from fastapi.testclient import TestClient
 
-        app = self._make_app()
+        from web.api import app
+
         with TestClient(app, raise_server_exceptions=False) as client:
             with client.stream("GET", "/stream/alerts") as resp:
                 content_type = resp.headers.get("content-type", "")
                 assert "text/event-stream" in content_type
 
+    @pytest.mark.slow
     def test_stream_prices_cache_control_header(self):
         """GET /stream/prices should set Cache-Control: no-cache."""
         from fastapi.testclient import TestClient
 
-        app = self._make_app()
+        from web.api import app
+
         with TestClient(app, raise_server_exceptions=False) as client:
             with client.stream("GET", "/stream/prices") as resp:
                 assert resp.headers.get("cache-control") == "no-cache"
 
+    @pytest.mark.slow
     def test_stream_alerts_cache_control_header(self):
         """GET /stream/alerts should set Cache-Control: no-cache."""
         from fastapi.testclient import TestClient
 
-        app = self._make_app()
+        from web.api import app
+
         with TestClient(app, raise_server_exceptions=False) as client:
             with client.stream("GET", "/stream/alerts") as resp:
                 assert resp.headers.get("cache-control") == "no-cache"

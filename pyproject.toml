@@ -74,6 +74,7 @@ vollib = ["py_vollib>=1.0.1"]
 dev = [
     "pytest>=7.0.0",
     "pytest-mock>=3.10.0",
+    "pytest-xdist>=3.0.0",
     "pyyaml>=6.0",
     "ruff>=0.8.0",
 ]
@@ -98,9 +99,10 @@ include = ["brokers*", "market*", "analysis*", "agent*", "engine*", "ui*", "app*
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short -m 'not network'"
+addopts = "-v --tb=short -m 'not network and not slow' -n auto"
 markers = [
     "network: tests that require network access (yfinance, NSE API, etc.)",
+    "slow: tests slow by design — SSE stream connections, MC simulations (run nightly, not on every push)",
 ]
 
 [tool.ruff]

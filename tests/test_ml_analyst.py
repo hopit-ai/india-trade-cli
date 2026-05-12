@@ -52,6 +52,22 @@ EXPECTED_FEATURES = [
 from analysis.ml_analyst import MLAnalyst, MLPredictor, MLPrediction  # noqa: E402
 
 
+# ── Module-scoped fixture: train once, reuse across all tests ─
+
+
+@pytest.fixture(scope="module")
+def trained_predictor_and_df():
+    """Train a single MLPredictor on 300-row OHLCV once per module.
+
+    Reused by TestTrain and TestPredict to avoid ~26 redundant train()
+    calls that each take 200–500 ms (GradientBoosting on 300 rows).
+    """
+    df = make_ohlcv(300)
+    predictor = MLPredictor()
+    predictor.train("INFY", df=df)
+    return predictor, df
+
+
 # ── _compute_features tests ──────────────────────────────────
 
 
@@ -174,40 +190,35 @@ class TestComputeTarget:
 
 
 class TestTrain:
-    def setup_method(self):
-        self.df = make_ohlcv(300)
-        self.predictor = MLPredictor()
+    """Uses the module-scoped trained_predictor_and_df fixture — one train() per module."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, trained_predictor_and_df):
+        self.predictor, self.df = trained_predictor_and_df
 
     def test_returns_dict(self):
-        with patch("analysis.ml_analyst.get_ohlcv", return_value=self.df):
-            result = self.predictor.train("INFY", exchange="NSE")
+        result = self.predictor.train("INFY", df=self.df)
         assert isinstance(result, dict)
 
     def test_dict_has_required_keys(self):
-        with patch("analysis.ml_analyst.get_ohlcv", return_value=self.df):
-            result = self.predictor.train("INFY")
+        result = self.predictor.train("INFY", df=self.df)
         assert "accuracy" in result
         assert "samples" in result
         assert "model_type" in result
 
     def test_accuracy_between_0_and_1(self):
-        with patch("analysis.ml_analyst.get_ohlcv", return_value=self.df):
-            result = self.predictor.train("INFY")
+        result = self.predictor.train("INFY", df=self.df)
         assert 0.0 <= result["accuracy"] <= 1.0
 
     def test_samples_positive(self):
-        with patch("analysis.ml_analyst.get_ohlcv", return_value=self.df):
-            result = self.predictor.train("INFY")
+        result = self.predictor.train("INFY", df=self.df)
         assert result["samples"] > 0
 
     def test_model_set_after_training(self):
-        with patch("analysis.ml_analyst.get_ohlcv", return_value=self.df):
-            self.predictor.train("INFY")
         assert self.predictor.model is not None
 
     def test_model_type_is_string(self):
-        with patch("analysis.ml_analyst.get_ohlcv", return_value=self.df):
-            result = self.predictor.train("INFY")
+        result = self.predictor.train("INFY", df=self.df)
         assert isinstance(result["model_type"], str)
         assert result["model_type"] in ("GradientBoosting", "XGBoost")
 
@@ -218,8 +229,6 @@ class TestTrain:
         assert self.predictor.model is not None
 
     def test_feature_names_set(self):
-        with patch("analysis.ml_analyst.get_ohlcv", return_value=self.df):
-            self.predictor.train("INFY")
         assert len(self.predictor.feature_names) == len(EXPECTED_FEATURES)
 
 
@@ -227,61 +236,48 @@ class TestTrain:
 
 
 class TestPredict:
-    def setup_method(self):
-        self.df = make_ohlcv(300)
-        self.predictor = MLPredictor()
+    """Uses the module-scoped trained_predictor_and_df fixture — predict() calls only."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, trained_predictor_and_df):
+        self.predictor, self.df = trained_predictor_and_df
+        # Cache prediction result for tests that only need to inspect it
+        self._pred = self.predictor.predict("INFY", df=self.df)
 
     def test_predict_before_train_raises(self):
+        fresh = MLPredictor()
         with pytest.raises(RuntimeError):
-            self.predictor.predict("INFY", df=self.df)
+            fresh.predict("INFY", df=self.df)
 
     def test_predict_returns_mlprediction(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        assert isinstance(result, MLPrediction)
+        assert isinstance(self._pred, MLPrediction)
 
     def test_direction_valid(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        assert result.direction in ("UP", "DOWN", "NEUTRAL")
+        assert self._pred.direction in ("UP", "DOWN", "NEUTRAL")
 
     def test_probability_range(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        assert 0.0 <= result.probability <= 1.0
+        assert 0.0 <= self._pred.probability <= 1.0
 
     def test_confidence_pct_is_rounded_int(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        assert isinstance(result.confidence_pct, int)
-        assert 0 <= result.confidence_pct <= 100
+        assert isinstance(self._pred.confidence_pct, int)
+        assert 0 <= self._pred.confidence_pct <= 100
 
     def test_feature_importances_top5(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        assert isinstance(result.feature_importances, dict)
-        assert len(result.feature_importances) == 5
+        assert isinstance(self._pred.feature_importances, dict)
+        assert len(self._pred.feature_importances) == 5
 
     def test_feature_importance_keys_are_feature_names(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        for key in result.feature_importances:
+        for key in self._pred.feature_importances:
             assert key in EXPECTED_FEATURES
 
     def test_training_samples_positive(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        assert result.training_samples > 0
+        assert self._pred.training_samples > 0
 
     def test_test_accuracy_range(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        assert 0.0 <= result.test_accuracy <= 1.0
+        assert 0.0 <= self._pred.test_accuracy <= 1.0
 
     def test_symbol_in_result(self):
-        self.predictor.train("INFY", df=self.df)
-        result = self.predictor.predict("INFY", df=self.df)
-        assert result.symbol == "INFY"
+        assert self._pred.symbol == "INFY"
 
 
 # ── train_and_predict() tests ─────────────────────────────────
