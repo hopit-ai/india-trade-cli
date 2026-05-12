@@ -13,10 +13,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     # Fast tier: skip slow & network tests, run in parallel
-    # Only test on 3.11 and 3.13 — enough to catch version compat issues
     strategy:
       matrix:
-        python-version: ["3.11", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
