@@ -5,10 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Nightly at 01:00 UTC — runs slow tests (SSE streams, Monte Carlo, etc.)
+    - cron: "0 1 * * *"
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Fast tier: skip slow & network tests, run in parallel
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
@@ -31,8 +35,29 @@ jobs:
           pip install build wheel
           python -m build --no-isolation
 
-      - name: Run tests
-        run: pytest tests/ -v --tb=short -m "not network"
+      - name: Run tests (fast — not network, not slow)
+        run: pytest tests/ -v --tb=short -m "not network and not slow" -n auto
+
+  slow-tests:
+    # Runs only on schedule (nightly) or manual dispatch — not on every PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run slow tests (SSE streams, Monte Carlo, ML training)
+        run: pytest tests/ -v --tb=short -m "slow and not network" -n auto
 
   frontend-test:
     runs-on: ubuntu-latest

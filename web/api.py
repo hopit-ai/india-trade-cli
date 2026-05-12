@@ -48,7 +48,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request as _Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 
 from web.auth import auth_router, init_db as init_auth_db, get_session, user_count
 
@@ -1632,6 +1632,100 @@ async def api_portfolio(request: Request):
         "holding_count": len(holdings),
         "position_count": len(positions),
     }
+
+
+# ── SSE Streaming ─────────────────────────────────────────────────
+
+from web.sse import event_bus as _event_bus
+
+# Tracked symbols for price polling (mutable set, shared across requests)
+_price_poll_symbols: set[str] = set()
+_price_poll_task = None  # asyncio.Task | None
+
+
+async def _price_poll_loop() -> None:
+    """Background task: poll prices every 30s and publish to 'price' channel."""
+    import asyncio as _asyncio
+    import logging
+
+    while True:
+        await _asyncio.sleep(30)
+        symbols = list(_price_poll_symbols)
+        if not symbols:
+            continue
+        try:
+            from market import quotes as _quotes
+
+            result = _quotes.get_quote(symbols)
+            import datetime
+
+            ts = datetime.datetime.utcnow().isoformat() + "Z"
+            for sym, q in result.items():
+                _event_bus.publish_sync(
+                    "price",
+                    {
+                        "symbol": sym,
+                        "ltp": q.last_price,
+                        "change_pct": q.change_pct,
+                        "ts": ts,
+                    },
+                )
+        except Exception as exc:
+            logging.debug("[sse] price poll error: %s", exc)
+
+
+@app.get("/stream/prices", tags=["SSE"])
+async def stream_prices(symbols: str = ""):
+    """
+    SSE stream of live price ticks.
+
+    Query: ?symbols=NIFTY,BANKNIFTY,INFY (comma-separated, optional)
+
+    Event format:
+        data: {"symbol": "NIFTY", "ltp": 24500.0, "change_pct": 0.42, "ts": "..."}
+
+    Also starts a background price-polling task (30s interval) if not already running.
+    """
+    import asyncio as _asyncio
+
+    global _price_poll_task
+
+    if symbols:
+        for sym in symbols.split(","):
+            sym = sym.strip()
+            if sym:
+                _price_poll_symbols.add(sym)
+
+    # Start polling task if not already running
+    if _price_poll_task is None or _price_poll_task.done():
+        _price_poll_task = _asyncio.create_task(_price_poll_loop())
+
+    return StreamingResponse(
+        _event_bus.subscribe("price"),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/stream/alerts", tags=["SSE"])
+async def stream_alerts():
+    """
+    SSE stream of triggered alerts.
+
+    Event format:
+        data: {"alert_id": "...", "symbol": "INFY", "message": "RSI > 70", "ts": "..."}
+    """
+    return StreamingResponse(
+        _event_bus.subscribe("alert"),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ── Static file serving (web mode) ──────────────────────────────

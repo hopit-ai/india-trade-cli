@@ -44,6 +44,7 @@ dependencies = [
     # ── Data & Analysis ───────────────────────────────────────────────
     "pandas>=2.2.0",
     "numpy>=1.26.0",
+    "scikit-learn>=1.3.0",
     # py_vollib is optional: depends on numba which breaks on Python 3.13+.
     # Install separately if needed: pip install py_vollib
     # The platform gracefully falls back to built-in BS formulas without it.
@@ -74,6 +75,7 @@ vollib = ["py_vollib>=1.0.1"]
 dev = [
     "pytest>=7.0.0",
     "pytest-mock>=3.10.0",
+    "pytest-xdist>=3.0.0",
     "pyyaml>=6.0",
     "ruff>=0.8.0",
 ]
@@ -98,9 +100,10 @@ include = ["brokers*", "market*", "analysis*", "agent*", "engine*", "ui*", "app*
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short -m 'not network'"
+addopts = "-v --tb=short -m 'not network and not slow' -n auto"
 markers = [
     "network: tests that require network access (yfinance, NSE API, etc.)",
+    "slow: tests slow by design — SSE stream connections, MC simulations (run nightly, not on every push)",
 ]
 
 [tool.ruff]
