@@ -49,3 +49,10 @@ data/
 # ── Logs ─────────────────────────────────────────────────────
 *.log
 logs/
+
+# ── Generated docs (regenerate with: node docs/generate_*.js) ─
+docs/*.pdf
+docs/*.docx
+docs/node_modules/
+docs/package-lock.json
+docs/package.json
