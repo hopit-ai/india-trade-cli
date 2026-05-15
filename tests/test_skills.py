@@ -7,6 +7,7 @@ so no real broker connection or LLM API keys are needed.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
@@ -19,10 +20,21 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture(scope="module")
 def client():
-    """TestClient with all broker/keychain loading suppressed."""
+    """TestClient with all broker/keychain loading suppressed.
+
+    Two extra patches keep the auth middleware from returning 401:
+    - DEPLOY_MODE=self-hosted  activates the 'no users yet' bypass path
+    - web.api.user_count → 0  satisfies that bypass condition
+
+    In newer starlette/httpx (>=0.21) TestClient sets request.client.host
+    to "testclient" rather than "127.0.0.1", so the localhost shortcut no
+    longer fires — these patches cover all Python/starlette version combos.
+    """
     with (
         patch("config.credentials.load_all", return_value=None),
         patch("dotenv.load_dotenv", return_value=None),
+        patch("web.api.user_count", return_value=0),
+        patch.dict(os.environ, {"DEPLOY_MODE": "self-hosted"}),
     ):
         from web.api import app
 
